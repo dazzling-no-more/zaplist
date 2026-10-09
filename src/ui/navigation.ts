@@ -1,6 +1,7 @@
 import { doesFocusableExist, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { BackStack, type ScreenEntry } from '../platform/backStack'
+import { platformBack } from '../platform/webos'
 
 export type Route =
   | { name: 'home' }
@@ -17,7 +18,9 @@ export interface ScreenProps<N extends ScreenName = ScreenName> {
   entry: ScreenEntry<Extract<Route, { name: N }>>
 }
 
-export const backStack = new BackStack<Route>({ name: 'home' })
+// Back on the first screen goes to the system, which shows its exit popup or the Home screen as each
+// webOS version requires (LG's app checklist rejects custom handling there on webOS 23 and later).
+export const backStack = new BackStack<Route>({ name: 'home' }, platformBack)
 
 export const useBackStack = () => useSyncExternalStore(backStack.subscribe, backStack.getState)
 

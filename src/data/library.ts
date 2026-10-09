@@ -52,7 +52,7 @@ class Library {
   init(): Promise<void> {
     this.initializing ??= (async () => {
       const sources = await getSources()
-      for (const source of sources) await this.load(source.id)
+      for (const source of sources) await this.load(source)
       this.set({ ready: true, sources, ...this.combine(sources) })
     })()
     return this.initializing
@@ -64,7 +64,7 @@ class Library {
     this.setProgress(source.id, { stage: 'download' })
     try {
       const result = await ingestSource(source, (progress) => this.setProgress(source.id, progress))
-      await this.load(source.id)
+      await this.load(result.source)
       const others = this.state.sources.filter((s) => s.id !== source.id)
       const sources = [...others, result.source].sort((a, b) => a.addedAt - b.addedAt)
       this.set({ sources, ...this.combine(sources) })
@@ -100,15 +100,15 @@ class Library {
     return failed
   }
 
-  private async load(sourceId: string): Promise<void> {
-    const meta = await getPlaylistMeta(sourceId)
+  private async load(source: Source): Promise<void> {
+    const meta = await getPlaylistMeta(source)
     const channels: Channel[] = []
     for (let i = 0; i < (meta?.chunks ?? 0); i++) {
-      const chunk = await getChannelChunk(sourceId, i)
+      const chunk = await getChannelChunk(source, i)
       for (const channel of chunk) channels.push(channel)
       await yieldToUi()
     }
-    this.data.set(sourceId, { categories: meta?.categories ?? [], channels, epgUrls: meta?.epgUrls ?? [] })
+    this.data.set(source.id, { categories: meta?.categories ?? [], channels, epgUrls: meta?.epgUrls ?? [] })
   }
 
   private combine(sources: Source[]): Pick<LibraryState, 'categories' | 'channels'> {

@@ -717,7 +717,8 @@ h3 {
 
 .osd-times {
   flex: none;
-  width: 210px;
+  width: 260px; /* fits 12-hour times: "10:30 PM–11:00 PM" */
+  white-space: nowrap;
   color: var(--text-dim);
 }
 

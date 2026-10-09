@@ -169,10 +169,6 @@ const en = {
 
   'crash.title': 'Something went wrong.',
   'crash.detail': 'Press OK to restart the app.',
-
-  'exit.title': 'Exit IPTV Player?',
-  'exit.confirm': 'Exit',
-  'exit.cancel': 'Cancel',
 } as const
 
 export type StringKey = keyof typeof en

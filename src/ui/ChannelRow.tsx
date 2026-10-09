@@ -33,9 +33,10 @@ export function ChannelRow({ channel, focused, favorite, actionFocused, onToggle
         <div className="channel-name">{channel.name}</div>
         <NowPlaying channel={channel} />
       </div>
-      {showStar && (
+      {/* Rows that can take a star keep its space, so the now-playing bars line up. */}
+      {(showStar || onToggleFavorite) && (
         <span className={`row-action${favorite ? ' on' : ''}${actionFocused ? ' focused' : ''}`} onClick={onToggleFavorite ? toggle : undefined}>
-          <Icon name={favorite ? 'star' : 'starOutline'} />
+          {showStar && <Icon name={favorite ? 'star' : 'starOutline'} />}
         </span>
       )}
     </div>

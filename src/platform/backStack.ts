@@ -16,13 +16,11 @@ export type ScreenEntry<R extends Route> = R & {
 
 export interface BackStackState<R extends Route> {
   readonly screens: readonly ScreenEntry<R>[]
-  /** The user pressed Back on the root screen and must confirm leaving the app. */
-  readonly exitPrompt: boolean
 }
 
 /**
  * Routes the Back key. The most recently added handler goes first (overlays, OSD); if no handler
- * consumes the press, the top screen closes; on the root screen, an exit prompt is requested.
+ * consumes the press, the top screen closes; on the root screen, `onRootBack` leaves the app.
  */
 export class BackStack<R extends Route> {
   private state: BackStackState<R>
@@ -30,8 +28,11 @@ export class BackStack<R extends Route> {
   private readonly listeners = new Set<() => void>()
   private nextId = 1
 
-  constructor(root: R) {
-    this.state = { screens: [{ ...root, id: 0, memo: {} }], exitPrompt: false }
+  private readonly onRootBack: () => void
+
+  constructor(root: R, onRootBack: () => void = () => {}) {
+    this.state = { screens: [{ ...root, id: 0, memo: {} }] }
+    this.onRootBack = onRootBack
   }
 
   getState = (): BackStackState<R> => this.state
@@ -64,7 +65,7 @@ export class BackStack<R extends Route> {
     for (let i = this.handlers.length - 1; i >= 0; i--) {
       if (this.handlers[i]()) return
     }
-    if (!this.pop()) this.set({ exitPrompt: true })
+    if (!this.pop()) this.onRootBack()
   }
 
   /** Closes the top screen unless it is the root. Returns false at the root. */
@@ -73,10 +74,6 @@ export class BackStack<R extends Route> {
     if (screens.length < 2) return false
     this.set({ screens: screens.slice(0, -1) })
     return true
-  }
-
-  closeExitPrompt(): void {
-    this.set({ exitPrompt: false })
   }
 
   private set(patch: Partial<BackStackState<R>>): void {

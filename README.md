@@ -2,7 +2,7 @@
 
 A free, open-source IPTV player for LG TVs with webOS 4.0 or newer (2018 models onward). It plays
 the playlists you give it, either M3U/M3U8 URLs or Xtream Codes logins. It ships no channels,
-streams or credentials, and has no ads, accounts or telemetry. Credentials stay on the TV.
+streams or credentials, and has no ads, accounts or telemetry. Credentials stay on the TV, encrypted.
 
 ## Features
 
@@ -12,10 +12,11 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 - **Browse**: sidebar with Search, TV guide, Settings, Favorites, Recent, All channels and the playlist
   categories; a virtualized channel list (50,000+ channels) with logos, numbers and the programme on now.
 - **Search** across channel names (ignores case, accents and punctuation), updating as you type.
-- **Favorites** (red button, or hold OK) in your own order, and the last 20 channels watched.
+- **Favorites** (the star on each channel: Right then OK, or click it; also the red button or hold OK) in
+  your own order, and the last 20 channels watched.
 - **Player**: native playback first, then hls.js (HLS) or mpegts.js (MPEG-TS) when the TV's player
   can't play a stream. Zapping, number entry, a mini channel list, now/next, audio and subtitle tracks,
-  picture shape (fit, fill, 16:9, 4:3), automatic retries and a readable error otherwise. Playback
+  picture shape (fit, zoom, fill, 16:9, 4:3), automatic retries and a readable error otherwise. Playback
   stops when the app is hidden or the network drops and resumes on its own. The last channel reopens
   when the app starts.
 - **TV guide**: XMLTV (plain or gzipped) from the playlist, the Xtream server or a URL you enter; the
@@ -28,8 +29,9 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 | Where      | Key                          | Does                                                    |
 | ---------- | ---------------------------- | ------------------------------------------------------- |
 | Everywhere | Arrows, OK                   | Move and select (the Magic Remote pointer works too)    |
-|            | Back                         | Close the open overlay, go back; on Home, offer to exit |
+|            | Back                         | Close the open overlay, go back; on Home, leave the app |
 | Lists      | Channel +/−                  | Page up/down                                            |
+|            | Right, then OK               | Toggle favorite (the star at the end of the row)        |
 |            | Red / hold OK                | Toggle favorite / channel menu                          |
 |            | Yellow (in Favorites)        | Move the channel (Up/Down, then OK)                     |
 | Player     | Up/Down, Channel +/−         | Next / previous channel                                 |
@@ -41,7 +43,10 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 | Guide      | Arrows, OK                   | Move through programmes; OK watches what's on now       |
 
 Every action also works with arrows and OK alone (the Magic Remote has no color keys). In a desktop
-browser, Escape and Backspace act as Back.
+browser, Escape and Backspace act as Back, and double-clicking the picture toggles full screen.
+
+On Home, Back goes to the system (`webOS.platformBack()`), which shows the TV's exit prompt or Home
+screen depending on the webOS version, as LG's app checklist requires.
 
 ## Development
 
@@ -75,6 +80,8 @@ Test data (all legal and public):
 3. `npm run build && npm run package && npm run install:tv && npm run launch:tv`
 4. `npm run inspect:tv` opens Web Inspector for the running app.
 
+To publish on the LG Content Store, follow [docs/PUBLISHING.md](docs/PUBLISHING.md).
+
 ## Building for webOS (Chromium 53)
 
 webOS TV 4.x runs Chromium 53 and loads the app from `file://`, so the build:
@@ -107,12 +114,15 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
 - Audio track switching for HLS played by the TV's own player may not work on every webOS version
   (reported on LG's forum). Streams played by hls.js switch reliably.
 - Catch-up/timeshift, VOD and series (Xtream) are not implemented yet.
+- Sources are encrypted with a key kept on the TV (non-extractable, in IndexedDB), and the login is
+  replaced by placeholders in stored stream and guide URLs. That protects a copied database, not a TV
+  someone fully controls. The optional global guide URL (Settings → TV guide) is stored unencrypted.
 
 ## Project layout
 
 ```
-appinfo.json           webOS manifest (ID, version, icons, 1920×1080, Back handling, permissions)
-public/                icons, LG webOSTV.js (Apache-2.0)
+appinfo.json           webOS manifest (ID, version, icons, splash, 1920×1080, Back handling, permissions)
+public/                icons, splash image, LG webOSTV.js (Apache-2.0)
 scripts/               bundle checker, webOS CLI wrapper, large-playlist generator
 src/platform/          remote keys, back stack, webOS wrappers, lifecycle, network status
 src/data/              models, M3U/Xtream/XMLTV parsers, IndexedDB, library, guide, preferences
@@ -122,6 +132,8 @@ src/ui/                focus, navigation, virtual list, dialogs, PIN pad, channe
 src/screens/           Home, Search, Player, Guide, Settings (sources, guide, parental, about), source form
 src/i18n.ts            every user-facing string
 tests/                 Vitest tests and fixtures
+store/                 LG Content Store material: icon, screenshots, listing text, UX scenario, test playlist
+docs/PUBLISHING.md     how to submit the app to the LG Content Store
 ```
 
 ## License

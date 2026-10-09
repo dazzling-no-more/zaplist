@@ -5,26 +5,23 @@ const create = () => new BackStack<{ name: string }>({ name: 'home' })
 const names = (stack: BackStack<{ name: string }>) => stack.getState().screens.map((s) => s.name)
 
 describe('BackStack', () => {
-  it('starts at the root screen with no exit prompt', () => {
-    const stack = create()
-    expect(names(stack)).toEqual(['home'])
-    expect(stack.getState().exitPrompt).toBe(false)
+  it('starts at the root screen', () => {
+    expect(names(create())).toEqual(['home'])
   })
 
-  it('pops screens on Back, then asks to exit at the root', () => {
-    const stack = create()
+  it('pops screens on Back, then hands Back to the system at the root', () => {
+    const onRootBack = vi.fn()
+    const stack = new BackStack<{ name: string }>({ name: 'home' }, onRootBack)
     stack.push({ name: 'settings' })
     stack.push({ name: 'about' })
     stack.back()
     expect(names(stack)).toEqual(['home', 'settings'])
     stack.back()
     expect(names(stack)).toEqual(['home'])
-    expect(stack.getState().exitPrompt).toBe(false)
+    expect(onRootBack).not.toHaveBeenCalled()
     stack.back()
     expect(names(stack)).toEqual(['home'])
-    expect(stack.getState().exitPrompt).toBe(true)
-    stack.closeExitPrompt()
-    expect(stack.getState().exitPrompt).toBe(false)
+    expect(onRootBack).toHaveBeenCalledOnce()
   })
 
   it('remembers the focus key of the screen being left', () => {
@@ -74,11 +71,12 @@ describe('BackStack', () => {
     expect(names(stack)).toEqual(['home'])
   })
 
-  it('does not open the exit prompt while a handler consumes Back at the root', () => {
-    const stack = create()
+  it('does not leave the app while a handler consumes Back at the root', () => {
+    const onRootBack = vi.fn()
+    const stack = new BackStack<{ name: string }>({ name: 'home' }, onRootBack)
     stack.addHandler(() => true)
     stack.back()
-    expect(stack.getState().exitPrompt).toBe(false)
+    expect(onRootBack).not.toHaveBeenCalled()
   })
 
   it('removes only the handler it was given', () => {
