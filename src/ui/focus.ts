@@ -21,7 +21,9 @@ export const hoverToFocus = (focusSelf: () => void) => (): void => {
  * Pointer hide/show needs no extra work: hovering already moved focus, so arrows continue from there.
  */
 export function initFocus(): void {
-  init()
+  // Native events: keep the browser's default key handling so the caret moves inside text inputs.
+  // Nothing scrolls natively (overflow is hidden everywhere), so arrows have no other default effect.
+  init({ shouldUseNativeEvents: true })
   document.addEventListener('cursorStateChange', (event) => {
     pointerVisible = (event as VisibilityEvent).detail.visibility
   })

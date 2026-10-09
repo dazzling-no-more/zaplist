@@ -1,0 +1,9 @@
+#EXTM3U url-tvg="http://example.com/guide.xml.gz"
+#EXTINF:-1 tvg-id="bbb.test" tvg-name="Big Buck Bunny" tvg-logo="https://example.com/logos/bbb.png" tvg-chno="1" group-title="Test streams",Big Buck Bunny (HLS)
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="bipbop.test" tvg-name="Apple Bipbop" tvg-chno="2" group-title="Test streams",Apple Bipbop (HLS, audio + subtitles)
+https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8
+#EXTINF:-1 tvg-id="angel.test" tvg-name="Angel One" tvg-chno="3" group-title="Multi-language",Angel One (HLS, several languages)
+https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8
+#EXTINF:-1 tvg-id="tears.test" tvg-name="Tears of Steel" tvg-chno="4" tvg-shift="1" group-title="Multi-language",Tears of Steel (HLS)
+https://test-streams.mux.dev/tos_ismc/main.m3u8

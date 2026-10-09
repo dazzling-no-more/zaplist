@@ -1,0 +1,36 @@
+﻿#EXTM3U x-tvg-url="http://example.com/a.xml.gz, http://example.com/b.xml" url-tvg=http://example.com/a.xml.gz
+
+#extinf:-1 tvg-id=news.example tvg-name=News group-title=News,News 24
+http://example.com/news.m3u8
+
+
+#EXTINF:-1,No Attributes At All
+http://example.com/plain.ts
+#EXTINF:0 tvg-id="" tvg-logo="" group-title="",Empty Attributes
+http://example.com/empty.m3u8
+#EXTINF:-1 tvg-name="Dup",Duplicate
+http://example.com/dup1.m3u8
+#EXTINF:-1 tvg-name="Dup",Duplicate
+http://example.com/dup2.m3u8
+#EXTINF:-1 tvg-name="Dup",Duplicate
+http://example.com/dup1.m3u8
+#EXTINF:-1 tvg-logo="http://example.com/logo.png group-title="Broken",Broken Quote
+http://example.com/broken.m3u8
+#EXTINF:-1 group-title="Movies",Title, With, Commas
+#EXTVLCOPT:http-user-agent=SomeAgent/1.0
+#EXTVLCOPT:http-referrer=http://example.com/
+http://example.com/commas.m3u8
+#EXTINF:-1 tvg-id="x" junk "stray" tvg-name="After Junk",After Junk
+http://example.com/junk.m3u8
+http://example.com/no-extinf.m3u8
+#EXTINF:-1,Group From EXTGRP
+#EXTGRP:Sports
+http://example.com/extgrp.m3u8
+#EXTINF:-1 tvg-chno="7" tvg-shift="-1.5" catchup="default" catchup-source="http://example.com/archive?start={utc}" catchup-days="3",Catchup Channel
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+http://example.com/catchup.mpd
+#EXTINF:-1 tvg-name='Single Quoted' group-title='News',Télé Ünicode
+http://example.com/unicode.m3u8
+#EXTINF:-1,Bad Byte �
+http://example.com/badbyte.m3u8
+   

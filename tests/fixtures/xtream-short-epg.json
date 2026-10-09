@@ -1,0 +1,28 @@
+{
+  "epg_listings": [
+    {
+      "id": "2",
+      "epg_id": "1",
+      "title": "TGF0ZSBNYXRjaA==",
+      "lang": "en",
+      "start": "2026-10-09 14:00:00",
+      "end": "2026-10-09 16:00:00",
+      "description": "U2Vjb25kIGhhbGYg4oCUIGxpdmU=",
+      "channel_id": "sports1.example",
+      "start_timestamp": "1791554400",
+      "stop_timestamp": "1791561600"
+    },
+    {
+      "id": "1",
+      "epg_id": "1",
+      "title": "TW9ybmluZyBTaG93OiBDYWbDqQ==",
+      "lang": "en",
+      "start": "2026-10-09 12:00:00",
+      "end": "2026-10-09 14:00:00",
+      "description": "",
+      "channel_id": "sports1.example",
+      "start_timestamp": "1791547200",
+      "stop_timestamp": "1791554400"
+    }
+  ]
+}

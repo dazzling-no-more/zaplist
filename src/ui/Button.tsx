@@ -8,16 +8,18 @@ interface Props {
   selected?: boolean
   className?: string
   onPress: () => void
+  onFocus?: () => void
   children: ReactNode
 }
 
 /** A focusable control: OK on the 5-way remote, or hover + click with the Magic Remote. */
-export function Button({ focusKey, selected, className, onPress, children }: Props) {
+export function Button({ focusKey, selected, className, onPress, onFocus, children }: Props) {
   const { ref, focused, focusSelf } = useFocusable<object, HTMLDivElement>({
     focusKey,
     onEnterPress: () => {
       if (!isPointerVisible()) onPress()
     },
+    onFocus: () => onFocus?.(),
   })
   const classes = ['button', className, selected && 'selected', focused && 'focused'].filter(Boolean).join(' ')
   return (

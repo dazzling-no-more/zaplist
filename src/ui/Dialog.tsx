@@ -1,4 +1,4 @@
-import { doesFocusableExist, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation'
+import { doesFocusableExist, getCurrentFocusKey, ROOT_FOCUS_KEY, setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { useEffect, useId } from 'react'
 import { Button } from './Button'
 import { useBackHandler } from './navigation'
@@ -19,7 +19,10 @@ interface Props {
   onCancel: () => void
 }
 
-/** Modal dialog: keeps focus inside, Back cancels, and focus returns to where it was on close. */
+/**
+ * Modal dialog: keeps focus inside, Back cancels, and on close focus returns to where it was
+ * (unless a button handler already moved it elsewhere).
+ */
 export function Dialog({ title, message, buttons, initialFocus = 0, onCancel }: Props) {
   const id = useId()
   useBackHandler(() => {
@@ -30,7 +33,7 @@ export function Dialog({ title, message, buttons, initialFocus = 0, onCancel }: 
     const previous = getCurrentFocusKey()
     setFocus(`${id}-button-${initialFocus}`)
     return () => {
-      if (doesFocusableExist(previous)) setFocus(previous)
+      if (getCurrentFocusKey().indexOf(id) === 0) setFocus(doesFocusableExist(previous) ? previous : ROOT_FOCUS_KEY)
     }
   }, [])
 

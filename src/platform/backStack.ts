@@ -1,16 +1,21 @@
 /** Returns true when it consumed the Back press. */
 export type BackHandler = () => boolean
 
-export interface ScreenEntry<S extends string> {
-  /** Unique per visit, so a screen remounts when the user comes back to it. */
-  readonly id: number
-  readonly name: S
-  /** What was focused when the user left this screen; restored on return. */
-  readonly focusKey?: string
+export interface Route {
+  readonly name: string
 }
 
-export interface BackStackState<S extends string> {
-  readonly screens: readonly ScreenEntry<S>[]
+export type ScreenEntry<R extends Route> = R & {
+  /** Unique per visit, so a screen remounts when the user comes back to it. */
+  readonly id: number
+  /** What was focused when the user left this screen; restored on return. */
+  readonly focusKey?: string
+  /** UI state the screen keeps while it's in the stack (selected category, list position). */
+  readonly memo: Record<string, unknown>
+}
+
+export interface BackStackState<R extends Route> {
+  readonly screens: readonly ScreenEntry<R>[]
   /** The user pressed Back on the root screen and must confirm leaving the app. */
   readonly exitPrompt: boolean
 }
@@ -19,17 +24,17 @@ export interface BackStackState<S extends string> {
  * Routes the Back key. The most recently added handler goes first (overlays, OSD); if no handler
  * consumes the press, the top screen closes; on the root screen, an exit prompt is requested.
  */
-export class BackStack<S extends string> {
-  private state: BackStackState<S>
+export class BackStack<R extends Route> {
+  private state: BackStackState<R>
   private readonly handlers: BackHandler[] = []
   private readonly listeners = new Set<() => void>()
   private nextId = 1
 
-  constructor(root: S) {
-    this.state = { screens: [{ id: 0, name: root }], exitPrompt: false }
+  constructor(root: R) {
+    this.state = { screens: [{ ...root, id: 0, memo: {} }], exitPrompt: false }
   }
 
-  getState = (): BackStackState<S> => this.state
+  getState = (): BackStackState<R> => this.state
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
@@ -38,11 +43,11 @@ export class BackStack<S extends string> {
     }
   }
 
-  /** Opens `name` on top. `leavingFocusKey` is what to focus when the user comes back. */
-  push(name: S, leavingFocusKey?: string): void {
+  /** Opens `route` on top. `leavingFocusKey` is what to focus when the user comes back. */
+  push(route: R, leavingFocusKey?: string): void {
     const screens = this.state.screens.slice()
     screens[screens.length - 1] = { ...screens[screens.length - 1], focusKey: leavingFocusKey }
-    screens.push({ id: this.nextId++, name })
+    screens.push({ ...route, id: this.nextId++, memo: {} })
     this.set({ screens })
   }
 
@@ -59,16 +64,22 @@ export class BackStack<S extends string> {
     for (let i = this.handlers.length - 1; i >= 0; i--) {
       if (this.handlers[i]()) return
     }
+    if (!this.pop()) this.set({ exitPrompt: true })
+  }
+
+  /** Closes the top screen unless it is the root. Returns false at the root. */
+  pop(): boolean {
     const { screens } = this.state
-    if (screens.length > 1) this.set({ screens: screens.slice(0, -1) })
-    else this.set({ exitPrompt: true })
+    if (screens.length < 2) return false
+    this.set({ screens: screens.slice(0, -1) })
+    return true
   }
 
   closeExitPrompt(): void {
     this.set({ exitPrompt: false })
   }
 
-  private set(patch: Partial<BackStackState<S>>): void {
+  private set(patch: Partial<BackStackState<R>>): void {
     this.state = { ...this.state, ...patch }
     this.listeners.forEach((listener) => listener())
   }

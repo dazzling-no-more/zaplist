@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { Readable } from 'node:stream'
 import { createRequire } from 'node:module'
 import react from '@vitejs/plugin-react'
 import compat from 'core-js-compat'
@@ -12,14 +13,10 @@ const TARGET = 'chrome53'
  * `virtual:core-js` imports exactly the core-js modules Chromium 53 lacks (what Babel's
  * `useBuiltIns: "entry"` would emit). The dev server runs in a modern desktop browser, so it gets none.
  */
-function coreJsPolyfills(): Plugin {
+function coreJsPolyfills(build: boolean): Plugin {
   const id = 'virtual:core-js'
-  let build = false
   return {
     name: 'core-js-polyfills',
-    configResolved(config) {
-      build = config.command === 'build'
-    },
     resolveId: (source) => (source === id ? '\0' + id : undefined),
     load(resolved) {
       if (resolved !== '\0' + id) return
@@ -46,6 +43,46 @@ function classicScripts(): Plugin {
   }
 }
 
+/**
+ * `/__proxy?url=<absolute URL>` on the dev server. The TV lets packaged apps fetch any origin, but
+ * desktop browsers enforce CORS; src/data/http.ts routes requests through here in dev builds.
+ */
+function devProxy(): Plugin {
+  const forwarded = ['content-type', 'content-range', 'accept-ranges', 'last-modified']
+  return {
+    name: 'dev-proxy',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__proxy', async (req, res) => {
+        const target = new URL(req.url ?? '', 'http://localhost').searchParams.get('url')
+        if (!target || !/^https?:\/\//i.test(target)) {
+          res.statusCode = 400
+          res.end('Expected ?url=http(s)://...')
+          return
+        }
+        const controller = new AbortController()
+        req.on('close', () => controller.abort())
+        try {
+          const range = req.headers.range
+          const upstream = await fetch(target, { signal: controller.signal, headers: range ? { range } : {} })
+          res.statusCode = upstream.status
+          for (const name of forwarded) {
+            const value = upstream.headers.get(name)
+            if (value) res.setHeader(name, value)
+          }
+          res.setHeader('access-control-allow-origin', '*')
+          if (!upstream.body) return void res.end()
+          Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream).pipe(res)
+        } catch (error) {
+          if (controller.signal.aborted) return
+          res.statusCode = 502
+          res.end(String(error))
+        }
+      })
+    },
+  }
+}
+
 /** Copies appinfo.json into dist/ so ares-package can package dist/ as-is. */
 function webosAppInfo(): Plugin {
   return {
@@ -57,9 +94,9 @@ function webosAppInfo(): Plugin {
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: './',
-  plugins: [react(), coreJsPolyfills(), classicScripts(), webosAppInfo()],
+  plugins: [react(), coreJsPolyfills(command === 'build'), classicScripts(), webosAppInfo(), devProxy()],
   build: {
     target: TARGET,
     cssTarget: TARGET,
@@ -70,8 +107,11 @@ export default defineConfig({
       output: { format: 'iife', inlineDynamicImports: true },
     },
   },
-  worker: { format: 'iife' },
+  worker: {
+    format: 'iife',
+    plugins: () => [coreJsPolyfills(command === 'build')],
+  },
   test: {
     include: ['tests/**/*.test.ts'],
   },
-})
+}))

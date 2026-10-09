@@ -131,3 +131,122 @@ p {
 .dialog-buttons .button:last-child {
   margin-right: 0;
 }
+
+.small {
+  font-size: 24px;
+}
+
+.error {
+  color: #ff8a80;
+}
+
+.button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.button.primary.focused {
+  background: var(--focus-bg);
+  color: var(--focus-text);
+}
+
+.welcome {
+  width: 1100px;
+  padding-top: 160px;
+}
+
+.welcome h2 {
+  margin-top: 40px;
+}
+
+/* Forms */
+.form {
+  max-width: 1000px;
+}
+
+.segmented {
+  display: flex;
+  margin-bottom: 20px;
+}
+
+.segmented .button {
+  margin: 0 16px 0 0;
+}
+
+.field {
+  display: block;
+  margin-bottom: 14px;
+  padding: 10px 20px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  transition: transform 0.12s ease-out;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-dim);
+  font-size: 24px;
+}
+
+.field input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.field input:focus {
+  border-color: var(--accent);
+}
+
+.field.focused {
+  background: var(--focus-bg);
+  transform: scale(1.02);
+}
+
+.field.focused .field-label {
+  color: var(--focus-text);
+}
+
+/* Settings rows */
+.rows {
+  margin-bottom: 20px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-title {
+  font-size: 30px;
+}
+
+.row-actions {
+  display: flex;
+  flex: none;
+}
+
+.row-actions .button {
+  margin: 0 0 0 12px;
+  background: var(--surface-raised);
+}
+
+.row-actions .button.focused {
+  background: var(--focus-bg);
+}

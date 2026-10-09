@@ -3,12 +3,14 @@ import { t } from './i18n'
 import { platformBack } from './platform/webos'
 import { HomeScreen } from './screens/Home'
 import { SettingsScreen } from './screens/Settings'
+import { SourceEditScreen } from './screens/SourceEdit'
 import { Dialog } from './ui/Dialog'
 import { backStack, useBackStack, type ScreenName, type ScreenProps } from './ui/navigation'
 
-const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
+const SCREENS: { [N in ScreenName]: ComponentType<ScreenProps<N>> } = {
   home: HomeScreen,
   settings: SettingsScreen,
+  sourceEdit: SourceEditScreen,
 }
 
 const cancelExit = () => backStack.closeExitPrompt()
@@ -21,7 +23,7 @@ function exitApp() {
 export function App() {
   const { screens, exitPrompt } = useBackStack()
   const top = screens[screens.length - 1]
-  const Screen = SCREENS[top.name]
+  const Screen = SCREENS[top.name] as ComponentType<ScreenProps>
 
   return (
     <>
