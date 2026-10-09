@@ -66,10 +66,18 @@ describe('parseAccount', () => {
     })
   })
 
-  it('treats a null expiry as never expiring', () => {
+  it.each([null, '0', '-1', 0])('treats an expiry of %s as never expiring', (value) => {
     const login = json('xtream-login.json')
-    login.user_info.exp_date = null
+    login.user_info.exp_date = value
     expect(parseAccount(login).expiresAt).toBeUndefined()
+  })
+
+  it('accepts auth as a number, string or boolean', () => {
+    for (const auth of [1, '1', true]) {
+      const login = json('xtream-login.json')
+      login.user_info.auth = auth
+      expect(parseAccount(login).status).toBe('Active')
+    }
   })
 
   it('throws on rejected logins', () => {

@@ -1,9 +1,10 @@
 import { init, pause, resume } from '@noriginmedia/norigin-spatial-navigation'
-import { isWebOS } from '../platform/webos'
+import { cursorVisible, isWebOS } from '../platform/webos'
 
 type VisibilityEvent = CustomEvent<{ visibility: boolean }>
 
 let pointerVisible = false
+let swallowEnter = false
 
 /**
  * While the Magic Remote pointer is on screen, its OK button arrives as a click, so focusables act
@@ -11,9 +12,20 @@ let pointerVisible = false
  */
 export const isPointerVisible = (): boolean => pointerVisible
 
-/** mouseenter handler: the element under the Magic Remote pointer (or a desktop mouse) takes focus. */
+/** Hovering moves focus while the Magic Remote pointer is shown (or always with a desktop mouse). */
+export const canHover = (): boolean => pointerVisible || !isWebOS()
+
+/** mouseenter handler: the element under the pointer takes focus. */
 export const hoverToFocus = (focusSelf: () => void) => (): void => {
-  if (pointerVisible || !isWebOS()) focusSelf()
+  if (canHover()) focusSelf()
+}
+
+/**
+ * After a long press opens something (a menu), the OK key is still held and keeps repeating; ignore
+ * it until it is released so it doesn't also press whatever just opened.
+ */
+export function swallowHeldEnter(): void {
+  swallowEnter = true
 }
 
 /**
@@ -24,6 +36,16 @@ export function initFocus(): void {
   // Native events: keep the browser's default key handling so the caret moves inside text inputs.
   // Nothing scrolls natively (overflow is hidden everywhere), so arrows have no other default effect.
   init({ shouldUseNativeEvents: true })
+  pointerVisible = cursorVisible()
+  // Capture phase on window runs before spatial navigation's own listener.
+  const swallow = (event: KeyboardEvent) => {
+    if (!swallowEnter || event.keyCode !== 13) return
+    if (event.type === 'keyup') swallowEnter = false
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  }
+  window.addEventListener('keydown', swallow, true)
+  window.addEventListener('keyup', swallow, true)
   document.addEventListener('cursorStateChange', (event) => {
     pointerVisible = (event as VisibilityEvent).detail.visibility
   })

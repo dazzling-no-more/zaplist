@@ -22,6 +22,7 @@ describe('toKey', () => {
     expect(toKey(413, tv)).toBe('stop')
     expect(toKey(412, tv)).toBe('rewind')
     expect(toKey(417, tv)).toBe('fastForward')
+    expect(toKey(457, tv)).toBe('info')
     expect(toKey(33, tv)).toBe('channelUp')
     expect(toKey(34, tv)).toBe('channelDown')
   })

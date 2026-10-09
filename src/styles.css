@@ -250,3 +250,240 @@ p {
 .row-actions .button.focused {
   background: var(--focus-bg);
 }
+
+h3 {
+  margin: 24px 0 16px;
+  font-size: 30px;
+}
+
+.button-row {
+  display: flex;
+}
+
+.button-row .button {
+  margin-right: 16px;
+}
+
+.empty {
+  padding-top: 24px;
+}
+
+/* Virtualized lists: rows are absolutely positioned; scrolling moves the inner layer. */
+.vlist {
+  position: relative;
+  overflow: hidden;
+}
+
+.vlist-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.vlist-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  padding: 4px 6px;
+}
+
+.group-list {
+  margin-top: 16px;
+}
+
+.group-row,
+.channel-row {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 0 20px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.group-name,
+.channel-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.group-detail {
+  flex: none;
+  margin-left: 12px;
+  color: var(--text-dim);
+  font-size: 24px;
+}
+
+.group-row.selected {
+  color: var(--accent);
+}
+
+/* The focused row of a focused list. */
+.group-row.focused,
+.channel-row.focused {
+  background: var(--focus-bg);
+  color: var(--focus-text);
+}
+
+.group-row.focused .group-detail {
+  color: #4a5160;
+}
+
+.channel-row.moving {
+  outline: 4px dashed var(--accent);
+}
+
+.channel-number {
+  flex: none;
+  width: 80px;
+  margin-right: 16px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.channel-row.focused .channel-number {
+  color: #4a5160;
+}
+
+.channel-text {
+  flex: 1;
+  min-width: 0;
+  margin-left: 20px;
+}
+
+.logo {
+  position: relative;
+  flex: none;
+  width: 112px;
+  height: 63px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface-raised);
+  color: var(--text-dim);
+  font-size: 24px;
+  line-height: 63px;
+  text-align: center;
+}
+
+.logo img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.logo img.shown {
+  opacity: 1;
+}
+
+.fav-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin: 0 12px 2px 0;
+  border-radius: 50%;
+  background: #f5c518;
+  vertical-align: middle;
+}
+
+/* A small padlock drawn with CSS (no emoji fonts on older TVs). */
+.lock-icon {
+  position: relative;
+  display: inline-block;
+  width: 18px;
+  height: 14px;
+  margin: 10px 14px 0 2px;
+  border-radius: 3px;
+  background: currentColor;
+  vertical-align: middle;
+}
+
+.lock-icon::before {
+  content: '';
+  position: absolute;
+  bottom: 12px;
+  left: 3px;
+  width: 8px;
+  height: 9px;
+  border: 3px solid currentColor;
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+}
+
+.lock-icon.open::before {
+  left: 9px;
+}
+
+.hints {
+  margin-top: 12px;
+  color: var(--text-dim);
+  font-size: 24px;
+}
+
+.key-red,
+.key-yellow {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+.key-red {
+  background: #e53935;
+}
+
+.key-yellow {
+  background: #f5c518;
+}
+
+/* PIN dialog */
+.pin-dialog {
+  width: 560px;
+}
+
+.pin-dots {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.pin-dots span {
+  width: 28px;
+  height: 28px;
+  margin: 0 12px;
+  border: 3px solid var(--text-dim);
+  border-radius: 50%;
+}
+
+.pin-dots span.filled {
+  border-color: var(--text);
+  background: var(--text);
+}
+
+.keypad-row {
+  display: flex;
+}
+
+.keypad-key {
+  flex: 1;
+  margin: 0 6px 12px;
+  text-align: center;
+}
+
+.pin-dialog .dialog-buttons {
+  margin-top: 12px;
+}

@@ -4,7 +4,7 @@ import { assignNumbers, uniqueId } from './playlist'
 // Xtream Codes player_api.php responses. Panels differ, so every field is optional and loosely typed.
 export interface XtreamLogin {
   user_info?: {
-    auth?: number | string
+    auth?: number | string | boolean
     status?: string
     exp_date?: string | number | null
     max_connections?: string | number
@@ -84,11 +84,12 @@ export class XtreamAuthError extends Error {}
 /** Reads the login response; throws XtreamAuthError when the server rejects the credentials. */
 export function parseAccount(login: XtreamLogin): XtreamAccount {
   const info = login.user_info
-  if (!info || String(info.auth) !== '1') throw new XtreamAuthError(info?.message || 'Login rejected')
+  if (!info || (info.auth !== true && String(info.auth) !== '1')) throw new XtreamAuthError(info?.message || 'Login rejected')
   const expires = toInt(info.exp_date)
   return {
     status: info.status || 'Active',
-    expiresAt: expires ? expires * 1000 : undefined,
+    // Panels send 0, negative or missing values for accounts that don't expire.
+    expiresAt: expires && expires > 0 ? expires * 1000 : undefined,
     maxConnections: toInt(info.max_connections),
     activeConnections: toInt(info.active_cons),
     trial: String(info.is_trial) === '1',

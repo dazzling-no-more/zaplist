@@ -7,6 +7,7 @@ interface WebOSTV {
 
 interface WebOSSystem {
   activate(): void
+  cursor?: { visibility?: boolean }
 }
 
 declare global {
@@ -25,6 +26,11 @@ export function isWebOS(): boolean {
 /** Leaves the app the way the system Back key would. Does nothing in a desktop browser. */
 export function platformBack(): void {
   if (isWebOS()) window.webOS?.platformBack()
+}
+
+/** Whether the Magic Remote pointer is on screen right now. */
+export function cursorVisible(): boolean {
+  return !!(window.webOSSystem ?? window.PalmSystem)?.cursor?.visibility
 }
 
 /** Brings the app to the foreground. */

@@ -1,5 +1,5 @@
 import { doesFocusableExist, getCurrentFocusKey, ROOT_FOCUS_KEY, setFocus } from '@noriginmedia/norigin-spatial-navigation'
-import { useEffect, useId } from 'react'
+import { useEffect, useId, type ReactNode } from 'react'
 import { Button } from './Button'
 import { useBackHandler } from './navigation'
 import { Region } from './Region'
@@ -12,18 +12,17 @@ interface DialogButton {
 interface Props {
   title: string
   message?: string
-  buttons: DialogButton[]
-  /** Index of the button focused when the dialog opens. */
-  initialFocus?: number
+  children?: ReactNode
+  buttons?: DialogButton[]
+  /** Button index, or the focus key of a child, focused when the dialog opens. */
+  initialFocus?: number | string
   /** Back was pressed. */
   onCancel: () => void
+  className?: string
 }
 
-/**
- * Modal dialog: keeps focus inside, Back cancels, and on close focus returns to where it was
- * (unless a button handler already moved it elsewhere).
- */
-export function Dialog({ title, message, buttons, initialFocus = 0, onCancel }: Props) {
+/** Modal dialog: keeps focus inside, Back cancels, and focus returns to where it was on close. */
+export function Dialog({ title, message, children, buttons = [], initialFocus = 0, onCancel, className }: Props) {
   const id = useId()
   useBackHandler(() => {
     onCancel()
@@ -31,24 +30,27 @@ export function Dialog({ title, message, buttons, initialFocus = 0, onCancel }: 
   })
   useEffect(() => {
     const previous = getCurrentFocusKey()
-    setFocus(`${id}-button-${initialFocus}`)
+    setFocus(typeof initialFocus === 'string' ? initialFocus : `${id}-button-${initialFocus}`)
     return () => {
-      if (getCurrentFocusKey().indexOf(id) === 0) setFocus(doesFocusableExist(previous) ? previous : ROOT_FOCUS_KEY)
+      setFocus(doesFocusableExist(previous) ? previous : ROOT_FOCUS_KEY)
     }
   }, [])
 
   return (
     <div className="dialog-backdrop">
-      <Region focusKey={`${id}-dialog`} className="dialog" isFocusBoundary>
+      <Region focusKey={`${id}-dialog`} className={`dialog${className ? ' ' + className : ''}`} isFocusBoundary>
         <h2>{title}</h2>
         {message && <p>{message}</p>}
-        <div className="dialog-buttons">
-          {buttons.map((button, i) => (
-            <Button key={i} focusKey={`${id}-button-${i}`} onPress={button.onPress}>
-              {button.label}
-            </Button>
-          ))}
-        </div>
+        {children}
+        {buttons.length > 0 && (
+          <div className="dialog-buttons">
+            {buttons.map((button, i) => (
+              <Button key={i} focusKey={`${id}-button-${i}`} onPress={button.onPress}>
+                {button.label}
+              </Button>
+            ))}
+          </div>
+        )}
       </Region>
     </div>
   )

@@ -1,5 +1,5 @@
 import { useFocusable } from '@noriginmedia/norigin-spatial-navigation'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { hoverToFocus, isPointerVisible } from './focus'
 
 interface Props {
@@ -9,13 +9,15 @@ interface Props {
   onChange: (value: string) => void
   type?: 'text' | 'password' | 'url'
   placeholder?: string
+  /** Start editing on mount (opens the on-screen keyboard on webOS). */
+  autoEdit?: boolean
 }
 
 /**
  * A text input inside spatial navigation. OK starts editing (on webOS this opens the on-screen
  * keyboard); OK, Up/Down or Back stop editing. While editing, Left/Right move the caret.
  */
-export function TextField({ focusKey, label, value, onChange, type = 'text', placeholder }: Props) {
+export function TextField({ focusKey, label, value, onChange, type = 'text', placeholder, autoEdit }: Props) {
   const input = useRef<HTMLInputElement>(null)
   const editing = () => document.activeElement === input.current
   const { ref, focused, focusSelf } = useFocusable<object, HTMLLabelElement>({
@@ -32,6 +34,9 @@ export function TextField({ focusKey, label, value, onChange, type = 'text', pla
     },
     onBlur: () => input.current?.blur(),
   })
+  useEffect(() => {
+    if (autoEdit) input.current?.focus()
+  }, [])
 
   return (
     <label ref={ref} className={`field${focused ? ' focused' : ''}`} onMouseEnter={hoverToFocus(focusSelf)} onClick={focusSelf}>

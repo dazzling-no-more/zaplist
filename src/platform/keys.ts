@@ -17,6 +17,8 @@ export const KeyCode = {
   Stop: 413,
   Rewind: 412,
   FastForward: 417,
+  Info: 457,
+  // Some TVs don't pass the channel keys to apps, so every use also has an arrow-key alternative.
   ChannelUp: 33,
   ChannelDown: 34,
   Digit0: 48,
@@ -44,6 +46,7 @@ export type Key =
   | 'stop'
   | 'rewind'
   | 'fastForward'
+  | 'info'
   | 'channelUp'
   | 'channelDown'
   | Digit
@@ -64,6 +67,7 @@ const REMOTE_KEYS: Record<number, Key> = {
   [KeyCode.Stop]: 'stop',
   [KeyCode.Rewind]: 'rewind',
   [KeyCode.FastForward]: 'fastForward',
+  [KeyCode.Info]: 'info',
   [KeyCode.ChannelUp]: 'channelUp',
   [KeyCode.ChannelDown]: 'channelDown',
 }
