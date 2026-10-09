@@ -10,7 +10,7 @@ two files online, a test on a real TV, a seller account and the submission form.
 | ---- | -------- |
 | `out/zaplist.player_1.0.0_all.ipk` | The app package (built in step 3) |
 | `store/lg-qa/Zaplist_UX_Scenario_1.0.0.pptx` | LG's UX scenario document, filled in (built in step 2) |
-| `store/lg-qa/Zaplist_Self_Checklist_1.0.0.xlsx` | LG's Self Checklist, filled in |
+| `store/lg-qa/Zaplist_Self_Checklist_1.0.0.xlsx` | LG's Self Checklist: comments and N/A items filled in; the results that need a TV test stay empty until step 4 |
 | `store/listing.md` | App name, descriptions, category, image list for the form |
 | `store/icon-400.png` | Store icon, 400×400 |
 | `store/screenshots/*.png` | Primary + 5 secondary screenshots, 1280×720 |
@@ -28,8 +28,8 @@ before then if you want another one (for example the reverse domain of a website
 - **Test playlist**: publish `store/test-playlist.m3u` at a public URL: a public GitHub repository or
   gist, GitHub Pages, or any web host. LG's testers type it with a remote, so keep it short (a URL
   shortener is fine). Open it on the TV's browser to check it's reachable.
-- **Privacy policy**: replace the two placeholders in `store/privacy-policy.md` (date, e-mail) and
-  publish it the same way.
+- **Privacy policy**: put your support e-mail into `store/privacy-policy.md` (and the date, if you
+  change the text) and publish it the same way.
 
 ## 2. Put your details into the UX scenario
 
@@ -64,8 +64,8 @@ results for a TV, so run it on one first; a rejection costs a review round.
    app, then `npx ares-novacom --device tv --getkey` with the passphrase it shows.
 4. `npm run install:tv && npm run launch:tv`. `npm run inspect:tv` opens Web Inspector.
 
-Then go through the UX scenario on the TV, page by page, with the test playlist, and check the Self
-Checklist items marked Pass. In particular:
+Then go through the UX scenario on the TV, page by page, with the test playlist, and every Self
+Checklist item whose result is still empty. In particular:
 
 - [ ] Every stream in the test playlist plays; audio tracks switch on "Angel One", subtitles on
       "Apple test stream".
@@ -75,9 +75,17 @@ Checklist items marked Pass. In particular:
 - [ ] The splash image shows while the app loads; the launcher tile looks right.
 - [ ] Unplugging the network shows a message; playback resumes when it's back.
 - [ ] Turning the TV off and on reopens the app with its playlists.
+- [ ] Home, then back into the app (from the launcher and from Recent): it comes back where it was;
+      playback stops while the app is hidden.
+- [ ] Typing with the LG keyboard in the playlist, login and search fields: upper and lower case, the
+      < > cursor buttons, voice input.
 
-If something fails, fix it (or, if it can't be fixed, set that item to *Fail* in the Self Checklist
-and fix it before submitting: LG rejects any app with a failed item). Then rebuild (step 3).
+If something fails, fix it and rebuild (step 3); LG rejects any app with a failed item. When
+everything passes, fill in the checklist's results:
+
+```sh
+python store/lg-qa/self-checklist.py --tv-verified
+```
 
 Also search the LG Content Store on the TV for "Zaplist": LG rejects a title that another app in the
 store already uses. Web searches found no app or trademark with this name, but they can't see the store.
@@ -123,7 +131,7 @@ time; plan for weeks. Questions go to the *1:1 Q&A* in Seller Lounge.
 
 Every change after approval goes through the same review. For each release: raise `version` in
 `appinfo.json` and `package.json`, build, package, test on the TV, rebuild both LG documents
-(`ux-scenario.ps1`, `python store/lg-qa/self-checklist.py`), update "What's new" in
+(`ux-scenario.ps1`, and `self-checklist.py --tv-verified` after the TV test), update "What's new" in
 `store/listing.md`, and submit the new IPK as an update. When screens change, retake the screenshots
 in `store/screenshots/` and `store/lg-qa/images/` (1280×720) and check the callout positions in
 `ux-scenario.ps1`.
@@ -136,8 +144,8 @@ in `store/screenshots/` and `store/lg-qa/images/` (1280×720) and check the call
 | All navigation keys and the pointer work; visible focus | Spatial navigation plus pointer hover, click and wheel on every screen |
 | Playback controls reachable without media keys (Magic Remote) | Play/Pause, channel list, favorite, audio, subtitles and picture buttons in the info bar |
 | Everything inside the overscan area | 96 px / 54 px margins at 1920×1080, overlays included |
-| No hard-coded credentials; sensitive data encrypted | Sources sealed with AES-GCM under a non-extractable key; logins masked in stored URLs (`src/data/vault.ts`, `src/data/db.ts`) |
-| Visual cue while loading | Splash image, loading text, spinners |
+| No hard-coded credentials; sensitive data encrypted | Sources, cached channel lists (every stream, logo and guide URL, whatever token they carry), the PIN and the extra guide URL are sealed with AES-GCM under a non-extractable key generated on the TV (`src/data/vault.ts`, `src/data/db.ts`, `src/data/prefs.ts`) |
+| Visual cue while loading; no hang | Splash image, loading text, spinners; if storage can't be read at startup, an error screen offers Try again and Reset app data |
 | Long text ellipsized, lists scroll | Ellipsis on names; virtual lists |
 | Square, opaque icon without rounded corners | `store/icon-400.png`, `public/icon.png`, `public/largeIcon.png` |
 | Adult content protection (when present) | Parental PIN locks categories; locked channels hidden everywhere |

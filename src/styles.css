@@ -248,6 +248,13 @@ p {
   margin-bottom: 20px;
 }
 
+/* Settings > Sources: scrolls (see Sources.tsx) so "Add a source" stays on screen. */
+.source-list {
+  position: relative;
+  max-height: 748px;
+  overflow: hidden;
+}
+
 .row {
   display: flex;
   align-items: center;

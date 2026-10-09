@@ -1,13 +1,13 @@
 # Zaplist privacy policy
 
-_Last updated: `<date of publishing>`_
+_Last updated: October 10, 2026_
 
 Zaplist is a free, open-source app for LG webOS TVs that plays playlists you add yourself.
 
 **What the app stores.** The playlist URLs, Xtream Codes logins and guide URLs you enter, the channel
 lists and TV guide it downloads from them, and your settings (favorites, recent channels, parental
-control PIN, picture mode). All of it is stored only on your TV. Playlist URLs and logins are
-encrypted. Deleting a source in Settings removes it and its channels; uninstalling the app removes
+control PIN, picture mode). All of it is stored only on your TV. Playlist URLs, logins, the channel
+lists and guide addresses downloaded with them, and the PIN are encrypted. Deleting a source in Settings removes it and its channels; uninstalling the app removes
 everything.
 
 **What the app sends.** The app connects only to the addresses you enter (your playlist, your

@@ -42,10 +42,13 @@ if (!isWebOS()) {
 // Dev builds only: lets browser automation reach any screen directly.
 if (import.meta.env.DEV) Object.assign(window, { __app: { backStack, library, guide } })
 
-library.init().then(() => {
-  resumeLastChannel()
-  void guide.start()
-})
+library.init().then(
+  () => {
+    resumeLastChannel()
+    void guide.start()
+  },
+  () => undefined, // Home shows the error with Try again and Reset
+)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

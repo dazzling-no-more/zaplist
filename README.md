@@ -114,9 +114,9 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
 - Audio track switching for HLS played by the TV's own player may not work on every webOS version
   (reported on LG's forum). Streams played by hls.js switch reliably.
 - Catch-up/timeshift, VOD and series (Xtream) are not implemented yet.
-- Sources are encrypted with a key kept on the TV (non-extractable, in IndexedDB), and the login is
-  replaced by placeholders in stored stream and guide URLs. That protects a copied database, not a TV
-  someone fully controls. The optional global guide URL (Settings → TV guide) is stored unencrypted.
+- Sources, cached channel lists, guide addresses, the PIN and the extra guide URL are encrypted with a
+  key kept on the TV (AES-GCM, non-extractable, in IndexedDB). That protects a copied database, not a
+  TV someone fully controls. Favorites, recent channels and guide programmes are stored unencrypted.
 
 ## Project layout
 

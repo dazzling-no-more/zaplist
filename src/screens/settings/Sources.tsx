@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type WheelEvent } from 'react'
 import { guide } from '../../data/guide'
 import { library, useLibrary } from '../../data/library'
 import type { Source } from '../../data/models'
@@ -19,6 +19,19 @@ export function SourcesSection() {
     return result
   }, [channels])
 
+  // The list scrolls inside a fixed height so "Add a source" stays on screen however many there are.
+  const list = useRef<HTMLDivElement>(null)
+  const reveal = (sourceId: string) => {
+    const box = list.current
+    const row = box?.querySelector<HTMLElement>(`[data-source="${sourceId}"]`)
+    if (!box || !row) return
+    if (row.offsetTop < box.scrollTop) box.scrollTop = row.offsetTop
+    else if (row.offsetTop + row.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = row.offsetTop + row.offsetHeight - box.clientHeight
+  }
+  const scroll = (event: WheelEvent) => {
+    if (list.current) list.current.scrollTop += event.deltaY > 0 ? 124 : -124
+  }
+
   const refresh = (source: Source) => {
     setErrors(({ [source.id]: _, ...rest }) => rest)
     library
@@ -31,7 +44,7 @@ export function SourcesSection() {
     <Region focusKey="settings-content" className="content">
       <h2>{t('settings.sources')}</h2>
       {!sources.length && <p className="dim">{t('sources.none')}</p>}
-      <div className="rows">
+      <div ref={list} className="rows source-list" onWheel={scroll}>
         {sources.map((source) => {
           const busy = progress[source.id]
           const details = [
@@ -41,25 +54,33 @@ export function SourcesSection() {
           ]
           const account = source.kind === 'xtream' ? source.account : undefined
           return (
-            <Region key={source.id} focusKey={`source-row-${source.id}`} className="row">
-              <div className="row-text">
-                <div className="row-title">{source.name}</div>
-                <div className="dim small">{details.filter(Boolean).join(' · ')}</div>
-                {account && (
-                  <div className="dim small">
-                    {account.expiresAt ? t('sources.expires', { date: formatDate(account.expiresAt) }) : t('sources.noExpiry')}
-                    {account.maxConnections ? ' · ' + t('sources.connections', { count: account.maxConnections }) : ''}
-                  </div>
-                )}
-                {busy && <div className="small">{describeProgress(busy)}</div>}
-                {errors[source.id] && <div className="error small">{errors[source.id]}</div>}
-              </div>
-              <div className="row-actions">
-                <Button onPress={() => refresh(source)}>{t('sources.refresh')}</Button>
-                <Button onPress={() => navigate({ name: 'sourceEdit', sourceId: source.id })}>{t('sources.edit')}</Button>
-                <Button onPress={() => setDeleting(source)}>{t('sources.delete')}</Button>
-              </div>
-            </Region>
+            <div key={source.id} data-source={source.id}>
+              <Region focusKey={`source-row-${source.id}`} className="row">
+                <div className="row-text">
+                  <div className="row-title">{source.name}</div>
+                  <div className="dim small">{details.filter(Boolean).join(' · ')}</div>
+                  {account && (
+                    <div className="dim small">
+                      {account.expiresAt ? t('sources.expires', { date: formatDate(account.expiresAt) }) : t('sources.noExpiry')}
+                      {account.maxConnections ? ' · ' + t('sources.connections', { count: account.maxConnections }) : ''}
+                    </div>
+                  )}
+                  {busy && <div className="small">{describeProgress(busy)}</div>}
+                  {errors[source.id] && <div className="error small">{errors[source.id]}</div>}
+                </div>
+                <div className="row-actions">
+                  <Button onFocus={() => reveal(source.id)} onPress={() => refresh(source)}>
+                    {t('sources.refresh')}
+                  </Button>
+                  <Button onFocus={() => reveal(source.id)} onPress={() => navigate({ name: 'sourceEdit', sourceId: source.id })}>
+                    {t('sources.edit')}
+                  </Button>
+                  <Button onFocus={() => reveal(source.id)} onPress={() => setDeleting(source)}>
+                    {t('sources.delete')}
+                  </Button>
+                </div>
+              </Region>
+            </div>
           )
         })}
       </div>

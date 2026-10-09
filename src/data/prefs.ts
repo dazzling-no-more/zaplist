@@ -1,9 +1,13 @@
 import { useSyncExternalStore } from 'react'
+import { getSecretSettings, putSecretSettings } from './db'
 
 export const ASPECTS = ['fit', 'zoom', 'fill', '16:9', '4:3'] as const
 export type Aspect = (typeof ASPECTS)[number]
 
-/** Small user settings kept in localStorage. Playlists and the guide live in IndexedDB. */
+/**
+ * Small user settings, kept in localStorage except the secrets (PIN, guide URL), which are stored
+ * encrypted in IndexedDB and read by `loadSecretPrefs`. Playlists and the guide live in IndexedDB.
+ */
 export interface Prefs {
   /** Channel ids in the user's order. */
   favorites: string[]
@@ -43,14 +47,44 @@ const listeners = new Set<() => void>()
 
 export const getPrefs = (): Prefs => prefs
 
-export function updatePrefs(patch: Partial<Prefs>): void {
-  prefs = { ...prefs, ...patch }
+/** Settings that can grant access (a guide URL may carry a login): never written to localStorage. */
+type Secrets = Pick<Prefs, 'pin' | 'epgUrl'>
+const secretsOf = ({ pin, epgUrl }: Prefs): Secrets => ({ pin, epgUrl })
+
+function saveLocal(): void {
+  const { pin: _pin, epgUrl: _epgUrl, ...rest } = prefs
   try {
-    localStorage.setItem(KEY, JSON.stringify(prefs))
+    localStorage.setItem(KEY, JSON.stringify(rest))
   } catch {
     // Storage full or unavailable: keep the change for this session.
   }
+}
+
+export function updatePrefs(patch: Partial<Prefs>): void {
+  prefs = { ...prefs, ...patch }
+  saveLocal()
+  if ('pin' in patch || 'epgUrl' in patch) void putSecretSettings(secretsOf(prefs)).catch(() => undefined)
   listeners.forEach((listener) => listener())
+}
+
+/** Reads the PIN and guide URL from encrypted storage, moving them there from localStorage (older versions). */
+export async function loadSecretPrefs(): Promise<void> {
+  const stored = await getSecretSettings<Secrets>()
+  if (stored) prefs = { ...prefs, pin: stored.pin, epgUrl: stored.epgUrl }
+  else if (prefs.pin !== undefined || prefs.epgUrl !== undefined) {
+    await putSecretSettings(secretsOf(prefs))
+    saveLocal()
+  }
+  listeners.forEach((listener) => listener())
+}
+
+/** Forgets every setting (startup recovery). */
+export function clearPrefs(): void {
+  try {
+    localStorage.removeItem(KEY)
+  } catch {
+    // nothing stored
+  }
 }
 
 function subscribe(listener: () => void): () => void {

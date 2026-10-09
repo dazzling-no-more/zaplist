@@ -160,6 +160,11 @@ function webosAppInfo(): Plugin {
 export default defineConfig(({ command }) => ({
   base: './',
   plugins: [react(), coreJsPolyfills(command === 'build'), classicScripts(), webosAppInfo(), vendorScripts(), devProxy()],
+  server: {
+    // Packages and test output, not sources. A browser profile in there holds locked files, which
+    // crash the watcher on Windows.
+    watch: { ignored: ['**/out/**', '**/dist/**'] },
+  },
   build: {
     target: TARGET,
     cssTarget: TARGET,

@@ -406,7 +406,7 @@ try {
         '1. Zaplist includes no channels. Add the test playlist from 4 to test playback; it uses public test streams (Blender Foundation open movies, Apple and Google test streams).',
         '2. Xtream Codes sources need an account from an IPTV provider, which we can''t supply; the M3U path covers the same screens.',
         '3. Back on the first screen calls webOS.platformBack(), so the TV shows its exit popup or Home screen depending on the webOS version.',
-        '4. No credentials are hard-coded. The words "password", "credential" and "token" in the package come from the Xtream Codes API parameters, the login form field, the core-js URL polyfill (URL.password) and the XHR/fetch withCredentials options in hls.js and mpegts.js. Playlist URLs and logins are stored only on the TV, encrypted (AES-GCM).',
+        '4. No credentials are hard-coded. The words "password", "credential" and "token" in the package come from the Xtream Codes API parameters, the login form field, the core-js URL polyfill (URL.password) and the XHR/fetch withCredentials options in hls.js and mpegts.js. Playlist URLs, logins, the cached channel lists and guide addresses, and the parental PIN are stored only on the TV, encrypted (AES-GCM, key generated on the TV).',
         "5. Contact: $Email"
       ) -join "`r"
       $sh.TextFrame.TextRange.Font.Size = 12

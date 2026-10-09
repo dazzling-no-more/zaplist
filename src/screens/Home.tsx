@@ -1,10 +1,11 @@
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { useEffect, useMemo, useState } from 'react'
+import { deleteDatabase } from '../data/db'
 import { library, useLibrary } from '../data/library'
 import { ALL, buildGroups, channelsByCategory, channelsForGroup, FAVORITES, type ChannelGroup } from '../data/lists'
 import type { Channel } from '../data/models'
 import { unlock, useUnlocked } from '../data/parental'
-import { moveFavorite, toggleFavorite, usePrefs } from '../data/prefs'
+import { clearPrefs, moveFavorite, toggleFavorite, usePrefs } from '../data/prefs'
 import { t } from '../i18n'
 import { Button } from '../ui/Button'
 import { ChannelRow } from '../ui/ChannelRow'
@@ -35,7 +36,8 @@ interface HomeMemo {
 }
 
 export function HomeScreen({ entry }: ScreenProps<'home'>) {
-  const { ready, sources } = useLibrary()
+  const { ready, sources, error } = useLibrary()
+  if (error) return <StorageError entry={entry} error={error} />
   if (!ready) return <p className="dim">{t('common.loading')}</p>
   if (!sources.length) return <Welcome entry={entry} />
   return <Browse entry={entry} />
@@ -52,6 +54,45 @@ function Welcome({ entry }: ScreenProps<'home'>) {
       <Button focusKey="home-add-source" className="inline primary" onPress={() => navigate({ name: 'sourceEdit' })}>
         {t('home.addSource')}
       </Button>
+    </Region>
+  )
+}
+
+/** The stored data couldn't be read: try again, or start over with empty storage. */
+function StorageError({ entry, error }: ScreenProps<'home'> & { error: unknown }) {
+  useScreenFocus(entry, 'storage-retry')
+  const [confirm, setConfirm] = useState(false)
+  const reset = async () => {
+    await deleteDatabase().catch(() => undefined)
+    clearPrefs()
+    location.reload()
+  }
+  return (
+    <Region focusKey="home-storage-error" className="welcome">
+      <h1>{t('appName')}</h1>
+      <h2>{t('storage.title')}</h2>
+      <p className="dim">{t('storage.detail')}</p>
+      <p className="dim small">{String(error)}</p>
+      <div className="button-row">
+        <Button focusKey="storage-retry" className="inline primary" onPress={() => location.reload()}>
+          {t('storage.retry')}
+        </Button>
+        <Button focusKey="storage-reset" className="inline" onPress={() => setConfirm(true)}>
+          {t('storage.reset')}
+        </Button>
+      </div>
+      {confirm && (
+        <Dialog
+          title={t('storage.resetTitle')}
+          message={t('storage.resetMessage')}
+          buttons={[
+            { label: t('storage.reset'), onPress: () => void reset() },
+            { label: t('common.cancel'), onPress: () => setConfirm(false) },
+          ]}
+          initialFocus={1}
+          onCancel={() => setConfirm(false)}
+        />
+      )}
     </Region>
   )
 }

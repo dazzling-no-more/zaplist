@@ -19,6 +19,13 @@ const en = {
   'home.locked': 'This category is locked.',
   'home.unlock': 'Unlock',
 
+  'storage.title': 'The app can’t read its data on this TV.',
+  'storage.detail': 'Try again. If it keeps happening, restart the TV, or reset the app’s data.',
+  'storage.retry': 'Try again',
+  'storage.reset': 'Reset app data',
+  'storage.resetTitle': 'Reset the app’s data?',
+  'storage.resetMessage': 'This deletes your playlists, favorites and settings on this TV.',
+
   'hint.watch': 'OK: watch',
   'hint.more': 'Hold OK: more',
   'hint.favoriteRight': 'Right: favorite',

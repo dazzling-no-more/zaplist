@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { clearCache, deleteSource, getChannelChunk, getPlaylistMeta, getSources } from './db'
 import type { Category, Channel, Source } from './models'
+import { loadSecretPrefs } from './prefs'
 import { ingestSource } from './worker'
 import type { IngestProgress } from '../workers/protocol'
 
@@ -19,6 +20,8 @@ export interface LibraryState {
   channels: Channel[]
   /** Refreshes in progress, by source id. */
   progress: Record<string, IngestProgress>
+  /** Set when the stored data couldn't be read at startup. */
+  error?: unknown
 }
 
 const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
@@ -51,10 +54,19 @@ class Library {
   /** Reads all cached sources. Chunks load with yields in between so the UI keeps responding. */
   init(): Promise<void> {
     this.initializing ??= (async () => {
+      // The PIN first: it decides which categories may be shown at all.
+      await loadSecretPrefs()
       const sources = await getSources()
-      for (const source of sources) await this.load(source)
-      this.set({ ready: true, sources, ...this.combine(sources) })
-    })()
+      const uncached: Source[] = []
+      for (const source of sources) if (!(await this.load(source))) uncached.push(source)
+      this.set({ ready: true, error: undefined, sources, ...this.combine(sources) })
+      // Channel lists a storage upgrade dropped download again, in the background.
+      for (const source of uncached) void this.save(source).catch(() => undefined)
+    })().catch((error: unknown) => {
+      this.initializing = undefined
+      this.set({ error })
+      throw error
+    })
     return this.initializing
   }
 
@@ -100,15 +112,17 @@ class Library {
     return failed
   }
 
-  private async load(source: Source): Promise<void> {
-    const meta = await getPlaylistMeta(source)
+  /** Reads a source's cached channels; false when none are cached. */
+  private async load(source: Source): Promise<boolean> {
+    const meta = await getPlaylistMeta(source.id)
     const channels: Channel[] = []
     for (let i = 0; i < (meta?.chunks ?? 0); i++) {
-      const chunk = await getChannelChunk(source, i)
+      const chunk = await getChannelChunk(source.id, i)
       for (const channel of chunk) channels.push(channel)
       await yieldToUi()
     }
     this.data.set(source.id, { categories: meta?.categories ?? [], channels, epgUrls: meta?.epgUrls ?? [] })
+    return !!meta
   }
 
   private combine(sources: Source[]): Pick<LibraryState, 'categories' | 'channels'> {

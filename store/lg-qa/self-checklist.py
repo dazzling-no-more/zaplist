@@ -1,10 +1,12 @@
 """Fills in LG's Self Checklist (self_evaluation_checklist_*.xlsx in "documents for app QA") for Zaplist.
 
-    python store/lg-qa/self-checklist.py [--template path/to/self_evaluation_checklist_5.0.xlsx]
+    python store/lg-qa/self-checklist.py [--tv-verified] [--template path/to/self_evaluation_checklist_5.0.xlsx]
 
 Writes store/lg-qa/Zaplist_Self_Checklist_<version>.xlsx. Only LG's input columns are written: the
-test result and the developer comment. "Pass" is the result the TV test in docs/PUBLISHING.md must
-confirm; change any item that doesn't pass on your TV before submitting.
+test result and the developer comment. LG wants results of a test on a TV: without --tv-verified,
+the items that need one are left empty (N/A items, which follow from what the app is, are filled).
+Run the TV test in docs/PUBLISHING.md, fix or mark Fail anything that doesn't pass, then build the
+file again with --tv-verified.
 """
 
 import argparse
@@ -100,6 +102,7 @@ def template_path(arg: str | None) -> io.BytesIO | pathlib.Path:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--template')
+    parser.add_argument('--tv-verified', action='store_true', help='every item marked Pass was checked on a TV')
     args = parser.parse_args()
 
     here = pathlib.Path(__file__).resolve().parent
@@ -113,7 +116,7 @@ def main() -> None:
         if number is None or not str(number).isdigit() or int(number) not in ITEMS:
             continue
         result, comment = ITEMS[int(number)]
-        checklist[f'N{row}'] = result
+        checklist[f'N{row}'] = result if result == 'NA' or args.tv_verified else None
         checklist[f'O{row}'] = comment or None
         filled += 1
     assert filled == len(ITEMS), f'filled {filled} of {len(ITEMS)} items: the template layout changed'
@@ -131,7 +134,10 @@ def main() -> None:
 
     out = here / f'Zaplist_Self_Checklist_{version}.xlsx'
     book.save(out)
+    pending = 0 if args.tv_verified else sum(1 for result, _ in ITEMS.values() if result != 'NA')
     print(f'Wrote {out} ({filled} test items, {count} other check points)')
+    if pending:
+        print(f'{pending} results are empty until the TV test: build again with --tv-verified after it passes.')
 
 
 if __name__ == '__main__':
