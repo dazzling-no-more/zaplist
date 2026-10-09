@@ -4,10 +4,9 @@ Text and choices for the Seller Lounge forms. Replace everything in `<angle brac
 
 ## App name
 
-IPTV Player
+Zaplist
 
-(Generic; other stores already have apps with this name. If you pick another, change it before the
-first submission in `appinfo.json` → `title`, `src/i18n.ts` → `appName` and `index.html` → `<title>`.)
+(The name appears in `appinfo.json` → `title`, `src/i18n.ts` → `appName` and `index.html` → `<title>`.)
 
 ## Category
 
@@ -19,11 +18,11 @@ Free (no in-app purchases, no ads)
 
 ## Short description
 
-Watch your own IPTV playlists (M3U or Xtream Codes) with a TV guide, favorites and search.
+IPTV player for your own playlists (M3U or Xtream Codes), with a TV guide, favorites and search.
 
 ## Description
 
-IPTV Player plays the TV channels from your own IPTV subscription or playlist on your LG TV.
+Zaplist plays the TV channels from your own IPTV subscription or playlist on your LG TV.
 
 This app does not include any channels or content. To use it you need an M3U/M3U8 playlist URL or an
 Xtream Codes login from your provider. Only watch content you have the right to watch.
@@ -35,7 +34,7 @@ Features:
 • Favorites in your own order, and recently watched channels
 • TV guide (XMLTV) with what's on now and next, and a full program grid
 • Zap with Up/Down or Channel +/−, or type the channel number
-• Audio track and subtitle selection, picture modes (fit, zoom, fill, 16:9, 4:3)
+• Play/pause, audio track and subtitle selection, picture modes (fit, zoom, fill, 16:9, 4:3)
 • Parental control: lock categories with a PIN
 • Works with the standard remote and the Magic Remote pointer
 
@@ -48,7 +47,7 @@ First release.
 
 ## Support
 
-- Email: `<your support email>`
+- E-mail: `<your support e-mail>`
 - Privacy policy URL (if asked): `<public URL of store/privacy-policy.md>`
 
 ## Images

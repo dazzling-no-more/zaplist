@@ -23,6 +23,7 @@ const PATHS = {
   aspect:
     'M19 12h-2v3h-3v2h5v-5zM7 9h3V7H5v5h2V9zm14-6H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.99h18v14.02z',
   play: 'M8 5v14l11-7z',
+  pause: 'M6 19h4V5H6v14zm8-14v14h4V5h-4z',
   tv: 'M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z',
   add: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
 }

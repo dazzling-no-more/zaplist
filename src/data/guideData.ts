@@ -31,6 +31,8 @@ export const shiftMs = (channel: Pick<Channel, 'epgShift'> | undefined, offsetMi
 export class GuideCollector implements XmltvHandlers {
   private readonly lists = new Map<string, Programme[]>()
   private readonly keysById = new Map<string, string[]>()
+  /** Guide channels and programmes kept, each counted once however many keys store it. */
+  readonly kept = { channels: new Set<string>(), programmes: 0 }
 
   constructor(
     private readonly wanted: Set<string>,
@@ -58,6 +60,8 @@ export class GuideCollector implements XmltvHandlers {
       this.keysById.set(p.channel, keys)
     }
     if (!keys.length) return
+    this.kept.channels.add(p.channel)
+    this.kept.programmes++
     const programme: Programme = {
       start: p.start,
       stop: p.stop,

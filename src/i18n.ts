@@ -1,6 +1,6 @@
 /** Every user-facing string. Other languages get a dictionary with the same keys. */
 const en = {
-  appName: 'IPTV Player',
+  appName: 'Zaplist',
   'common.loading': 'Loading…',
   'common.cancel': 'Cancel',
   'common.retry': 'Try again',
@@ -10,7 +10,7 @@ const en = {
   'home.recent': 'Recent',
   'home.all': 'All channels',
   'home.welcome': 'Add a playlist to start watching.',
-  'home.welcomeDetail': 'Use an M3U playlist URL or an Xtream Codes login from your TV provider.',
+  'home.welcomeDetail': 'This app includes no channels. Use an M3U playlist URL or an Xtream Codes login from your TV provider.',
   'home.addSource': 'Add a playlist',
   'home.search': 'Search',
   'home.noFavorites': 'No favorites yet. Press Right on a channel and OK on the star, or click the star, to add one.',
@@ -32,7 +32,7 @@ const en = {
   'search.title': 'Search',
   'search.hint': 'Type part of a channel name. Results update as you type.',
   'search.label': 'Channel name',
-  'search.results': '{count} channels',
+  'search.results': '{count} channel|{count} channels',
   'search.none': 'No channels match “{query}”.',
 
   'pin.enter': 'Enter the PIN',
@@ -68,11 +68,11 @@ const en = {
   'sources.deleteMessage': 'Its channels are removed from this TV.',
   'sources.m3u': 'M3U playlist',
   'sources.xtream': 'Xtream Codes',
-  'sources.channels': '{count} channels',
+  'sources.channels': '{count} channel|{count} channels',
   'sources.updated': 'updated {date}',
   'sources.expires': 'Account expires {date}',
   'sources.noExpiry': 'Account does not expire',
-  'sources.connections': '{count} connections allowed',
+  'sources.connections': '{count} connection allowed|{count} connections allowed',
 
   'source.addTitle': 'Add a source',
   'source.editTitle': 'Edit source',
@@ -85,12 +85,12 @@ const en = {
   'source.epgUrl': 'Guide (XMLTV) URL, optional',
   'source.save': 'Check and save',
   'source.required': 'Fill in “{field}”.',
-  'source.saved': 'Saved: {count} channels.',
+  'source.saved': 'Saved: {count} channel.|Saved: {count} channels.',
 
   'progress.connecting': 'Connecting…',
   'progress.download': 'Downloading… {size}',
   'progress.parse': 'Reading the channel list…',
-  'progress.save': 'Saving {count} channels…',
+  'progress.save': 'Saving {count} channel…|Saving {count} channels…',
 
   'error.network': 'Couldn’t reach the server. Check the address and the TV’s internet connection.',
   'error.http': 'The server answered with an error ({detail}).',
@@ -109,6 +109,8 @@ const en = {
   'player.favoriteAdded': 'Added to favorites',
   'player.favoriteRemoved': 'Removed from favorites',
   'player.channelList': 'Channel list',
+  'player.pause': 'Pause',
+  'player.play': 'Play',
   'player.audio': 'Audio',
   'player.subtitles': 'Subtitles',
   'player.subtitlesOff': 'Off',
@@ -132,10 +134,10 @@ const en = {
   'guide.hints': 'OK: watch the programme on air, or see details · Channel +/−: page',
 
   'guideSettings.never': 'The guide hasn’t been downloaded yet.',
-  'guideSettings.updated': 'Updated {date}: {programmes} programmes for {channels} channels.',
+  'guideSettings.updated': 'Updated {date}. Programmes: {programmes} · Channels: {channels}',
   'guideSettings.downloading': 'Downloading guide {url} of {urls}… {size}',
   'guideSettings.saving': 'Saving the guide…',
-  'guideSettings.someFailed': '{count} guide address(es) couldn’t be read.',
+  'guideSettings.someFailed': '{count} guide address couldn’t be read.|{count} guide addresses couldn’t be read.',
   'guideSettings.refresh': 'Refresh guide now',
   'guideSettings.urlTitle': 'Extra guide for all sources',
   'guideSettings.url': 'XMLTV URL (.xml or .xml.gz), optional',
@@ -156,7 +158,7 @@ const en = {
   'about.none': 'None',
   'about.parsing': 'Playlist parsing',
   'about.data': 'Stored',
-  'about.dataValue': '{sources} sources, {channels} channels, {programmes} guide entries',
+  'about.dataValue': 'Sources: {sources} · Channels: {channels} · Guide entries: {programmes}',
   'about.cache': 'Cache',
   'about.cacheDetail': 'Deletes the downloaded channel lists and guide, then downloads them again. Sources, favorites and settings stay.',
   'about.clear': 'Clear cache',
@@ -164,7 +166,8 @@ const en = {
   'about.clearMessage': 'Channel lists and the guide are downloaded again.',
   'about.clearing': 'Clearing the cache and downloading channel lists again…',
   'about.cleared': 'Done. Channel lists were downloaded again; the guide is updating.',
-  'about.clearedSomeFailed': 'Done, but {count} source(s) couldn’t be downloaded. Try Refresh under Sources.',
+  'about.clearedSomeFailed':
+    'Done, but {count} source couldn’t be downloaded. Try Refresh under Sources.|Done, but {count} sources couldn’t be downloaded. Try Refresh under Sources.',
   'about.legal': 'Free software under the MIT License. This app plays playlists you provide; it includes no channels.',
 
   'crash.title': 'Something went wrong.',
@@ -173,8 +176,10 @@ const en = {
 
 export type StringKey = keyof typeof en
 
-/** Looks up a string and fills `{name}` placeholders from `vars`. */
+/** Looks up a string and fills `{name}` placeholders from `vars`. A "one|other" string picks by `vars.count`. */
 export function t(key: StringKey, vars?: Record<string, string | number>): string {
-  const text: string = en[key]
+  let text: string = en[key]
+  const bar = text.indexOf('|')
+  if (bar >= 0) text = vars && String(vars.count) === '1' ? text.slice(0, bar) : text.slice(bar + 1)
   return vars ? text.replace(/\{(\w+)\}/g, (match, name: string) => (name in vars ? String(vars[name]) : match)) : text
 }

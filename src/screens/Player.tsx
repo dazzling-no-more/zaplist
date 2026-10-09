@@ -91,6 +91,24 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
     return () => instance.stop()
   }, [])
 
+  // The Play/Pause button follows the element, so the remote's media keys keep it in step.
+  const [paused, setPaused] = useState(false)
+  useEffect(() => {
+    const element = video.current!
+    const update = () => setPaused(element.paused)
+    element.addEventListener('play', update)
+    element.addEventListener('pause', update)
+    return () => {
+      element.removeEventListener('play', update)
+      element.removeEventListener('pause', update)
+    }
+  }, [])
+  const togglePause = () => {
+    const element = video.current
+    if (element?.paused) void element.play()
+    else element?.pause()
+  }
+
   // (Re)start the stream whenever the channel changes, the user retries, or the app/network returns.
   useEffect(() => {
     if (!playback) return
@@ -275,6 +293,10 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
           </div>
           {osd && (
             <Region focusKey="osd-buttons" className="osd-buttons">
+              {/* The Magic Remote has no media keys, so playback control is on screen too. */}
+              <Button focusKey="osd-pause" icon={paused ? 'play' : 'pause'} onPress={togglePause}>
+                {t(paused ? 'player.play' : 'player.pause')}
+              </Button>
               <Button focusKey="osd-channels" icon="all" onPress={openList}>
                 {t('player.channelList')}
               </Button>

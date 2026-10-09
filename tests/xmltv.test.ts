@@ -103,6 +103,16 @@ describe('GuideCollector', () => {
     expect(run(['name:news24']).get('name:news24')).toHaveLength(1)
   })
 
+  it('counts a channel and its programmes once when both its id and its name are wanted', () => {
+    const collector = new GuideCollector(new Set(['bbb.test']), guideWindow(NOW))
+    new XmltvParser(collector).feed(new TextDecoder().decode(fixture('guide.xml')))
+    const byId = { channels: collector.kept.channels.size, programmes: collector.kept.programmes }
+    const both = new GuideCollector(new Set(['bbb.test', ...guideKeys({ name: 'Big Buck Bunny' })]), guideWindow(NOW))
+    new XmltvParser(both).feed(new TextDecoder().decode(fixture('guide.xml')))
+    expect(byId.channels).toBe(1)
+    expect({ channels: both.kept.channels.size, programmes: both.kept.programmes }).toEqual(byId)
+  })
+
   it('keeps the time window, sorts, and ends programmes without a stop at the next start', () => {
     const titles = (run(['bbb.test']).get('bbb.test') ?? []).map((p) => [p.title, new Date(p.start).toISOString(), new Date(p.stop).toISOString()])
     expect(titles).toEqual([

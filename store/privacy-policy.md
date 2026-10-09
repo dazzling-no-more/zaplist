@@ -1,8 +1,8 @@
-# IPTV Player privacy policy
+# Zaplist privacy policy
 
 _Last updated: `<date of publishing>`_
 
-IPTV Player is a free, open-source app for LG webOS TVs that plays playlists you add yourself.
+Zaplist is a free, open-source app for LG webOS TVs that plays playlists you add yourself.
 
 **What the app stores.** The playlist URLs, Xtream Codes logins and guide URLs you enter, the channel
 lists and TV guide it downloads from them, and your settings (favorites, recent channels, parental
@@ -20,4 +20,4 @@ don't control them.
 
 **Children.** The app has no content of its own. A parental control PIN can lock categories.
 
-**Contact.** `<your support email>`
+**Contact.** `<your support e-mail>`

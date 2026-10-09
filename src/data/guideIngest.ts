@@ -129,11 +129,8 @@ export async function ingestGuide(urls: string[], wanted: string[], progress: (p
   }
   if (urls.length && failed === urls.length) throw lastError ?? new LoadError('network')
   progress({ stage: 'save' })
-  const programmes = collector.finish()
-  let count = 0
-  programmes.forEach((list) => (count += list.length))
-  await saveGuide(programmes)
-  return { channels: programmes.size, programmes: count, failed }
+  await saveGuide(collector.finish())
+  return { channels: collector.kept.channels.size, programmes: collector.kept.programmes, failed }
 }
 
 function bufferReader(bytes: Uint8Array): ByteReader {

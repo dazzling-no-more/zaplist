@@ -1,49 +1,61 @@
-# Publishing to the LG Content Store
+# Publishing Zaplist on the LG Content Store
 
-Step-by-step for submitting IPTV Player to LG's app store (called LG Content Store or LG Apps) through
-LG Seller Lounge. The code side is done (see [What the code already does](#what-the-code-already-does));
-what's left is testing on a TV, LG's paperwork and the submission form.
+Step-by-step for submitting Zaplist to LG's app store (LG Content Store, also called LG Apps) through
+LG Seller Lounge. The app and LG's paperwork are ready; what's left needs you: your contact details,
+two files online, a test on a real TV, a seller account and the submission form.
 
-Everything the forms ask for is in [`store/`](../store):
+## What's ready
 
 | File | Used for |
 | ---- | -------- |
-| `out/org.iptvplayer.app_1.0.0_all.ipk` | The app package (built in step 2) |
-| `store/listing.md` | App name, descriptions, category, image list |
+| `out/zaplist.player_1.0.0_all.ipk` | The app package (built in step 3) |
+| `store/lg-qa/Zaplist_UX_Scenario_1.0.0.pptx` | LG's UX scenario document, filled in (built in step 2) |
+| `store/lg-qa/Zaplist_Self_Checklist_1.0.0.xlsx` | LG's Self Checklist, filled in |
+| `store/listing.md` | App name, descriptions, category, image list for the form |
 | `store/icon-400.png` | Store icon, 400×400 |
 | `store/screenshots/*.png` | Primary + 5 secondary screenshots, 1280×720 |
 | `public/splash.png` | Launcher/splash background, 1920×1080 (also inside the IPK) |
-| `store/ux-scenario.md` | Content for LG's UX scenario template |
 | `store/test-playlist.m3u` | Playlist for LG's testers (public test streams only) |
-| `store/privacy-policy.md` | Privacy policy, if the form asks for a URL |
-| `store/art/*.svg` | Sources of the icon and splash, if you want to change them |
+| `store/privacy-policy.md` | Privacy policy, in case the form asks for a URL |
+| `store/lg-qa/*.ps1`, `*.py` | Scripts that rebuild the two LG documents from LG's templates |
+| `store/art/*.svg` | Sources of the icon and splash |
 
-## 1. Decide these first: they can't change later
+The app ID is `zaplist.player` (`appinfo.json`). LG fixes the ID at the first submission; change it
+before then if you want another one (for example the reverse domain of a website you own).
 
-- **App ID.** `appinfo.json` → `id` is `org.iptvplayer.app`. LG fixes the ID at the first submission
-  and recommends the reverse domain of something you own, for example `com.yourdomain.iptvplayer` or
-  `io.github.yourname.iptvplayer`. IDs may use only `a-z`, `0-9`, `-` and `.`, and must not start with
-  `com.lge`, `com.webos`, `com.palm` or `com.palmdts`. If you change it, rebuild (step 2).
-- **App name.** "IPTV Player" is generic and used by other apps elsewhere. To rename, change
-  `appinfo.json` → `title`, `src/i18n.ts` → `appName`, `index.html` → `<title>` and the name in
-  `store/listing.md`, `store/ux-scenario.md` and `store/privacy-policy.md`.
-- **Support email** shown in the store, and your **seller name** (step 4).
+## 1. Put two files online
 
-## 2. Build the package
+- **Test playlist**: publish `store/test-playlist.m3u` at a public URL: a public GitHub repository or
+  gist, GitHub Pages, or any web host. LG's testers type it with a remote, so keep it short (a URL
+  shortener is fine). Open it on the TV's browser to check it's reachable.
+- **Privacy policy**: replace the two placeholders in `store/privacy-policy.md` (date, e-mail) and
+  publish it the same way.
+
+## 2. Put your details into the UX scenario
+
+The UX scenario names your support e-mail and the test playlist URL. Rebuild it with yours (needs
+Windows with PowerPoint; it downloads LG's template itself):
+
+```powershell
+pwsh store/lg-qa/ux-scenario.ps1 -Email support@example.com -PlaylistUrl https://example.com/zaplist.m3u
+```
+
+Open the result and page through it once. Without PowerPoint, edit the placeholders by hand instead:
+the e-mail on the cover and in the appendix (last page), and the URL in the table on page 6.
+
+## 3. Build the package
 
 ```sh
 npm ci
 npm test
 npm run build      # also checks the bundle for webOS 4 (Chromium 53)
-npm run package    # → out/<id>_<version>_all.ipk
+npm run package    # → out/zaplist.player_1.0.0_all.ipk
 ```
 
-The version comes from `appinfo.json` → `version` (1.0.0). Keep `package.json` → `version` the same.
+## 4. Test on your TV
 
-## 3. Test on your TV first
-
-The app has only been tested in desktop Chrome so far. LG's testers use real TVs, so check it on one
-before submitting; a rejection costs a review round.
+Zaplist has been tested in desktop Chrome only. LG tests on real TVs, and the Self Checklist states
+results for a TV, so run it on one first; a rejection costs a review round.
 
 1. Create an account on the [LG webOS TV developer site](https://webostv.developer.lge.com).
 2. On the TV, install **Developer Mode** from the LG Content Store, sign in with that account and turn
@@ -52,125 +64,95 @@ before submitting; a rejection costs a review round.
    app, then `npx ares-novacom --device tv --getkey` with the passphrase it shows.
 4. `npm run install:tv && npm run launch:tv`. `npm run inspect:tv` opens Web Inspector.
 
-Check at least:
+Then go through the UX scenario on the TV, page by page, with the test playlist, and check the Self
+Checklist items marked Pass. In particular:
 
-- [ ] Add the test playlist (`store/test-playlist.m3u`, hosted as in step 5, or any URL the TV can
-      reach); every stream plays. Try audio tracks on "Angel One" and subtitles on "Apple test stream".
-- [ ] Back on Home leaves the app the system way: an exit popup or the Home screen, depending on
-      the webOS version.
-- [ ] Arrows, OK, Back, Channel +/−, number keys and the color keys do what `store/ux-scenario.md` says.
-- [ ] The Magic Remote pointer: hover focuses, click selects, the wheel scrolls, clicking a star
-      toggles the favorite.
-- [ ] Picture → Zoom fills the screen (it resizes the video element, which the TV's video plane must follow).
-- [ ] The splash image shows while the app loads, and the launcher tile looks right.
-- [ ] Unplug the network while playing: a message appears and playback resumes when it's back.
+- [ ] Every stream in the test playlist plays; audio tracks switch on "Angel One", subtitles on
+      "Apple test stream".
+- [ ] Back on the first screen leaves the app the system way (exit popup or Home screen).
+- [ ] Pointer, wheel, number keys, color keys and Play/Pause/Stop behave as the scenario says.
+- [ ] Picture → Zoom fills the screen.
+- [ ] The splash image shows while the app loads; the launcher tile looks right.
+- [ ] Unplugging the network shows a message; playback resumes when it's back.
+- [ ] Turning the TV off and on reopens the app with its playlists.
 
-## 4. Register as a seller
+If something fails, fix it (or, if it can't be fixed, set that item to *Fail* in the Self Checklist
+and fix it before submitting: LG rejects any app with a failed item). Then rebuild (step 3).
+
+Also search the LG Content Store on the TV for "Zaplist": LG rejects a title that another app in the
+store already uses. Web searches found no app or trademark with this name, but they can't see the store.
+
+## 5. Register as a seller
 
 1. Open [LG Seller Lounge](https://seller.lgappstv.com) and sign in with an LG account (create one
    from the sign-in page if needed).
 2. Register as an **individual seller** (a company can register as a corporate seller instead). You
    must be 18 or older. The seller name you enter is shown in the store next to the app.
+3. Download the Seller Lounge guide: *APP MANAGEMENT* → *LG Seller Lounge Guide Download*. It
+   describes every field of the form; where it differs from step 6, follow it.
 
-## 5. Put two files online
+## 6. Submit
 
-LG's testers need a playlist URL they can type with a remote, so keep it short.
+In Seller Lounge, *APP MANAGEMENT* → *App Submission*. The field names below come from LG's pages
+and third-party guides and may differ slightly.
 
-- **Test playlist**: publish `store/test-playlist.m3u` at a public URL (a public GitHub repository or
-  gist, GitHub Pages, or any web host), ideally behind a short URL. Check it opens from the TV.
-- **Privacy policy**: fill in the placeholders in `store/privacy-policy.md` and publish it the same
-  way, in case the form asks for a privacy policy URL.
-
-## 6. Get LG's documents
-
-- **Seller Lounge guide**: in Seller Lounge, *APP MANAGEMENT* → *LG Seller Lounge Guide Download*.
-  It describes every field of the submission form; follow it where it differs from step 9.
-- **App Self Checklist**: download `documents_for_app_qa.zip` from the
-  [App Self Checklist page](https://webostv.developer.lge.com/distribute/app-self-checklist).
-- **UX scenario template**: in Seller Lounge (a PowerPoint file).
-
-## 7. Fill in the Self Checklist
-
-Test every item on the TV and mark it *pass* or *N/A* truthfully. A missing or inaccurate checklist
-gets the app rejected without testing, and so does marking an item N/A that applies. Notes for the
-items that concern this app:
-
-- **Back button on the entry page** (webOS 23–25: must show the Home screen): Back on Home calls
-  `webOS.platformBack()` and the system decides (exit popup or Home screen). There is no custom exit
-  popup.
-- **Navigation keys, screen cursor, selection effect**: everything works with the arrows and OK and
-  with the pointer; the focused item is always shown inverted (white).
-- **Privacy and credentials**: no credentials are hard-coded. LG's scanner will still find keywords;
-  explain them with the note below.
-
-Reviewer note (paste where the checklist or form allows comments):
-
-> No credentials, tokens or keys are hard-coded. The words "password", "credential" and "token" in
-> the package come from: the Xtream Codes API, whose requests carry the user's own login as
-> `username=`/`password=` URL parameters; the Password field of the "Add a source" form; the core-js
-> URL polyfill (the standard `URL.password` property); the standard `withCredentials`/`credentials`
-> options of XHR and fetch in hls.js and mpegts.js; and `DOMTokenList`. Logins and playlist URLs the
-> user enters are stored only on the TV, encrypted with AES-GCM under a non-extractable key generated
-> on the TV, and the login is replaced by placeholders in stored stream and guide URLs.
-
-## 8. Write the UX scenario
-
-Copy the sections of `store/ux-scenario.md` into LG's template, one slide each, with the matching
-screenshots from `store/screenshots/`. Replace `<test playlist URL>` with your URL from step 5.
-
-## 9. Submit
-
-In Seller Lounge, *APP MANAGEMENT* → *App Submission*. The form has tabs; the field names below come
-from LG's pages and third-party guides, so they may differ slightly. The Seller Lounge guide is
-authoritative.
-
-1. **App ID**: the ID from `appinfo.json`. It can't be changed afterwards.
-2. **File upload**: service platform *webOS*; upload the IPK from `out/`; choose the 1920×1080 (FHD)
-   display resolution, which matches `appinfo.json`; select the webOS versions to support (the app
-   targets webOS TV 4.0 and later); enter the file title and version `1.0.0`. A *deep link URL*
-   field is for apps hosted on a website; this app is packaged, so leave it at its default.
-3. **Images**: see the table in `store/listing.md` (400×400 icon, primary + up to 5 secondary
-   screenshots, 1920×1080 background, tile color `#3b82ea`).
-4. **Service info**: name, short and full description, category *Entertainment*, price *Free*,
-   countries, support email and privacy policy URL, all from `store/listing.md`. For an age rating,
-   answer for the app itself: it has no built-in content, users load their own playlists, and it has a
-   parental control PIN.
-5. **Test info**: upload the Self Checklist and the UX scenario. As test account information give the
-   test playlist URL, and say that Xtream Codes needs an account from an IPTV provider, which you
-   can't supply.
+1. **App ID**: `zaplist.player`.
+2. **File upload**: service platform *webOS*; upload `out/zaplist.player_1.0.0_all.ipk`; display
+   resolution 1920×1080 (FHD); webOS TV 4.0 and later; file title "Zaplist", version `1.0.0`. A
+   *deep link URL* field is for apps hosted on a website: leave it at its default.
+3. **Images**: the table in `store/listing.md` (400×400 icon, primary + 5 secondary screenshots,
+   1920×1080 launcher and splash background, tile color `#3b82ea`).
+4. **Service info**: name, short and full description (English), category *Entertainment*, price
+   *Free*, the countries you want, support e-mail and privacy policy URL, all from
+   `store/listing.md`. Set **Geo-IP block to No** and include English as the service language: LG
+   rejects global apps that are geo-blocked or not in English. For the age rating, answer for the
+   app itself: no built-in content, users load their own playlists, parental control PIN.
+5. **Test info**: upload `Zaplist_Self_Checklist_1.0.0.xlsx` and `Zaplist_UX_Scenario_1.0.0.pptx`.
+   As test account information: "No account needed: add the test playlist from page 6 of the UX
+   scenario", followed by the playlist URL.
 6. Save each tab, then submit.
 
-## 10. Review
+## 7. Review
 
 LG tests in three stages: a pretest of the submitted information, a function test and a content
-test. A rejection comes back with a list of issues; fix them, rebuild and resubmit (raising the
-version, e.g. 1.0.1, keeps the packages apart). LG publishes no review time; plan for weeks.
-Questions go to the *1:1 Q&A* in Seller Lounge. Once approved, the app goes live in the store.
+test. A rejection comes back with a list of issues; fix them, rebuild and resubmit (raise the
+version, e.g. 1.0.1, and add a row to the UX scenario's document history). LG publishes no review
+time; plan for weeks. Questions go to the *1:1 Q&A* in Seller Lounge.
 
 ## Updates
 
 Every change after approval goes through the same review. For each release: raise `version` in
-`appinfo.json` and `package.json`, then build, package, test on the TV, update the listing's
-"What's new", and submit the new IPK as an update in Seller Lounge.
+`appinfo.json` and `package.json`, build, package, test on the TV, rebuild both LG documents
+(`ux-scenario.ps1`, `python store/lg-qa/self-checklist.py`), update "What's new" in
+`store/listing.md`, and submit the new IPK as an update. When screens change, retake the screenshots
+in `store/screenshots/` and `store/lg-qa/images/` (1280×720) and check the callout positions in
+`ux-scenario.ps1`.
 
 ## What the code already does
 
-| LG requirement or recommendation | How the app meets it |
-| -------------------------------- | -------------------- |
-| Back on the entry page shows the Home screen (webOS 23–25) | Back on Home calls `webOS.platformBack()` (`src/ui/navigation.ts`); `disableBackHistoryAPI` is set |
-| All navigation keys and the pointer work; visible selection | Spatial navigation plus pointer hover/click/wheel on every screen |
-| No hard-coded credentials | None in the source |
-| Sensitive data saved on the TV is encrypted | Sources sealed with AES-GCM, key non-extractable in IndexedDB; login masked in stored URLs (`src/data/vault.ts`, `src/data/db.ts`) |
-| Visual cue while loading | Splash image (`appinfo.json` → `splashBackground`), loading text and spinners |
-| 1920×1080, fonts ≥ 20 px | `"resolution": "1920x1080"`; smallest text is 22 px |
-| Icons 80×80 and 130×130 in the package, 400×400 for the store | `public/icon.png`, `public/largeIcon.png`, `store/icon-400.png` |
-| Playback controls work with 4-way keys and the pointer | Info bar buttons for list, favorite, audio, subtitles, picture |
+| LG requirement | How Zaplist meets it |
+| -------------- | -------------------- |
+| Back on the first page goes to the system (webOS 23–25: Home screen) | Back on Home calls `webOS.platformBack()` (`src/ui/navigation.ts`); `disableBackHistoryAPI` is set |
+| All navigation keys and the pointer work; visible focus | Spatial navigation plus pointer hover, click and wheel on every screen |
+| Playback controls reachable without media keys (Magic Remote) | Play/Pause, channel list, favorite, audio, subtitles and picture buttons in the info bar |
+| Everything inside the overscan area | 96 px / 54 px margins at 1920×1080, overlays included |
+| No hard-coded credentials; sensitive data encrypted | Sources sealed with AES-GCM under a non-extractable key; logins masked in stored URLs (`src/data/vault.ts`, `src/data/db.ts`) |
+| Visual cue while loading | Splash image, loading text, spinners |
+| Long text ellipsized, lists scroll | Ellipsis on names; virtual lists |
+| Square, opaque icon without rounded corners | `store/icon-400.png`, `public/icon.png`, `public/largeIcon.png` |
+| Adult content protection (when present) | Parental PIN locks categories; locked channels hidden everywhere |
+| Title not too generic | "Zaplist" |
+
+LG's scanner flags the words "password", "credential" and "token". In this package they come from the
+Xtream Codes API parameters, the login form field, the core-js URL polyfill (`URL.password`) and the
+`withCredentials` options of hls.js and mpegts.js; nothing is hard-coded. The UX scenario's appendix
+says so for the reviewers.
 
 ## Sources
 
 - [App Approval Process](https://webostv.developer.lge.com/distribute/app-approval-process) (LG)
 - [App Ecosystem](https://webostv.developer.lge.com/distribute/app-ecosystem) (LG)
-- [App Self Checklist](https://webostv.developer.lge.com/distribute/app-self-checklist) (LG)
+- [App Self Checklist](https://webostv.developer.lge.com/distribute/app-self-checklist) (LG; the QA documents zip)
 - [Back button guide](https://webostv.developer.lge.com/develop/guides/back-button) (LG)
 - [appinfo.json reference](https://webostv.developer.lge.com/develop/references/appinfo-json) (LG)
 - [Submitting Apps to the LG (webOS) Store](https://beacon-help.support.brightcove.com/publishing-apps/lg/submitting-to-lg.html) (Brightcove; form details and image sizes)

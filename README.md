@@ -1,4 +1,4 @@
-# IPTV Player for LG webOS TV
+# Zaplist: IPTV player for LG webOS TV
 
 A free, open-source IPTV player for LG TVs with webOS 4.0 or newer (2018 models onward). It plays
 the playlists you give it, either M3U/M3U8 URLs or Xtream Codes logins. It ships no channels,
@@ -15,7 +15,7 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 - **Favorites** (the star on each channel: Right then OK, or click it; also the red button or hold OK) in
   your own order, and the last 20 channels watched.
 - **Player**: native playback first, then hls.js (HLS) or mpegts.js (MPEG-TS) when the TV's player
-  can't play a stream. Zapping, number entry, a mini channel list, now/next, audio and subtitle tracks,
+  can't play a stream. Zapping, number entry, a mini channel list, now/next, play/pause, audio and subtitle tracks,
   picture shape (fit, zoom, fill, 16:9, 4:3), automatic retries and a readable error otherwise. Playback
   stops when the app is hidden or the network drops and resumes on its own. The last channel reopens
   when the app starts.
@@ -132,7 +132,8 @@ src/ui/                focus, navigation, virtual list, dialogs, PIN pad, channe
 src/screens/           Home, Search, Player, Guide, Settings (sources, guide, parental, about), source form
 src/i18n.ts            every user-facing string
 tests/                 Vitest tests and fixtures
-store/                 LG Content Store material: icon, screenshots, listing text, UX scenario, test playlist
+store/                 LG Content Store material: icon, screenshots, listing text, test playlist, privacy policy
+store/lg-qa/           LG's UX scenario and Self Checklist, filled in, and the scripts that build them
 docs/PUBLISHING.md     how to submit the app to the LG Content Store
 ```
 

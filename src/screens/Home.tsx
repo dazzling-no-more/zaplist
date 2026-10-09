@@ -45,6 +45,7 @@ function Welcome({ entry }: ScreenProps<'home'>) {
   useScreenFocus(entry, 'home-add-source')
   return (
     <Region focusKey="home-welcome" className="welcome">
+      <img className="welcome-logo" src="largeIcon.png" alt="" />
       <h1>{t('appName')}</h1>
       <h2>{t('home.welcome')}</h2>
       <p className="dim">{t('home.welcomeDetail')}</p>
@@ -214,21 +215,23 @@ function Browse({ entry }: ScreenProps<'home'>) {
             empty={empty}
           />
         )}
-        <div className="hints">
-          {moving ? (
-            t('hint.moving')
-          ) : (
-            <>
-              <span>{t('hint.watch')}</span>
-              <span>
-                <Icon name="star" className="hint-star" />
-                {t('hint.favoriteRight')}
-              </span>
-              <span>{t('hint.more')}</span>
-              {groupId === FAVORITES && <span>{t('hint.moveMenu')}</span>}
-            </>
-          )}
-        </div>
+        {!locked && list.length > 0 && (
+          <div className="hints">
+            {moving ? (
+              t('hint.moving')
+            ) : (
+              <>
+                <span>{t('hint.watch')}</span>
+                <span>
+                  <Icon name="star" className="hint-star" />
+                  {t('hint.favoriteRight')}
+                </span>
+                <span>{t('hint.more')}</span>
+                {groupId === FAVORITES && <span>{t('hint.moveMenu')}</span>}
+              </>
+            )}
+          </div>
+        )}
       </Region>
       {menu && (
         <Dialog
