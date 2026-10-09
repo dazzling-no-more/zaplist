@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { guide } from '../data/guide'
 import { library, newSourceId, useLibrary } from '../data/library'
 import type { Source } from '../data/models'
 import { normalizeHost } from '../data/xtream'
@@ -56,6 +57,7 @@ export function SourceEditScreen({ entry }: ScreenProps<'sourceEdit'>) {
     setMessage(undefined)
     try {
       await library.save(source)
+      void guide.refresh()
       backStack.pop()
     } catch (error) {
       setMessage({ text: describeError(error), error: true })

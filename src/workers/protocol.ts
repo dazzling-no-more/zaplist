@@ -1,7 +1,6 @@
+import type { GuideProgress, GuideResult } from '../data/guideIngest'
 import type { LoadErrorCode } from '../data/http'
 import type { Source } from '../data/models'
-
-export type WorkerRequest = { id: number; type: 'ingest'; source: Source }
 
 export interface IngestProgress {
   stage: 'download' | 'parse' | 'save'
@@ -17,7 +16,12 @@ export interface IngestResult {
   categories: number
 }
 
+/** Work the worker does: download and store one source, or the whole guide. */
+export type Job = { type: 'ingest'; source: Source } | { type: 'guide'; urls: string[]; wanted: string[] }
+
+export type WorkerRequest = Job & { id: number }
+
 export type WorkerResponse =
-  | { id: number; type: 'progress'; progress: IngestProgress }
-  | { id: number; type: 'result'; result: IngestResult }
+  | { id: number; type: 'progress'; progress: IngestProgress | GuideProgress }
+  | { id: number; type: 'result'; result: IngestResult | GuideResult }
   | { id: number; type: 'error'; code: LoadErrorCode; detail?: string }

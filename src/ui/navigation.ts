@@ -9,6 +9,7 @@ export type Route =
   | { name: 'sourceEdit'; sourceId?: string }
   /** listId: the group the channel was picked from (Favorites, a category, ...), for zapping. */
   | { name: 'player'; channelId: string; listId: string }
+  | { name: 'guide'; listId: string }
 
 export type ScreenName = Route['name']
 

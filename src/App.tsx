@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { t } from './i18n'
 import { platformBack } from './platform/webos'
+import { GuideScreen } from './screens/Guide'
 import { HomeScreen } from './screens/Home'
 import { PlayerScreen } from './screens/Player'
 import { SearchScreen } from './screens/Search'
@@ -11,6 +12,7 @@ import { backStack, useBackStack, type ScreenName, type ScreenProps } from './ui
 
 const SCREENS: { [N in ScreenName]: ComponentType<ScreenProps<N>> } = {
   home: HomeScreen,
+  guide: GuideScreen,
   player: PlayerScreen,
   search: SearchScreen,
   settings: SettingsScreen,

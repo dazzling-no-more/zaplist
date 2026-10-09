@@ -663,3 +663,211 @@ h3 {
   padding-top: 300px;
   text-align: center;
 }
+
+/* Now / next */
+.now-line {
+  display: flex;
+  align-items: center;
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-size: 24px;
+}
+
+.channel-row.focused .now-line {
+  color: #4a5160;
+}
+
+.now-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.progress {
+  position: relative;
+  flex: none;
+  width: 140px;
+  height: 6px;
+  margin-left: 16px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(167, 175, 191, 0.3);
+}
+
+.progress span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: 0 0;
+}
+
+.osd-programme {
+  margin-top: 8px;
+  font-size: 26px;
+}
+
+.osd-now,
+.osd-next {
+  display: flex;
+  align-items: center;
+}
+
+.osd-times {
+  flex: none;
+  width: 210px;
+  color: var(--text-dim);
+}
+
+.osd-next {
+  margin-top: 4px;
+}
+
+/* Settings */
+.stepper {
+  align-items: center;
+}
+
+.stepper-value {
+  min-width: 140px;
+  margin-right: 16px;
+  font-size: 32px;
+  text-align: center;
+}
+
+/* Guide grid */
+.guide-details {
+  height: 168px;
+  overflow: hidden;
+}
+
+.guide-details-title {
+  font-size: 26px;
+}
+
+.guide-details-programme {
+  margin: 6px 0;
+  overflow: hidden;
+  font-size: 40px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.guide-details-desc {
+  max-height: 64px;
+  overflow: hidden;
+  font-size: 24px;
+}
+
+.guide-header {
+  position: relative;
+  height: 48px;
+  overflow: hidden;
+  border-bottom: 2px solid var(--surface-raised);
+  color: var(--text-dim);
+  font-size: 24px;
+}
+
+.guide-header-day {
+  position: absolute;
+  left: 0;
+  top: 8px;
+}
+
+.guide-slot {
+  position: absolute;
+  top: 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--surface-raised);
+}
+
+.guide-body {
+  position: relative;
+  overflow: hidden;
+}
+
+.guide-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  height: 84px;
+}
+
+.guide-channel {
+  display: flex;
+  align-items: center;
+  flex: none;
+  width: 360px;
+  box-sizing: border-box;
+  padding-right: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.guide-channel .channel-number {
+  width: 64px;
+}
+
+.guide-channel.focused-row {
+  color: var(--accent);
+}
+
+.guide-channel-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.guide-cells {
+  position: relative;
+  flex: 1;
+}
+
+.guide-cell {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 24px;
+  line-height: 76px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.guide-cell.empty {
+  color: var(--text-dim);
+}
+
+.guide-cell.focused {
+  background: var(--focus-bg);
+  color: var(--focus-text);
+}
+
+.guide-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #ff5252;
+}
+
+.details-dialog {
+  width: 1100px;
+}
+
+.details-dialog p {
+  white-space: pre-line;
+}
+
+.channel-row.current {
+  box-shadow: inset 6px 0 0 var(--accent);
+}

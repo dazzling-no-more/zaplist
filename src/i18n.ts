@@ -123,6 +123,24 @@ const en = {
   'aspect.16:9': '16:9',
   'aspect.4:3': '4:3',
 
+  'guide.title': 'TV guide',
+  'guide.noInfo': 'No programme information',
+  'guide.next': 'Next: {title}',
+  'guide.empty': 'No channels in this list.',
+  'guide.hints': 'OK: watch the programme on air, or see details · Channel +/−: page',
+
+  'guideSettings.never': 'The guide hasn’t been downloaded yet.',
+  'guideSettings.updated': 'Updated {date}: {programmes} programmes for {channels} channels.',
+  'guideSettings.downloading': 'Downloading guide {url} of {urls}… {size}',
+  'guideSettings.saving': 'Saving the guide…',
+  'guideSettings.someFailed': '{count} guide address(es) couldn’t be read.',
+  'guideSettings.refresh': 'Refresh guide now',
+  'guideSettings.urlTitle': 'Extra guide for all sources',
+  'guideSettings.url': 'XMLTV URL (.xml or .xml.gz), optional',
+  'guideSettings.offset': 'Time offset',
+  'guideSettings.interval': 'Refresh automatically every',
+  'guideSettings.hours': '{hours} hours',
+
   'crash.title': 'Something went wrong.',
   'crash.detail': 'Press OK to restart the app.',
 

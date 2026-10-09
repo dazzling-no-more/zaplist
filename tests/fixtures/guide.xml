@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tv SYSTEM "xmltv.dtd">
+<!-- Test guide. Times are around 2026-10-09 12:00 UTC. -->
+<tv generator-info-name="fixture">
+  <channel id="bbb.test">
+    <display-name>Big Buck Bunny</display-name>
+    <icon src="https://example.com/bbb.png"/>
+  </channel>
+  <channel id="News.Example">
+    <display-name lang="en">News 24</display-name>
+    <display-name>News</display-name>
+  </channel>
+  <channel id="nomatch.test"><display-name>Nobody Watches This</display-name></channel>
+
+  <programme start="20261009120000 +0000" stop="20261009130000 +0000" channel="bbb.test">
+    <title lang="en">Morning &amp; Noon</title>
+    <title lang="de">Morgen und Mittag</title>
+    <desc lang="en"><![CDATA[A <bold> start & more]]></desc>
+  </programme>
+  <programme start="20261009150000 +0200" stop="20261009143000 +0000" channel="bbb.test">
+    <title>Offset Show</title>
+  </programme>
+  <programme start="202610091430 +0000" channel="bbb.test">
+    <title>No Stop Time</title>
+  </programme>
+  <programme start="20261009073000 -0500" stop="20261009133000" channel="News.Example">
+    <title>News at Noon &#8211; Live &#x2014; &quot;Today&quot;</title>
+    <desc>Headlines.</desc>
+  </programme>
+  <programme start="20261009120000 +0000" stop="20261009130000 +0000" channel="nomatch.test">
+    <title>Ignored</title>
+  </programme>
+  <programme start="20261009120000 +0000" stop="20261009130000 +0000" channel="undeclared.test">
+    <title>Undeclared Channel</title>
+  </programme>
+  <programme start="20261001120000 +0000" stop="20261001130000 +0000" channel="bbb.test">
+    <title>Too Old</title>
+  </programme>
+  <programme start="20261020120000 +0000" stop="20261020130000 +0000" channel="bbb.test">
+    <title>Too Far Ahead</title>
+  </programme>
+</tv>

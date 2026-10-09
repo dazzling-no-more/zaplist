@@ -3,6 +3,7 @@ import { t } from '../i18n'
 import { Button } from '../ui/Button'
 import { useScreenFocus, type ScreenProps } from '../ui/navigation'
 import { Region } from '../ui/Region'
+import { GuideSection } from './settings/Guide'
 import { ParentalSection } from './settings/Parental'
 import { SourcesSection } from './settings/Sources'
 
@@ -30,6 +31,8 @@ export function SettingsScreen({ entry }: ScreenProps<'settings'>) {
       </Region>
       {section === 'sources' ? (
         <SourcesSection />
+      ) : section === 'guide' ? (
+        <GuideSection />
       ) : section === 'parental' ? (
         <ParentalSection />
       ) : (

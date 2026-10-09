@@ -100,3 +100,31 @@ export async function getMeta<T>(key: string): Promise<T | undefined> {
 export async function setMeta(key: string, value: unknown): Promise<void> {
   await (await db()).put('meta', value, key)
 }
+
+/** Replaces the whole guide. Written in batches so no single transaction gets huge. */
+export async function saveGuide(programmes: Map<string, Programme[]>): Promise<void> {
+  const database = await db()
+  await database.clear('guide')
+  const entries = Array.from(programmes)
+  for (let i = 0; i < entries.length; i += 1000) {
+    const tx = database.transaction('guide', 'readwrite')
+    const writes = entries.slice(i, i + 1000).map(([key, list]) => tx.store.put({ key, programmes: list }))
+    await Promise.all([...writes, tx.done])
+  }
+}
+
+export async function getGuide(key: string): Promise<Programme[] | undefined> {
+  return (await (await db()).get('guide', key))?.programmes
+}
+
+/** Removes cached playlists and the guide; sources stay and download again on refresh. */
+export async function clearCache(): Promise<void> {
+  const tx = (await db()).transaction(['playlists', 'channelChunks', 'guide', 'meta'], 'readwrite')
+  await Promise.all([
+    tx.objectStore('playlists').clear(),
+    tx.objectStore('channelChunks').clear(),
+    tx.objectStore('guide').clear(),
+    tx.objectStore('meta').clear(),
+    tx.done,
+  ])
+}

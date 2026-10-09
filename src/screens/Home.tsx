@@ -17,7 +17,7 @@ import { clampIndex } from '../ui/scroll'
 import { VirtualList } from '../ui/VirtualList'
 
 const GROUP_ROW = 68
-const GROUP_LIST_HEIGHT = 680
+const GROUP_LIST_HEIGHT = 544
 const CHANNEL_ROW = 84
 const CHANNEL_LIST_HEIGHT = 840
 /** Moving through the sidebar shows a category after it stays focused this long. */
@@ -125,6 +125,9 @@ function Browse({ entry }: ScreenProps<'home'>) {
         <h1>{t('appName')}</h1>
         <Button focusKey="home-search" onPress={() => navigate({ name: 'search' })}>
           {t('home.search')}
+        </Button>
+        <Button focusKey="home-guide" onPress={() => navigate({ name: 'guide', listId: groupId })}>
+          {t('guide.title')}
         </Button>
         <Button focusKey="home-settings" onPress={() => navigate({ name: 'settings' })}>
           {t('settings.title')}

@@ -14,6 +14,7 @@ import { Button } from '../ui/Button'
 import { ChannelRow } from '../ui/ChannelRow'
 import { Dialog } from '../ui/Dialog'
 import { Logo } from '../ui/Logo'
+import { NowNext } from '../ui/NowPlaying'
 import { backStack, useBackHandler, type ScreenProps } from '../ui/navigation'
 import { recordPlay } from '../ui/play'
 import { Region } from '../ui/Region'
@@ -227,7 +228,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
             <Logo url={channel.logo} name={channel.name} />
             <div className="osd-text">
               <div className="osd-name">{channel.name}</div>
-              {loadingText && <div className="osd-status">{loadingText}</div>}
+              {loadingText ? <div className="osd-status">{loadingText}</div> : <NowNext channel={channel} />}
             </div>
             <Clock />
           </div>
@@ -287,7 +288,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
               if (c.id !== channelId) tune(c)
             }}
             renderRow={(c, _, focused) => (
-              <ChannelRow channel={c} focused={focused} favorite={prefs.favorites.includes(c.id)} moving={c.id === channelId} />
+              <ChannelRow channel={c} focused={focused} favorite={prefs.favorites.includes(c.id)} current={c.id === channelId} />
             )}
           />
         </div>

@@ -1,24 +1,26 @@
+import type { GuideProgress, GuideResult } from './guideIngest'
 import { LoadError } from './http'
-import { ingest, toLoadError } from './ingest'
+import { toLoadError } from './ingest'
+import { runJob } from './jobs'
 import type { Source } from './models'
-import type { IngestProgress, IngestResult, WorkerRequest, WorkerResponse } from '../workers/protocol'
+import type { IngestProgress, IngestResult, Job, WorkerRequest, WorkerResponse } from '../workers/protocol'
 import workerUrl from '../workers/ingest.worker?worker&url'
 
-interface Job {
-  source: Source
-  resolve: (result: IngestResult) => void
+interface Pending {
+  job: Job
+  resolve: (result: IngestResult | GuideResult) => void
   reject: (error: LoadError) => void
-  onProgress?: (progress: IngestProgress) => void
+  onProgress?: (progress: IngestProgress | GuideProgress) => void
 }
 
 /** undefined: not tried yet; null: workers unavailable here, so jobs run on the main thread. */
 let worker: Worker | null | undefined
 let workerAnswered = false
 let nextId = 1
-const jobs = new Map<number, Job>()
+const pending = new Map<number, Pending>()
 
-function runOnMainThread(job: Job): void {
-  ingest(job.source, (p) => job.onProgress?.(p)).then(job.resolve, (error) => job.reject(toLoadError(error)))
+function runOnMainThread(entry: Pending): void {
+  runJob(entry.job, (p) => entry.onProgress?.(p)).then(entry.resolve, (error) => entry.reject(toLoadError(error)))
 }
 
 function getWorker(): Worker | null {
@@ -33,38 +35,47 @@ function getWorker(): Worker | null {
   worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
     workerAnswered = true
     const message = event.data
-    const job = jobs.get(message.id)
-    if (!job) return
-    if (message.type === 'progress') return job.onProgress?.(message.progress)
-    jobs.delete(message.id)
-    if (message.type === 'result') job.resolve(message.result)
-    else job.reject(new LoadError(message.code, message.detail))
+    const entry = pending.get(message.id)
+    if (!entry) return
+    if (message.type === 'progress') return entry.onProgress?.(message.progress)
+    pending.delete(message.id)
+    if (message.type === 'result') entry.resolve(message.result)
+    else entry.reject(new LoadError(message.code, message.detail))
   }
   worker.onerror = (event) => {
-    const pending = Array.from(jobs.values())
-    jobs.clear()
+    const entries = Array.from(pending.values())
+    pending.clear()
     worker?.terminate()
     if (workerAnswered) {
       worker = undefined
-      for (const job of pending) job.reject(new LoadError('format', event.message))
+      for (const entry of entries) entry.reject(new LoadError('format', event.message))
     } else {
       // The script never started (blocked or missing): fall back for good.
       worker = null
-      pending.forEach(runOnMainThread)
+      entries.forEach(runOnMainThread)
     }
   }
   return worker
 }
 
-/** Downloads and parses a source off the UI thread when possible, then stores it in IndexedDB. */
-export function ingestSource(source: Source, onProgress?: (progress: IngestProgress) => void): Promise<IngestResult> {
+function run(job: Job, onProgress?: (progress: IngestProgress | GuideProgress) => void): Promise<IngestResult | GuideResult> {
   return new Promise((resolve, reject) => {
-    const job: Job = { source, resolve, reject, onProgress }
+    const entry: Pending = { job, resolve, reject, onProgress }
     const target = getWorker()
-    if (!target) return runOnMainThread(job)
+    if (!target) return runOnMainThread(entry)
     const id = nextId++
-    jobs.set(id, job)
-    const request: WorkerRequest = { id, type: 'ingest', source }
+    pending.set(id, entry)
+    const request: WorkerRequest = { ...job, id }
     target.postMessage(request)
   })
+}
+
+/** Downloads and parses a source off the UI thread when possible, then stores it in IndexedDB. */
+export function ingestSource(source: Source, onProgress?: (progress: IngestProgress) => void): Promise<IngestResult> {
+  return run({ type: 'ingest', source }, onProgress as (p: IngestProgress | GuideProgress) => void) as Promise<IngestResult>
+}
+
+/** Downloads the guide URLs and stores the programmes of the `wanted` guide keys. */
+export function ingestGuideUrls(urls: string[], wanted: string[], onProgress?: (progress: GuideProgress) => void): Promise<GuideResult> {
+  return run({ type: 'guide', urls, wanted }, onProgress as (p: IngestProgress | GuideProgress) => void) as Promise<GuideResult>
 }

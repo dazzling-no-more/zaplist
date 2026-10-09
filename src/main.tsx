@@ -2,6 +2,7 @@ import './polyfills'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { guide } from './data/guide'
 import { library } from './data/library'
 import { onRemoteKey } from './platform/keys'
 import { installLifecycle } from './platform/lifecycle'
@@ -22,7 +23,13 @@ onRemoteKey((key, event) => {
   if (active instanceof HTMLInputElement) active.blur()
   else backStack.back()
 })
-library.init().then(resumeLastChannel)
+// Dev builds only: lets browser automation reach any screen directly.
+if (import.meta.env.DEV) Object.assign(window, { __app: { backStack, library, guide } })
+
+library.init().then(() => {
+  resumeLastChannel()
+  void guide.start()
+})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

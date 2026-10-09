@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { guide } from '../../data/guide'
 import { library, useLibrary } from '../../data/library'
 import type { Source } from '../../data/models'
 import { t } from '../../i18n'
@@ -20,7 +21,10 @@ export function SourcesSection() {
 
   const refresh = (source: Source) => {
     setErrors(({ [source.id]: _, ...rest }) => rest)
-    library.refresh(source.id).catch((error) => setErrors((e) => ({ ...e, [source.id]: describeError(error) })))
+    library
+      .refresh(source.id)
+      .then(() => guide.refresh())
+      .catch((error) => setErrors((e) => ({ ...e, [source.id]: describeError(error) })))
   }
 
   return (
