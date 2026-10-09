@@ -1,0 +1,39 @@
+{
+  "name": "iptv-player",
+  "private": true,
+  "version": "0.1.0",
+  "description": "IPTV player for LG webOS TV",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "build": "npm run typecheck && vite build && node scripts/check-bundle.mjs",
+    "package": "node scripts/ares.mjs package",
+    "install:tv": "node scripts/ares.mjs install",
+    "launch:tv": "node scripts/ares.mjs launch",
+    "inspect:tv": "node scripts/ares.mjs inspect"
+  },
+  "dependencies": {
+    "@juggle/resize-observer": "3.4.0",
+    "@noriginmedia/norigin-spatial-navigation": "3.3.0",
+    "abortcontroller-polyfill": "1.7.8",
+    "core-js": "3.50.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "5.2.0",
+    "@webos-tools/cli": "3.2.6",
+    "acorn": "8.19.0",
+    "acorn-walk": "8.3.5",
+    "core-js-compat": "3.50.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "4.1.11"
+  }
+}

@@ -1,0 +1,98 @@
+import { describe, expect, it, vi } from 'vitest'
+import { BackStack } from '../src/platform/backStack'
+
+const create = () => new BackStack<string>('home')
+const names = (stack: BackStack<string>) => stack.getState().screens.map((s) => s.name)
+
+describe('BackStack', () => {
+  it('starts at the root screen with no exit prompt', () => {
+    const stack = create()
+    expect(names(stack)).toEqual(['home'])
+    expect(stack.getState().exitPrompt).toBe(false)
+  })
+
+  it('pops screens on Back, then asks to exit at the root', () => {
+    const stack = create()
+    stack.push('settings')
+    stack.push('about')
+    stack.back()
+    expect(names(stack)).toEqual(['home', 'settings'])
+    stack.back()
+    expect(names(stack)).toEqual(['home'])
+    expect(stack.getState().exitPrompt).toBe(false)
+    stack.back()
+    expect(names(stack)).toEqual(['home'])
+    expect(stack.getState().exitPrompt).toBe(true)
+    stack.closeExitPrompt()
+    expect(stack.getState().exitPrompt).toBe(false)
+  })
+
+  it('remembers the focus key of the screen being left', () => {
+    const stack = create()
+    stack.push('settings', 'home-settings')
+    stack.push('about', 'settings-about')
+    stack.back()
+    const [home, settings] = stack.getState().screens
+    expect(home.focusKey).toBe('home-settings')
+    expect(settings.focusKey).toBe('settings-about')
+  })
+
+  it('gives every visit a new id so returning remounts the screen', () => {
+    const stack = create()
+    stack.push('settings')
+    const first = stack.getState().screens[1].id
+    stack.back()
+    stack.push('settings')
+    expect(stack.getState().screens[1].id).not.toBe(first)
+  })
+
+  it('lets the newest handler consume Back before screens pop', () => {
+    const stack = create()
+    stack.push('settings')
+    const calls: string[] = []
+    stack.addHandler(() => (calls.push('screen'), false))
+    const removeOverlay = stack.addHandler(() => (calls.push('overlay'), true))
+
+    stack.back()
+    expect(calls).toEqual(['overlay'])
+    expect(names(stack)).toEqual(['home', 'settings'])
+
+    removeOverlay()
+    stack.back()
+    expect(calls).toEqual(['overlay', 'screen'])
+    expect(names(stack)).toEqual(['home'])
+  })
+
+  it('does not open the exit prompt while a handler consumes Back at the root', () => {
+    const stack = create()
+    stack.addHandler(() => true)
+    stack.back()
+    expect(stack.getState().exitPrompt).toBe(false)
+  })
+
+  it('removes only the handler it was given', () => {
+    const stack = create()
+    const a = vi.fn(() => false)
+    const b = vi.fn(() => false)
+    stack.addHandler(a)
+    const removeB = stack.addHandler(b)
+    removeB()
+    removeB()
+    stack.back()
+    expect(a).toHaveBeenCalledOnce()
+    expect(b).not.toHaveBeenCalled()
+  })
+
+  it('notifies subscribers with a new state object on every change', () => {
+    const stack = create()
+    const listener = vi.fn()
+    const unsubscribe = stack.subscribe(listener)
+    const before = stack.getState()
+    stack.push('settings')
+    expect(listener).toHaveBeenCalledOnce()
+    expect(stack.getState()).not.toBe(before)
+    unsubscribe()
+    stack.back()
+    expect(listener).toHaveBeenCalledOnce()
+  })
+})
