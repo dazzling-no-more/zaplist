@@ -1,5 +1,5 @@
 import { useFocusable } from '@noriginmedia/norigin-spatial-navigation'
-import { useEffect, useRef, type ReactNode, type WheelEvent } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type WheelEvent } from 'react'
 import { onRemoteKey, type Key } from '../platform/keys'
 import { canHover, isPointerVisible, swallowHeldEnter } from './focus'
 import { clampIndex, scrollToKeepVisible, visibleRange } from './scroll'
@@ -19,8 +19,11 @@ export interface VirtualListProps<T> {
   /** The focused row. The parent owns it so it can restore and move it. */
   index: number
   onIndexChange: (index: number) => void
-  renderRow: (item: T, index: number, focused: boolean) => ReactNode
+  /** `action`: the row's button (see onRowAction) has focus rather than the row itself. */
+  renderRow: (item: T, index: number, focused: boolean, action: boolean) => ReactNode
   onSelect?: (item: T, index: number) => void
+  /** The row's button (e.g. favorite): Right moves onto it, Left back, OK presses it. */
+  onRowAction?: (item: T, index: number) => void
   /** Holding OK. Without it, OK selects on key down instead of key up. */
   onLongPress?: (item: T, index: number) => void
   /** Up/Down before the list moves focus; return true when handled (e.g. reordering). */
@@ -41,6 +44,9 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
   latest.current = props
   const press = useRef<{ at: number; last: number; long: boolean } | null>(null)
   const top = useRef(0)
+  const [actionMode, setActionMode] = useState(false)
+  const action = useRef(false)
+  action.current = actionMode
 
   const move = (delta: number): boolean => {
     const { items, index, onIndexChange } = latest.current
@@ -55,16 +61,29 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
     // An empty list can't show focus, so it doesn't take it.
     focusable: props.items.length > 0,
     onArrowPress: (direction) => {
+      // Right onto the row's button and Left back; Up/Down keep it, so you can go down the column.
+      if (direction === 'right' && latest.current.onRowAction) {
+        setActionMode(true)
+        return false
+      }
+      if (direction === 'left' && action.current) {
+        setActionMode(false)
+        return false
+      }
       if (direction !== 'up' && direction !== 'down') return true
       const delta = direction === 'up' ? -1 : 1
       if (latest.current.onVertical?.(delta, latest.current.index)) return false
       return !move(delta)
     },
-    onEnterPress: () => {
+    onEnterPress: (_props, details) => {
       if (isPointerVisible()) return
-      const { items, index, onSelect, onLongPress } = latest.current
+      const { items, index, onSelect, onLongPress, onRowAction } = latest.current
       const item = items[index]
       if (item === undefined) return
+      if (action.current) {
+        if (onRowAction && (details?.pressedKeys?.enter ?? 1) <= 1) onRowAction(item, index)
+        return
+      }
       if (!onLongPress) return void onSelect?.(item, index)
       const now = Date.now()
       const current = press.current
@@ -83,11 +102,12 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
       const current = press.current
       press.current = null
       const { items, index, onSelect, onLongPress } = latest.current
-      if (onLongPress && current && !current.long && items[index] !== undefined) onSelect?.(items[index], index)
+      if (onLongPress && current && !current.long && !action.current && items[index] !== undefined) onSelect?.(items[index], index)
     },
     onFocus: () => latest.current.onFocusChange?.(true),
     onBlur: () => {
       press.current = null
+      setActionMode(false)
       latest.current.onFocusChange?.(false)
     },
   })
@@ -126,7 +146,7 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
           latest.current.onSelect?.(item, i)
         }}
       >
-        {renderRow(item, i, focused && i === index)}
+        {renderRow(item, i, focused && i === index, focused && i === index && actionMode)}
       </div>,
     )
   }

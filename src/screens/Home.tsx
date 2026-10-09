@@ -9,7 +9,9 @@ import { t } from '../i18n'
 import { Button } from '../ui/Button'
 import { ChannelRow } from '../ui/ChannelRow'
 import { Dialog } from '../ui/Dialog'
+import { formatCount } from '../ui/format'
 import { emptyListText, groupLabels, GroupRow } from '../ui/GroupRow'
+import { Icon } from '../ui/Icon'
 import { navigate, useBackHandler, useScreenFocus, type ScreenProps } from '../ui/navigation'
 import { PinDialog } from '../ui/PinDialog'
 import { playChannel } from '../ui/play'
@@ -17,10 +19,10 @@ import { Region } from '../ui/Region'
 import { clampIndex } from '../ui/scroll'
 import { VirtualList } from '../ui/VirtualList'
 
-const GROUP_ROW = 68
-const GROUP_LIST_HEIGHT = 544
-const CHANNEL_ROW = 84
-const CHANNEL_LIST_HEIGHT = 840
+const GROUP_ROW = 60
+const GROUP_LIST_HEIGHT = 600
+const CHANNEL_ROW = 78
+const CHANNEL_LIST_HEIGHT = 858
 /** Moving through the sidebar shows a category after it stays focused this long. */
 const GROUP_SELECT_DELAY_MS = 150
 
@@ -91,6 +93,10 @@ function Browse({ entry }: ScreenProps<'home'>) {
     const played = memo.lastPlayed !== prefs.lastChannelId ? list.findIndex((c) => c.id === prefs.lastChannelId) : -1
     return played >= 0 ? played : (memo.channelIndex ?? 0)
   })
+  const groupCounts = useMemo(
+    () => new Map(groups.map((g) => [g.id, channelsForGroup(g.id, channels, (id) => library.channel(id), byCategory, prefs, unlocked).length])),
+    [groups, channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked],
+  )
   const group: ChannelGroup | undefined = groups.find((g) => g.id === groupId)
   const index = clampIndex(channelIndex, list.length)
   const locked = !!group?.locked && !unlocked
@@ -126,15 +132,18 @@ function Browse({ entry }: ScreenProps<'home'>) {
 
   return (
     <div className="screen">
-      <Region focusKey="home-sidebar" className="sidebar" preferredChild="home-groups">
-        <h1>{t('appName')}</h1>
-        <Button focusKey="home-search" onPress={() => navigate({ name: 'search' })}>
+      <Region focusKey="home-sidebar" className="sidebar panel" preferredChild="home-groups">
+        <h1 className="brand">
+          <Icon name="tv" />
+          {t('appName')}
+        </h1>
+        <Button focusKey="home-search" className="nav" icon="search" onPress={() => navigate({ name: 'search' })}>
           {t('home.search')}
         </Button>
-        <Button focusKey="home-guide" onPress={() => navigate({ name: 'guide', listId: groupId })}>
+        <Button focusKey="home-guide" className="nav" icon="guide" onPress={() => navigate({ name: 'guide', listId: groupId })}>
           {t('guide.title')}
         </Button>
-        <Button focusKey="home-settings" onPress={() => navigate({ name: 'settings' })}>
+        <Button focusKey="home-settings" className="nav" icon="settings" onPress={() => navigate({ name: 'settings' })}>
           {t('settings.title')}
         </Button>
         <VirtualList
@@ -151,11 +160,16 @@ function Browse({ entry }: ScreenProps<'home'>) {
             if (g.locked && !unlocked) setAskPin(true)
             else if (g.id === groupId ? list.length : true) setFocus('home-channels')
           }}
-          renderRow={(g, _, focused) => <GroupRow group={g} focused={focused} selected={g.id === groupId} unlocked={unlocked} />}
+          renderRow={(g, _, focused) => (
+            <GroupRow group={g} focused={focused} selected={g.id === groupId} unlocked={unlocked} count={groupCounts.get(g.id)} />
+          )}
         />
       </Region>
       <Region focusKey="home-content" className="content" focusable={locked || list.length > 0}>
-        <h2>{group?.name ?? ''}</h2>
+        <div className="content-header">
+          <h2>{group?.name ?? ''}</h2>
+          {!locked && list.length > 0 && <span className="dim">{t('sources.channels', { count: formatCount(list.length) })}</span>}
+        </div>
         {locked ? (
           <div className="empty">
             <p className="dim">{t('home.locked')}</p>
@@ -186,8 +200,16 @@ function Browse({ entry }: ScreenProps<'home'>) {
               else return false
               return true
             }}
-            renderRow={(channel, _, focused) => (
-              <ChannelRow channel={channel} focused={focused} favorite={prefs.favorites.includes(channel.id)} moving={channel.id === moving} />
+            onRowAction={(channel) => toggleFavorite(channel.id)}
+            renderRow={(channel, _, focused, action) => (
+              <ChannelRow
+                channel={channel}
+                focused={focused}
+                actionFocused={action}
+                favorite={prefs.favorites.includes(channel.id)}
+                onToggleFavorite={() => toggleFavorite(channel.id)}
+                moving={channel.id === moving}
+              />
             )}
             empty={empty}
           />
@@ -197,13 +219,13 @@ function Browse({ entry }: ScreenProps<'home'>) {
             t('hint.moving')
           ) : (
             <>
-              {t('hint.watch')} · {t('hint.more')} · <span className="key-red" /> {t('hint.favorite')}
-              {groupId === FAVORITES && (
-                <>
-                  {' · '}
-                  <span className="key-yellow" /> {t('hint.move')}
-                </>
-              )}
+              <span>{t('hint.watch')}</span>
+              <span>
+                <Icon name="star" className="hint-star" />
+                {t('hint.favoriteRight')}
+              </span>
+              <span>{t('hint.more')}</span>
+              {groupId === FAVORITES && <span>{t('hint.moveMenu')}</span>}
             </>
           )}
         </div>

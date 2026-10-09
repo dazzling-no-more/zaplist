@@ -1,5 +1,7 @@
-import { FAVORITES, RECENT, type ChannelGroup, type GroupLabels } from '../data/lists'
+import { ALL, FAVORITES, RECENT, type ChannelGroup, type GroupLabels } from '../data/lists'
 import { t } from '../i18n'
+import { formatCount } from './format'
+import { Icon, type IconName } from './Icon'
 
 export const groupLabels = (): GroupLabels => ({ favorites: t('home.favorites'), recent: t('home.recent'), all: t('home.all') })
 
@@ -9,23 +11,27 @@ export function emptyListText(groupId: string, locked: boolean): string {
   return t(groupId === FAVORITES ? 'home.noFavorites' : groupId === RECENT ? 'home.noRecents' : 'home.noChannels')
 }
 
+const ICONS: Record<string, IconName> = { [FAVORITES]: 'star', [RECENT]: 'recent', [ALL]: 'all' }
+
 interface Props {
   group: ChannelGroup
   focused: boolean
   /** The group whose channels are shown next to the list. */
   selected: boolean
   unlocked: boolean
+  /** Channels in the group, shown on the right. */
+  count?: number
 }
 
 /** A row in a category list (Home sidebar, player channel list). */
-export function GroupRow({ group, focused, selected, unlocked }: Props) {
+export function GroupRow({ group, focused, selected, unlocked, count }: Props) {
+  const icon = group.locked ? 'lock' : ICONS[group.id]
   return (
-    <div className={`group-row${focused ? ' focused' : ''}${selected ? ' selected' : ''}`}>
-      <span className="group-name">
-        {group.locked && <span className={`lock-icon${unlocked ? ' open' : ''}`} />}
-        {group.name}
-      </span>
+    <div className={`group-row${focused ? ' focused' : ''}${selected ? ' selected' : ''}${group.locked && unlocked ? ' unlocked' : ''}`}>
+      {icon && <Icon name={icon} />}
+      <span className="group-name">{group.name}</span>
       {group.detail && <span className="group-detail">{group.detail}</span>}
+      {count !== undefined && !(group.locked && !unlocked) && <span className="group-count">{formatCount(count)}</span>}
     </div>
   )
 }

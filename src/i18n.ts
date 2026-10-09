@@ -13,7 +13,7 @@ const en = {
   'home.welcomeDetail': 'Use an M3U playlist URL or an Xtream Codes login from your TV provider.',
   'home.addSource': 'Add a playlist',
   'home.search': 'Search',
-  'home.noFavorites': 'No favorites yet. Hold OK on a channel, or press the red button, to add one.',
+  'home.noFavorites': 'No favorites yet. Press Right on a channel and OK on the star, or click the star, to add one.',
   'home.noRecents': 'Channels you watch appear here.',
   'home.noChannels': 'No channels in this category.',
   'home.locked': 'This category is locked.',
@@ -21,8 +21,8 @@ const en = {
 
   'hint.watch': 'OK: watch',
   'hint.more': 'Hold OK: more',
-  'hint.favorite': 'Favorite',
-  'hint.move': 'Move',
+  'hint.favoriteRight': 'Right: favorite',
+  'hint.moveMenu': 'Hold OK: move',
   'hint.moving': 'Up/Down: move · OK: done',
 
   'menu.addFavorite': 'Add to favorites',
@@ -109,7 +109,6 @@ const en = {
   'player.favoriteAdded': 'Added to favorites',
   'player.favoriteRemoved': 'Removed from favorites',
   'player.channelList': 'Channel list',
-  'player.categories': 'Categories',
   'player.audio': 'Audio',
   'player.subtitles': 'Subtitles',
   'player.subtitlesOff': 'Off',
@@ -121,6 +120,7 @@ const en = {
   'player.error.timeout': 'The stream stopped sending video.',
 
   'aspect.fit': 'Fit',
+  'aspect.zoom': 'Zoom',
   'aspect.fill': 'Fill',
   'aspect.16:9': '16:9',
   'aspect.4:3': '4:3',

@@ -83,6 +83,8 @@ p {
 }
 
 .button {
+  display: flex;
+  align-items: center;
   margin-bottom: 12px;
   padding: 18px 28px;
   border-radius: 12px;
@@ -93,7 +95,7 @@ p {
 }
 
 .button.inline {
-  display: inline-block;
+  display: inline-flex;
 }
 
 .button.selected {
@@ -132,6 +134,7 @@ p {
 
 .dialog-buttons .button {
   flex: 1;
+  justify-content: center;
   margin: 0 12px 0 0;
   text-align: center;
 }
@@ -397,68 +400,6 @@ h3 {
   opacity: 1;
 }
 
-.fav-dot {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  margin: 0 12px 2px 0;
-  border-radius: 50%;
-  background: #f5c518;
-  vertical-align: middle;
-}
-
-/* A small padlock drawn with CSS (no emoji fonts on older TVs). */
-.lock-icon {
-  position: relative;
-  display: inline-block;
-  width: 18px;
-  height: 14px;
-  margin: 10px 14px 0 2px;
-  border-radius: 3px;
-  background: currentColor;
-  vertical-align: middle;
-}
-
-.lock-icon::before {
-  content: '';
-  position: absolute;
-  bottom: 12px;
-  left: 3px;
-  width: 8px;
-  height: 9px;
-  border: 3px solid currentColor;
-  border-bottom: none;
-  border-radius: 7px 7px 0 0;
-}
-
-.lock-icon.open::before {
-  left: 9px;
-}
-
-.hints {
-  margin-top: 12px;
-  color: var(--text-dim);
-  font-size: 24px;
-}
-
-.key-red,
-.key-yellow {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  margin-right: 4px;
-  border-radius: 4px;
-  vertical-align: middle;
-}
-
-.key-red {
-  background: #e53935;
-}
-
-.key-yellow {
-  background: #f5c518;
-}
-
 /* PIN dialog */
 .pin-dialog {
   width: 560px;
@@ -489,6 +430,7 @@ h3 {
 
 .keypad-key {
   flex: 1;
+  justify-content: center;
   margin: 0 6px 12px;
   text-align: center;
 }
@@ -515,6 +457,15 @@ h3 {
   width: 1920px;
   height: 1080px;
   object-fit: contain;
+}
+
+/* Zoom crops black bars that are part of the stream (wide-screen films sent as 16:9). It resizes the
+   element rather than using a transform, since webOS places the hardware video plane by its box. */
+.player-video.zoom {
+  top: -180px;
+  left: -320px;
+  width: 2560px;
+  height: 1440px;
 }
 
 .player-video.fill,
@@ -940,4 +891,165 @@ h3 {
 
 .legal {
   margin-top: 32px;
+}
+
+/* Icons (inline SVG, colored by the text color) */
+.icon {
+  display: inline-block;
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  fill: currentColor;
+  vertical-align: -0.18em;
+}
+
+.button .icon {
+  margin-right: 14px;
+}
+
+/* Home sidebar */
+.panel {
+  box-sizing: border-box;
+  padding: 24px 16px;
+  border-radius: 20px;
+  background: #10131a;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  margin: 0 0 24px 12px;
+  font-size: 38px;
+}
+
+.brand .icon {
+  margin-right: 14px;
+  color: var(--accent);
+}
+
+.button.nav {
+  margin-bottom: 8px;
+  padding: 12px 20px;
+  background: transparent;
+}
+
+.button.nav.focused {
+  background: var(--focus-bg);
+}
+
+.group-row .icon {
+  margin-right: 14px;
+  color: var(--text-dim);
+}
+
+.group-row.selected .icon {
+  color: var(--accent);
+}
+
+.group-row.focused .icon {
+  color: var(--focus-text);
+}
+
+.group-row.unlocked .icon {
+  opacity: 0.5;
+}
+
+.group-count {
+  flex: none;
+  margin-left: 12px;
+  color: var(--text-dim);
+  font-size: 22px;
+}
+
+.group-row.focused .group-count {
+  color: #4a5160;
+}
+
+/* Home content */
+.content-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 20px 0 6px;
+}
+
+.content-header h2 {
+  margin: 0;
+}
+
+.hints {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  margin-top: 12px;
+  color: var(--text-dim);
+  font-size: 24px;
+}
+
+.hints span {
+  margin-right: 36px;
+}
+
+.hint-star {
+  margin-right: 6px;
+  color: #f5c518;
+}
+
+/* Favorite star at the end of a channel row */
+.row-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  margin-left: 12px;
+  border-radius: 50%;
+  color: var(--text-dim);
+  font-size: 30px;
+  cursor: pointer;
+}
+
+.row-action.on {
+  color: #f5c518;
+}
+
+.channel-row.focused .row-action {
+  color: #6b7383;
+}
+
+.channel-row.focused .row-action.on,
+.row-action.on.focused {
+  color: #d99a00;
+}
+
+.channel-row.action-row {
+  background: var(--surface-raised);
+}
+
+.row-action.focused {
+  background: var(--focus-bg);
+  color: var(--focus-text);
+}
+
+/* Player channel list: Search and Guide above the categories */
+.mini-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  font-weight: normal;
+}
+
+.mini-actions .button {
+  flex: 1;
+  justify-content: center;
+  margin: 0 12px 0 0;
+  padding: 8px 18px;
+  font-size: 24px;
+}
+
+.mini-actions .button:last-child {
+  margin-right: 0;
 }

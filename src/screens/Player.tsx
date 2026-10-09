@@ -8,6 +8,7 @@ import { ASPECTS, toggleFavorite, updatePrefs, usePrefs, type Aspect } from '../
 import { t } from '../i18n'
 import { onRemoteKey } from '../platform/keys'
 import { onNetworkChange } from '../platform/network'
+import { toggleFullscreen } from '../platform/screen'
 import type { Engine, PlaybackError } from '../player/streams'
 import { useSoundBlocked } from '../player/autoplay'
 import { Playback, usePlaybackStatus } from '../player/playback'
@@ -17,7 +18,7 @@ import { Dialog } from '../ui/Dialog'
 import { emptyListText, groupLabels, GroupRow } from '../ui/GroupRow'
 import { Logo } from '../ui/Logo'
 import { NowNext } from '../ui/NowPlaying'
-import { backStack, useBackHandler, type ScreenProps } from '../ui/navigation'
+import { backStack, navigate, useBackHandler, type ScreenProps } from '../ui/navigation'
 import { recordPlay } from '../ui/play'
 import { formatCount } from '../ui/format'
 import { Region } from '../ui/Region'
@@ -30,7 +31,7 @@ const TOAST_MS = 2500
 const GROUP_SELECT_DELAY_MS = 150
 /** Channel list overlay: 1080 minus the safe area, panel padding and column header. */
 const MINI_LIST_HEIGHT = 884
-const ASPECT_CLASS: Record<Aspect, string> = { fit: 'fit', fill: 'fill', '16:9': 'ratio-16-9', '4:3': 'ratio-4-3' }
+const ASPECT_CLASS: Record<Aspect, string> = { fit: 'fit', zoom: 'zoom', fill: 'fill', '16:9': 'ratio-16-9', '4:3': 'ratio-4-3' }
 
 function describeError(error: PlaybackError): string {
   return t(`player.error.${error.code}`)
@@ -73,6 +74,10 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   const [listIndex, setListIndex] = useState(0)
   const browseList = useMemo(() => visible(browseGroup), [...listDeps, browseGroup])
   const browseLocked = !!groups.find((g) => g.id === browseGroup)?.locked && !unlocked
+  const groupCounts = useMemo(
+    () => (miniList ? new Map(groups.map((g) => [g.id, visible(g.id).length])) : undefined),
+    [...listDeps, groups, miniList],
+  )
   const [picker, setPicker] = useState<'audio' | 'subtitles'>()
   const [digits, setDigits] = useState('')
   const [toast, setToast] = useState<string>()
@@ -255,7 +260,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   return (
     <div className="player">
       <video ref={video} className={`player-video ${ASPECT_CLASS[aspect]}`} />
-      <div ref={surface} className="player-surface" onClick={() => showOsd(true)} />
+      <div ref={surface} className="player-surface" onClick={() => showOsd(true)} onDoubleClick={toggleFullscreen} />
 
       {channel && (osd || status.state !== 'playing') && !miniList && (
         <div className="osd" onMouseMove={() => osd && armOsd()}>
@@ -270,19 +275,19 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
           </div>
           {osd && (
             <Region focusKey="osd-buttons" className="osd-buttons">
-              <Button focusKey="osd-channels" onPress={openList}>
+              <Button focusKey="osd-channels" icon="all" onPress={openList}>
                 {t('player.channelList')}
               </Button>
-              <Button focusKey="osd-favorite" onPress={favorite}>
+              <Button focusKey="osd-favorite" icon={prefs.favorites.includes(channel.id) ? 'star' : 'starOutline'} onPress={favorite}>
                 {t(prefs.favorites.includes(channel.id) ? 'menu.removeFavorite' : 'menu.addFavorite')}
               </Button>
-              <Button focusKey="osd-audio" onPress={() => setPicker('audio')}>
+              <Button focusKey="osd-audio" icon="audio" onPress={() => setPicker('audio')}>
                 {t('player.audio')}
               </Button>
-              <Button focusKey="osd-subtitles" onPress={() => setPicker('subtitles')}>
+              <Button focusKey="osd-subtitles" icon="subtitles" onPress={() => setPicker('subtitles')}>
                 {t('player.subtitles')}
               </Button>
-              <Button focusKey="osd-aspect" onPress={cycleAspect}>
+              <Button focusKey="osd-aspect" icon="aspect" onPress={cycleAspect}>
                 {t('player.aspectIs', { aspect: t(`aspect.${aspect}`) })}
               </Button>
             </Region>
@@ -317,7 +322,14 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
       {miniList && (
         <div className="mini-list">
           <div className="mini-groups">
-            <div className="mini-header">{t('player.categories')}</div>
+            <Region focusKey="player-list-actions" className="mini-header mini-actions">
+              <Button focusKey="player-search" icon="search" onPress={() => navigate({ name: 'search' })}>
+                {t('home.search')}
+              </Button>
+              <Button focusKey="player-guide" icon="guide" onPress={() => navigate({ name: 'guide', listId: browseGroup })}>
+                {t('guide.title')}
+              </Button>
+            </Region>
             <VirtualList
               focusKey="player-groups"
               items={groups}
@@ -330,7 +342,9 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
                 showBrowseGroup(g.id)
                 if (visible(g.id).length) setFocus('player-list')
               }}
-              renderRow={(g, _, focused) => <GroupRow group={g} focused={focused} selected={g.id === browseGroup} unlocked={unlocked} />}
+              renderRow={(g, _, focused) => (
+                <GroupRow group={g} focused={focused} selected={g.id === browseGroup} unlocked={unlocked} count={groupCounts?.get(g.id)} />
+              )}
             />
           </div>
           <div className="mini-channels">
@@ -353,8 +367,16 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
                 if (c.id !== channelId) tune(c, browseGroup)
                 else setListId(browseGroup)
               }}
-              renderRow={(c, _, focused) => (
-                <ChannelRow channel={c} focused={focused} favorite={prefs.favorites.includes(c.id)} current={c.id === channelId} />
+              onRowAction={(c) => toggleFavorite(c.id)}
+              renderRow={(c, _, focused, action) => (
+                <ChannelRow
+                  channel={c}
+                  focused={focused}
+                  actionFocused={action}
+                  favorite={prefs.favorites.includes(c.id)}
+                  onToggleFavorite={() => toggleFavorite(c.id)}
+                  current={c.id === channelId}
+                />
               )}
               empty={<p className="dim empty">{emptyListText(browseGroup, browseLocked)}</p>}
             />

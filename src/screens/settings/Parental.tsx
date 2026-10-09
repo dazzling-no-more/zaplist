@@ -4,6 +4,7 @@ import { markUnlocked, unlock, useUnlocked } from '../../data/parental'
 import { updatePrefs, usePrefs } from '../../data/prefs'
 import { t } from '../../i18n'
 import { Button } from '../../ui/Button'
+import { Icon } from '../../ui/Icon'
 import { PinDialog } from '../../ui/PinDialog'
 import { Region } from '../../ui/Region'
 import { VirtualList } from '../../ui/VirtualList'
@@ -102,7 +103,7 @@ export function ParentalSection() {
             renderRow={(c, _, focused) => (
               <div className={`group-row${focused ? ' focused' : ''}`}>
                 <span className="group-name">
-                  {prefs.lockedCategories.includes(c.id) && <span className="lock-icon" />}
+                  {prefs.lockedCategories.includes(c.id) && <Icon name="lock" />}
                   {c.name}
                 </span>
                 <span className="group-detail">

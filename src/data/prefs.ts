@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-export const ASPECTS = ['fit', 'fill', '16:9', '4:3'] as const
+export const ASPECTS = ['fit', 'zoom', 'fill', '16:9', '4:3'] as const
 export type Aspect = (typeof ASPECTS)[number]
 
 /** Small user settings kept in localStorage. Playlists and the guide live in IndexedDB. */

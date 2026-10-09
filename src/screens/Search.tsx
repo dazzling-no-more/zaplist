@@ -77,7 +77,16 @@ export function SearchScreen({ entry }: ScreenProps<'search'>) {
             toggleFavorite(channel.id)
             return true
           }}
-          renderRow={(channel, _, focused) => <ChannelRow channel={channel} focused={focused} favorite={prefs.favorites.includes(channel.id)} />}
+          onRowAction={(channel) => toggleFavorite(channel.id)}
+          renderRow={(channel, _, focused, action) => (
+            <ChannelRow
+              channel={channel}
+              focused={focused}
+              actionFocused={action}
+              favorite={prefs.favorites.includes(channel.id)}
+              onToggleFavorite={() => toggleFavorite(channel.id)}
+            />
+          )}
         />
       </Region>
     </div>

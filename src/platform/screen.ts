@@ -15,3 +15,9 @@ export function fitToWindow(): void {
   fit()
   window.addEventListener('resize', fit)
 }
+
+/** Desktop browsers: full screen on and off, like other web players. The TV app is always full screen. */
+export function toggleFullscreen(): void {
+  if (document.fullscreenElement) void document.exitFullscreen()
+  else void document.documentElement.requestFullscreen?.()
+}
