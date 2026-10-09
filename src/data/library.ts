@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { deleteSource, getChannelChunk, getPlaylistMeta, getSources } from './db'
+import { clearCache, deleteSource, getChannelChunk, getPlaylistMeta, getSources } from './db'
 import type { Category, Channel, Source } from './models'
 import { ingestSource } from './worker'
 import type { IngestProgress } from '../workers/protocol'
@@ -86,6 +86,18 @@ class Library {
     this.data.delete(sourceId)
     const sources = this.state.sources.filter((s) => s.id !== sourceId)
     this.set({ sources, ...this.combine(sources) })
+  }
+
+  /** Deletes cached channels and the guide, then downloads every source again. Returns how many failed. */
+  async clearCache(): Promise<number> {
+    await this.init()
+    await clearCache()
+    this.data.clear()
+    const { sources } = this.state
+    this.set(this.combine(sources))
+    let failed = 0
+    for (const source of sources) await this.save(source).catch(() => failed++)
+    return failed
   }
 
   private async load(sourceId: string): Promise<void> {

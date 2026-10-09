@@ -21,6 +21,8 @@ export type PlaybackStatus =
 export class Playback {
   private status: PlaybackStatus = { state: 'idle' }
   private engine?: Engine
+  /** The engine still trying to start, so a channel change can stop it too. */
+  private starting?: Engine
   private urls: string[] = []
   private retries = 0
   /** Bumped by every play/stop so late results of an earlier load are ignored. */
@@ -58,6 +60,8 @@ export class Playback {
 
   private reset(): number {
     clearTimeout(this.timer)
+    this.starting?.destroy()
+    this.starting = undefined
     this.engine?.destroy()
     this.engine = undefined
     releaseVideo(this.video)
@@ -70,12 +74,15 @@ export class Playback {
     for (const attempt of playbackAttempts(this.urls, mseSupport())) {
       if (token !== this.token) return
       const engine = createEngine(attempt, this.video)
+      this.starting = engine
       try {
         await engine.start()
       } catch (error) {
         engine.destroy()
         lastError = error instanceof PlaybackError ? error : new PlaybackError('format', String(error))
         continue
+      } finally {
+        if (this.starting === engine) this.starting = undefined
       }
       if (token !== this.token) return engine.destroy()
       this.engine = engine

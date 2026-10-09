@@ -10,8 +10,36 @@ import { defineConfig } from 'vitest/config'
 const TARGET = 'chrome53'
 
 /**
- * `virtual:core-js` imports exactly the core-js modules Chromium 53 lacks (what Babel's
- * `useBuiltIns: "entry"` would emit). The dev server runs in a modern desktop browser, so it gets none.
+ * Built-ins newer than ES2022 that aren't polyfilled. The app's TypeScript lib is ES2022, so its code
+ * can't call them, and hls.js / mpegts.js ship prebuilt for older browsers. Saves ~55 KB per bundle.
+ */
+const POLYFILLS_NOT_NEEDED = [
+  /^es\.(async-)?iterator\./,
+  /^es\.(async-)?disposable-stack\./,
+  /^es\.suppressed-error\./,
+  /^es\.symbol\.(async-)?dispose$/,
+  /^es\.uint8-array\./,
+  /^es\.set\.(union|intersection|difference|symmetric-difference|is-subset-of|is-superset-of|is-disjoint-from)/,
+  /^es\.(map|object)\.group-by$/,
+  /^es\.(weak-)?map\.get-or-insert/,
+  /^es\.array\.from-async$/,
+  /^es\.promise\.(try|with-resolvers)$/,
+  /^es\.math\.(f16round|sum-precise)$/,
+  /^es\.regexp\.escape$/,
+  /^es\.json\.(raw-json|is-raw-json)$/,
+  /^es\.array-buffer\.(transfer|transfer-to-fixed-length|detached)$/,
+  /^es\.error\.is-error$/,
+  /^es\.string\.(is|to)-well-formed$/,
+  /^es\.(array|typed-array)\.(find-last|find-last-index|to-reversed|to-sorted|to-spliced|with)$/,
+  /^es\.data-view\.(get|set)-float16$/,
+  /^web\.structured-clone$/,
+  /^web\.url\.(can-parse|parse)$/,
+]
+
+/**
+ * `virtual:core-js` imports the core-js modules Chromium 53 lacks (what Babel's
+ * `useBuiltIns: "entry"` would emit), minus POLYFILLS_NOT_NEEDED. The dev server runs in a modern
+ * desktop browser, so it gets none.
  */
 function coreJsPolyfills(build: boolean): Plugin {
   const id = 'virtual:core-js'
@@ -22,8 +50,28 @@ function coreJsPolyfills(build: boolean): Plugin {
       if (resolved !== '\0' + id) return
       if (!build) return ''
       const version = createRequire(import.meta.url)('core-js/package.json').version as string
-      const { list } = compat({ targets: { chrome: '53' }, modules: ['core-js/stable'], version })
+      const { list } = compat({ targets: { chrome: '53' }, modules: ['core-js/stable'], exclude: POLYFILLS_NOT_NEEDED, version })
       return list.map((name) => `import 'core-js/modules/${name}.js';`).join('\n')
+    },
+  }
+}
+
+/**
+ * Ships hls.js and mpegts.js as separate scripts with their licenses; src/player/vendor.ts loads them
+ * only when native playback fails. Their prebuilt dist files already run on Chromium 53.
+ */
+function vendorScripts(): Plugin {
+  const files: Record<string, string> = {
+    'vendor/hls.js': 'node_modules/hls.js/dist/hls.min.js',
+    'vendor/hls.js.LICENSE.txt': 'node_modules/hls.js/LICENSE',
+    'vendor/mpegts.js': 'node_modules/mpegts.js/dist/mpegts.js',
+    'vendor/mpegts.js.LICENSE.txt': 'node_modules/mpegts.js/LICENSE',
+  }
+  return {
+    name: 'vendor-scripts',
+    apply: 'build',
+    generateBundle() {
+      for (const [fileName, path] of Object.entries(files)) this.emitFile({ type: 'asset', fileName, source: readFileSync(path) })
     },
   }
 }
@@ -98,7 +146,7 @@ function webosAppInfo(): Plugin {
 
 export default defineConfig(({ command }) => ({
   base: './',
-  plugins: [react(), coreJsPolyfills(command === 'build'), classicScripts(), webosAppInfo(), devProxy()],
+  plugins: [react(), coreJsPolyfills(command === 'build'), classicScripts(), webosAppInfo(), vendorScripts(), devProxy()],
   build: {
     target: TARGET,
     cssTarget: TARGET,

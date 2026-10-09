@@ -10,6 +10,9 @@ class LruSet {
     this.items.set(key, true)
     return true
   }
+  clear(): void {
+    this.items.clear()
+  }
   add(key: string): void {
     this.items.delete(key)
     this.items.set(key, true)
@@ -20,6 +23,12 @@ class LruSet {
 // Bounded bookkeeping only; the images themselves are freed with their rows.
 const loaded = new LruSet(300)
 const failed = new LruSet(2000)
+
+export function clearLogoCache(): void {
+  loaded.clear()
+  failed.clear()
+}
+
 /** Rows that scroll past quickly never start a download. */
 const LOAD_DELAY_MS = 150
 

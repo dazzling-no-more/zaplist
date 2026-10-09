@@ -126,12 +126,14 @@ describe('Playback', () => {
     expect(created[1].engine.destroyed).toBe(true)
   })
 
-  it('ignores a slow start from a channel the user already left', async () => {
+  it('stops an engine that is still starting when the channel changes', async () => {
     let finishFirst!: () => void
     outcomes.native = [() => new Promise<void>((resolve) => (finishFirst = resolve)), ok]
     const playback = new Playback(video)
     playback.play(['first.mp4'])
     playback.play(['second.mp4'])
+    // Two engines must never drive the <video> at once.
+    expect(created[0].engine.destroyed).toBe(true)
     await flush()
     expect(playback.current()).toBe(created[1].engine)
     finishFirst()

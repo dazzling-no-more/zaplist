@@ -1,16 +1,19 @@
-import Hls, { type ErrorData } from 'hls.js'
-import mpegts from 'mpegts.js'
+import type { ErrorData } from 'hls.js'
+import type Mpegts from 'mpegts.js'
 import { proxied } from '../data/http'
 import { isWebOS } from '../platform/webos'
 import { PlaybackError, type Attempt, type Engine, type Track } from './streams'
+import { loadHls, loadMpegts, type Hls } from './vendor'
 
-const START_TIMEOUT_MS = 20_000
+// Native playback can stall without an error; after this long the next engine gets a turn.
+const START_TIMEOUT_MS = 12_000
 const STALL_TIMEOUT_MS = 20_000
 
-export const mseSupport = (): { hls: boolean; mpegts: boolean } => ({
-  hls: Hls.isSupported(),
-  mpegts: !!mpegts.getFeatureList().mseLivePlayback,
-})
+/** Whether the MSE engines can work here (the same checks hls.js and mpegts.js make). */
+export function mseSupport(): { hls: boolean; mpegts: boolean } {
+  const mse = typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E,mp4a.40.2"')
+  return { hls: mse, mpegts: mse && typeof ReadableStream !== 'undefined' }
+}
 
 /** Stops the element and frees its decoder. */
 export function releaseVideo(video: HTMLVideoElement): void {
@@ -151,45 +154,43 @@ class NativeEngine implements Engine {
   }
 }
 
-function hlsError(data: ErrorData): PlaybackError {
-  return new PlaybackError(data.type === Hls.ErrorTypes.NETWORK_ERROR ? 'network' : 'format', data.details)
-}
-
 class HlsEngine implements Engine {
   readonly name = 'hls.js'
   onFatal?: (error: PlaybackError) => void
-  private readonly hls: Hls
+  private hls?: InstanceType<Hls>
   private started = false
   private recovered = false
+  private destroyed = false
   private unwatch = () => {}
 
   constructor(
     private readonly video: HTMLVideoElement,
     private readonly url: string,
-  ) {
-    this.hls = new Hls({
+  ) {}
+
+  async start(): Promise<void> {
+    const Hls = await loadHls().catch((error: Error) => Promise.reject(new PlaybackError('format', error.message)))
+    if (this.destroyed) throw new PlaybackError('format', 'cancelled')
+    const hls = (this.hls = new Hls({
       // On the TV hls.js is only the fallback to native HLS; its Blob-URL worker is unreliable there.
       enableWorker: !isWebOS(),
       xhrSetup: import.meta.env.DEV ? (xhr, url) => xhr.open('GET', proxied(url), true) : undefined,
-    })
-  }
-
-  async start(): Promise<void> {
+    }))
     const failed = new Promise<never>((_, reject) => {
-      this.hls.on(Hls.Events.ERROR, (_event, data) => {
+      hls.on(Hls.Events.ERROR, (_event, data: ErrorData) => {
         if (!data.fatal) return
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !this.recovered) {
           this.recovered = true
-          this.hls.recoverMediaError()
+          hls.recoverMediaError()
           return
         }
-        const error = hlsError(data)
+        const error = new PlaybackError(data.type === Hls.ErrorTypes.NETWORK_ERROR ? 'network' : 'format', data.details)
         if (this.started) this.onFatal?.(error)
         else reject(error)
       })
     })
-    this.hls.loadSource(this.url)
-    this.hls.attachMedia(this.video)
+    hls.loadSource(this.url)
+    hls.attachMedia(this.video)
     const started = waitForPlaying(this.video, failed)
     void playVideo(this.video)
     await started
@@ -198,33 +199,36 @@ class HlsEngine implements Engine {
   }
 
   audioTracks(): Track[] {
-    return this.hls.audioTracks.map((t, i) => ({ id: i, label: t.name || t.lang || `${i + 1}` }))
+    return (this.hls?.audioTracks ?? []).map((t, i) => ({ id: i, label: t.name || t.lang || `${i + 1}` }))
   }
 
   selectedAudio(): number {
-    return this.hls.audioTrack
+    return this.hls?.audioTrack ?? -1
   }
 
   setAudioTrack(id: number): void {
-    this.hls.audioTrack = id
+    if (this.hls) this.hls.audioTrack = id
   }
 
   subtitleTracks(): Track[] {
-    return this.hls.subtitleTracks.map((t, i) => ({ id: i, label: t.name || t.lang || `${i + 1}` }))
+    return (this.hls?.subtitleTracks ?? []).map((t, i) => ({ id: i, label: t.name || t.lang || `${i + 1}` }))
   }
 
   selectedSubtitle(): number {
-    return this.hls.subtitleTrack
+    return this.hls?.subtitleTrack ?? -1
   }
 
   setSubtitleTrack(id: number): void {
+    if (!this.hls) return
     this.hls.subtitleDisplay = id >= 0
     this.hls.subtitleTrack = id
   }
 
   destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
     this.unwatch()
-    this.hls.destroy()
+    this.hls?.destroy()
     releaseVideo(this.video)
   }
 }
@@ -232,30 +236,32 @@ class HlsEngine implements Engine {
 class MpegtsEngine implements Engine {
   readonly name = 'mpegts.js'
   onFatal?: (error: PlaybackError) => void
-  private readonly player: mpegts.Player
+  private player?: Mpegts.Player
   private started = false
+  private destroyed = false
   private unwatch = () => {}
 
   constructor(
     private readonly video: HTMLVideoElement,
-    url: string,
-  ) {
-    this.player = mpegts.createPlayer(
-      { type: 'mpegts', isLive: true, url: proxied(url) },
-      { enableWorker: false, liveBufferLatencyChasing: true, autoCleanupSourceBuffer: true },
-    )
-  }
+    private readonly url: string,
+  ) {}
 
   async start(): Promise<void> {
+    const mpegts = await loadMpegts().catch((error: Error) => Promise.reject(new PlaybackError('format', error.message)))
+    if (this.destroyed) throw new PlaybackError('format', 'cancelled')
+    const player = (this.player = mpegts.createPlayer(
+      { type: 'mpegts', isLive: true, url: proxied(this.url) },
+      { enableWorker: false, liveBufferLatencyChasing: true, autoCleanupSourceBuffer: true },
+    ))
     const failed = new Promise<never>((_, reject) => {
-      this.player.on(mpegts.Events.ERROR, (type: string, detail: string) => {
+      player.on(mpegts.Events.ERROR, (type: string, detail: string) => {
         const error = new PlaybackError(type === mpegts.ErrorTypes.NETWORK_ERROR ? 'network' : 'format', detail)
         if (this.started) this.onFatal?.(error)
         else reject(error)
       })
     })
-    this.player.attachMediaElement(this.video)
-    this.player.load()
+    player.attachMediaElement(this.video)
+    player.load()
     const started = waitForPlaying(this.video, failed)
     void playVideo(this.video)
     await started
@@ -272,11 +278,15 @@ class MpegtsEngine implements Engine {
   setSubtitleTrack(): void {}
 
   destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
     this.unwatch()
-    this.player.pause()
-    this.player.unload()
-    this.player.detachMediaElement()
-    this.player.destroy()
+    if (this.player) {
+      this.player.pause()
+      this.player.unload()
+      this.player.detachMediaElement()
+      this.player.destroy()
+    }
     releaseVideo(this.video)
   }
 }

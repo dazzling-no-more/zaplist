@@ -1,60 +1,130 @@
 # IPTV Player for LG webOS TV
 
-An IPTV player for webOS TV 4.0+ (2018 models and newer). It plays playlists the user supplies
-(M3U URLs or Xtream Codes logins) and ships no channels, streams or credentials.
+A free, open-source IPTV player for LG TVs with webOS 4.0 or newer (2018 models onward). It plays
+the playlists you give it, either M3U/M3U8 URLs or Xtream Codes logins. It ships no channels,
+streams or credentials, and has no ads, accounts or telemetry. Credentials stay on the TV.
 
-## Scripts
+## Features
 
-| Command              | What it does                                                                 |
-| -------------------- | ---------------------------------------------------------------------------- |
-| `npm run dev`        | Vite dev server for desktop Chrome. Lay the window out at 1920×1080.          |
-| `npm test`           | Vitest unit tests (`tests/`).                                                |
-| `npm run build`      | Type-check, build to `dist/`, then `scripts/check-bundle.mjs` (see below).   |
-| `npm run package`    | `ares-package dist -o out` → `out/<id>_<version>_all.ipk`.                   |
-| `npm run install:tv` | Install the `.ipk` on the device named `tv`.                                 |
-| `npm run launch:tv`  | Launch the app on `tv`.                                                      |
-| `npm run inspect:tv` | Open Web Inspector for the app on `tv`.                                      |
+- **Sources**: several M3U URLs and Xtream Codes logins, each checked by downloading it before it is
+  saved. Xtream accounts show their expiry date and connection limit. Refresh, edit or delete
+  sources at any time.
+- **Browse**: sidebar with Search, TV guide, Settings, Favorites, Recent, All channels and the playlist
+  categories; a virtualized channel list (50,000+ channels) with logos, numbers and the programme on now.
+- **Search** across channel names (ignores case, accents and punctuation), updating as you type.
+- **Favorites** (red button, or hold OK) in your own order, and the last 20 channels watched.
+- **Player**: native playback first, then hls.js (HLS) or mpegts.js (MPEG-TS) when the TV's player
+  can't play a stream. Zapping, number entry, a mini channel list, now/next, audio and subtitle tracks,
+  picture shape (fit, fill, 16:9, 4:3), automatic retries and a readable error otherwise. Playback
+  stops when the app is hidden or the network drops and resumes on its own. The last channel reopens
+  when the app starts.
+- **TV guide**: XMLTV (plain or gzipped) from the playlist, the Xtream server or a URL you enter; the
+  Xtream short EPG as a fallback. Grid guide, time offset, automatic refresh every 6/12/24 hours.
+- **Parental control**: a 4-digit PIN locks the categories you choose until it is entered.
+- **About**: app version, TV model and webOS version, playback engine, last error; clear the cache.
 
-The webOS CLI (`@webos-tools/cli`) is a dev dependency, so no global install is needed; run its
-other commands with `npx`, e.g. `npx ares-setup-device` to register your TV under the name `tv`
-(enable Developer Mode on the TV first).
+## Remote control
 
-On desktop, Escape and Backspace act as the remote's Back key.
+| Where      | Key                          | Does                                                    |
+| ---------- | ---------------------------- | ------------------------------------------------------- |
+| Everywhere | Arrows, OK                   | Move and select (the Magic Remote pointer works too)    |
+|            | Back                         | Close the open overlay, go back; on Home, offer to exit |
+| Lists      | Channel +/−                  | Page up/down                                            |
+|            | Red / hold OK                | Toggle favorite / channel menu                          |
+|            | Yellow (in Favorites)        | Move the channel (Up/Down, then OK)                     |
+| Player     | Up/Down, Channel +/−         | Next / previous channel                                 |
+|            | 0–9                          | Go to channel number (after 1.5 s)                      |
+|            | OK                           | Channel list                                            |
+|            | Left/Right, Info             | Info bar with now/next, audio, subtitles, picture shape |
+|            | Red / Yellow                 | Favorite / picture shape                                |
+|            | Play, Pause, Stop            | Resume, pause, leave the player                         |
+| Guide      | Arrows, OK                   | Move through programmes; OK watches what's on now       |
 
-## Building for Chromium 53
+Every action also works with arrows and OK alone (the Magic Remote has no color keys). In a desktop
+browser, Escape and Backspace act as Back.
 
-webOS TV 4.x runs Chromium 53 and loads the app from `file://`. The build therefore:
+## Development
 
-- emits one classic IIFE script (no `type="module"`, no `crossorigin`) with relative paths;
-- lowers syntax with esbuild (`build.target: 'chrome53'`);
-- adds runtime polyfills in `src/polyfills.ts`: the core-js modules Chromium 53 lacks (computed by
-  `core-js-compat`), plus `AbortController` and `ResizeObserver`;
-- fails if `dist/` contains syntax newer than ES2016, regular expressions using ES2018+ features,
-  module scripts, `crossorigin`, or absolute URLs (`scripts/check-bundle.mjs`).
+Requires Node.js 20.19+ (or 22.12+). The webOS CLI is a dev dependency, so nothing is installed globally.
 
-CSS must also work on Chromium 53: no CSS grid, no flexbox `gap`, no `inset`. Animate only
-`transform` and `opacity`.
+```sh
+npm install
+npm run dev          # http://localhost:5173, use a 1920×1080 window and the keyboard
+npm test             # Vitest: parsers, time math, navigation, playback logic
+npm run build        # type-check, build to dist/, check the bundle for Chromium 53
+npm run package      # dist/ → out/<id>_<version>_all.ipk
+```
 
-## App identity
+In the dev server, requests to other origins go through a local proxy (`/__proxy/...`, see
+`vite.config.ts`), because desktop browsers enforce CORS and the TV does not. Production builds call
+the URLs directly.
 
-`appinfo.json` holds the app ID (`org.iptvplayer.app`), vendor and title.
-`public/webOSTVjs-1.2.13/` is LG's webOSTV.js library (Apache-2.0, license alongside), copied from
-the `@webos-tools/cli` app template.
+Test data (all legal and public):
 
-## Layout
+- `tests/fixtures/dev-streams.m3u`: public HLS and MPEG-TS test streams plus two broken ones for the
+  error paths. Add it as a source with `http://localhost:5173/tests/fixtures/dev-streams.m3u`.
+- `node scripts/make-large-playlist.mjs [count]` writes a 50,000-channel playlist to
+  `tests/fixtures/large.m3u` (not committed) for scale testing.
+- The [iptv-org](https://github.com/iptv-org/iptv) playlist, `https://iptv-org.github.io/iptv/index.m3u`.
+- `tests/fixtures/` also holds messy M3U files, XMLTV (+ `.gz`) and Xtream JSON responses used by the tests.
+
+## Running on a TV
+
+1. Turn on Developer Mode on the TV (LG's *Developer Mode* app) and note its IP address.
+2. Register it under the name `tv`: `npx ares-setup-device` (add device, name `tv`, the TV's IP).
+3. `npm run build && npm run package && npm run install:tv && npm run launch:tv`
+4. `npm run inspect:tv` opens Web Inspector for the running app.
+
+## Building for webOS (Chromium 53)
+
+webOS TV 4.x runs Chromium 53 and loads the app from `file://`, so the build:
+
+- emits classic scripts with relative paths (no `type="module"`, no `crossorigin`);
+- lowers syntax to Chromium 53 (`build.target: 'chrome53'`) and adds the core-js polyfills it lacks
+  (computed by `core-js-compat`; built-ins newer than ES2022 are left out), plus `AbortController`
+  and `ResizeObserver`;
+- ships hls.js and mpegts.js as separate scripts in `dist/vendor/`, loaded only when native playback
+  fails (they're about two thirds of the JavaScript);
+- runs playlist and guide parsing in a Web Worker loaded from its own file, falling back to the main
+  thread where workers can't load (desktop browsers refuse `file://` workers);
+- fails if `dist/` contains syntax newer than ES2016, ES2018+ regular expressions, module scripts,
+  `crossorigin`, or absolute URLs (`scripts/check-bundle.mjs`).
+
+CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Animate only
+`transform` and `opacity`; no `backdrop-filter` or blurred shadows.
+
+## Known limits
+
+- **Not yet tested on a TV or the webOS simulator.** Everything above was checked in desktop
+  Chrome (dev server and the `file://` build) with keyboard and simulated remote events. Playback in
+  desktop Chrome doesn't prove playback on the TV.
+- `#EXTVLCOPT` and `#KODIPROP` options are read and stored but not applied. Web apps can't set
+  headers such as `User-Agent` or `Referer`, and DRM (Widevine/PlayReady) is out of scope, so streams
+  that need them won't play.
+- Some TVs don't pass Channel +/− to apps; Up/Down zap in the player as well.
+- With the Magic Remote pointer visible, OK is taken as a click and the Enter key is ignored, so an
+  action doesn't run twice. This follows LG's own Enact framework; verify on a real TV.
+- Audio track switching for HLS played by the TV's own player may not work on every webOS version
+  (reported on LG's forum). Streams played by hls.js switch reliably.
+- Catch-up/timeshift, VOD and series (Xtream) are not implemented yet.
+
+## Project layout
 
 ```
-appinfo.json      webOS app manifest, copied into dist/ by the build
-public/           icons, webOSTV.js
-scripts/          bundle checker, webOS CLI wrapper
-src/platform/     key map, back stack, webOS wrappers, lifecycle
-src/ui/           focus manager, navigation hooks, Button, Region, Dialog
-src/screens/      Home, Settings
-src/i18n.ts       all user-facing strings
-tests/            Vitest tests
+appinfo.json           webOS manifest (ID, version, icons, 1920×1080, Back handling, permissions)
+public/                icons, LG webOSTV.js (Apache-2.0)
+scripts/               bundle checker, webOS CLI wrapper, large-playlist generator
+src/platform/          remote keys, back stack, webOS wrappers, lifecycle, network status
+src/data/              models, M3U/Xtream/XMLTV parsers, IndexedDB, library, guide, preferences
+src/workers/           parse worker and its message protocol
+src/player/            engines (native, hls.js, mpegts.js), retries, vendor script loading
+src/ui/                focus, navigation, virtual list, dialogs, PIN pad, channel rows, formatting
+src/screens/           Home, Search, Player, Guide, Settings (sources, guide, parental, about), source form
+src/i18n.ts            every user-facing string
+tests/                 Vitest tests and fixtures
 ```
 
 ## License
 
-Free and open source under the [MIT License](LICENSE). The app has no ads, accounts, telemetry or
-paid features, and every bundled library is under a free license (MIT, ISC or Apache-2.0).
+Free and open source under the [MIT License](LICENSE). Bundled libraries are under free licenses
+(MIT, ISC or Apache-2.0); hls.js and mpegts.js are shipped with their license files.

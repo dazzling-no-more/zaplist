@@ -16,6 +16,8 @@ interface WebOSTV {
 interface WebOSSystem {
   activate(): void
   cursor?: { visibility?: boolean }
+  /** JSON with modelName, platformVersion, ... */
+  deviceInfo?: string
 }
 
 declare global {
@@ -39,6 +41,22 @@ export function platformBack(): void {
 /** Whether the Magic Remote pointer is on screen right now. */
 export function cursorVisible(): boolean {
   return !!(window.webOSSystem ?? window.PalmSystem)?.cursor?.visibility
+}
+
+export interface DeviceInfo {
+  modelName?: string
+  platformVersion?: string
+}
+
+/** Model and webOS version, read without a Luna call (so no extra permissions). Undefined off-TV. */
+export function deviceInfo(): DeviceInfo | undefined {
+  const raw = (window.webOSSystem ?? window.PalmSystem)?.deviceInfo
+  if (!raw) return undefined
+  try {
+    return JSON.parse(raw) as DeviceInfo
+  } catch {
+    return undefined
+  }
 }
 
 /** Brings the app to the foreground. */

@@ -70,6 +70,9 @@ function run(job: Job, onProgress?: (progress: IngestProgress | GuideProgress) =
   })
 }
 
+/** Where background parsing runs, for the diagnostics screen. */
+export const parsingMode = (): 'worker' | 'main thread' | 'not started' => (worker === null ? 'main thread' : worker ? 'worker' : 'not started')
+
 /** Downloads and parses a source off the UI thread when possible, then stores it in IndexedDB. */
 export function ingestSource(source: Source, onProgress?: (progress: IngestProgress) => void): Promise<IngestResult> {
   return run({ type: 'ingest', source }, onProgress as (p: IngestProgress | GuideProgress) => void) as Promise<IngestResult>

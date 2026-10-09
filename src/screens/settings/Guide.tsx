@@ -57,9 +57,9 @@ export function GuideSection() {
       />
       <h3>{t('guideSettings.offset')}</h3>
       <div className="button-row stepper">
-        <Button onPress={() => setOffset(offset - OFFSET_STEP)}>−30 min</Button>
+        <Button onPress={() => setOffset(offset - OFFSET_STEP)}>{t('guideSettings.earlier')}</Button>
         <span className="stepper-value">{formatOffset(offset)}</span>
-        <Button onPress={() => setOffset(offset + OFFSET_STEP)}>+30 min</Button>
+        <Button onPress={() => setOffset(offset + OFFSET_STEP)}>{t('guideSettings.later')}</Button>
       </div>
       <h3>{t('guideSettings.interval')}</h3>
       <div className="button-row">
