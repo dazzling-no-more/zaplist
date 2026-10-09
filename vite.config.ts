@@ -44,8 +44,9 @@ function classicScripts(): Plugin {
 }
 
 /**
- * `/__proxy?url=<absolute URL>` on the dev server. The TV lets packaged apps fetch any origin, but
- * desktop browsers enforce CORS; src/data/http.ts routes requests through here in dev builds.
+ * `/__proxy/<scheme>/<host>/<path>` on the dev server fetches `<scheme>://<host>/<path>`. The TV lets
+ * packaged apps fetch any origin, but desktop browsers enforce CORS; src/data/http.ts routes requests
+ * through here in dev builds.
  */
 function devProxy(): Plugin {
   const forwarded = ['content-type', 'content-range', 'accept-ranges', 'last-modified']
@@ -54,12 +55,13 @@ function devProxy(): Plugin {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use('/__proxy', async (req, res) => {
-        const target = new URL(req.url ?? '', 'http://localhost').searchParams.get('url')
-        if (!target || !/^https?:\/\//i.test(target)) {
+        const match = /^\/(https?)\/(.+)$/.exec(req.url ?? '')
+        if (!match) {
           res.statusCode = 400
-          res.end('Expected ?url=http(s)://...')
+          res.end('Expected /__proxy/http(s)/host/path')
           return
         }
+        const target = `${match[1]}://${match[2]}`
         const controller = new AbortController()
         req.on('close', () => controller.abort())
         try {

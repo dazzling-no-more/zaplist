@@ -487,3 +487,179 @@ h3 {
 .pin-dialog .dialog-buttons {
   margin-top: 12px;
 }
+
+/* Player: full screen (outside the safe area); overlays stay inside it. */
+.player {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: #000;
+}
+
+.player-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  object-fit: contain;
+}
+
+.player-video.fill,
+.player-video.ratio-16-9 {
+  object-fit: fill;
+}
+
+.player-video.ratio-4-3 {
+  left: 240px;
+  width: 1440px;
+  object-fit: fill;
+}
+
+.player-surface {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.osd {
+  position: absolute;
+  right: 96px;
+  bottom: 54px;
+  left: 96px;
+  padding: 28px 32px;
+  border-radius: 16px;
+  background: rgba(11, 13, 18, 0.88);
+}
+
+.osd-info {
+  display: flex;
+  align-items: center;
+}
+
+.osd-number {
+  min-width: 80px;
+  margin-right: 20px;
+  color: var(--text-dim);
+  font-size: 40px;
+  text-align: right;
+}
+
+.osd-text {
+  flex: 1;
+  min-width: 0;
+  margin-left: 24px;
+}
+
+.osd-name {
+  overflow: hidden;
+  font-size: 40px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.osd-status {
+  margin-top: 6px;
+  color: var(--text-dim);
+}
+
+.osd-clock {
+  margin-left: 24px;
+  font-size: 36px;
+}
+
+.osd-buttons {
+  display: flex;
+  margin-top: 24px;
+}
+
+.osd-buttons .button {
+  margin: 0 16px 0 0;
+}
+
+.spinner {
+  position: absolute;
+  top: 480px;
+  left: 900px;
+  width: 120px;
+  height: 120px;
+  box-sizing: border-box;
+  border: 10px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.banner,
+.toast {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  max-width: 1400px;
+  padding: 16px 32px;
+  border-radius: 12px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.banner {
+  background: #8e1c1c;
+}
+
+.toast {
+  background: rgba(34, 40, 54, 0.95);
+}
+
+.digits {
+  position: absolute;
+  top: 54px;
+  right: 96px;
+  padding: 12px 32px;
+  border-radius: 12px;
+  background: rgba(11, 13, 18, 0.88);
+  font-size: 72px;
+  font-weight: bold;
+}
+
+.player-error {
+  position: absolute;
+  top: 300px;
+  left: 460px;
+  width: 1000px;
+  box-sizing: border-box;
+  padding: 48px;
+  border-radius: 16px;
+  background: var(--surface-raised);
+}
+
+.mini-list {
+  position: absolute;
+  top: 54px;
+  bottom: 54px;
+  left: 96px;
+  width: 800px;
+  padding: 12px;
+  box-sizing: border-box;
+  border-radius: 16px;
+  background: rgba(11, 13, 18, 0.92);
+}
+
+.dialog-options .button {
+  margin-bottom: 10px;
+}
+
+.crash {
+  padding-top: 300px;
+  text-align: center;
+}

@@ -60,6 +60,7 @@ class Library {
 
   /** Validates and stores a new or edited source by downloading it. Rejects with a LoadError. */
   async save(source: Source): Promise<Source> {
+    await this.init() // the startup load would otherwise overwrite this change
     this.setProgress(source.id, { stage: 'download' })
     try {
       const result = await ingestSource(source, (progress) => this.setProgress(source.id, progress))
@@ -80,6 +81,7 @@ class Library {
   }
 
   async remove(sourceId: string): Promise<void> {
+    await this.init()
     await deleteSource(sourceId)
     this.data.delete(sourceId)
     const sources = this.state.sources.filter((s) => s.id !== sourceId)

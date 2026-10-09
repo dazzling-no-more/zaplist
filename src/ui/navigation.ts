@@ -2,7 +2,13 @@ import { doesFocusableExist, getCurrentFocusKey, setFocus } from '@noriginmedia/
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { BackStack, type ScreenEntry } from '../platform/backStack'
 
-export type Route = { name: 'home' } | { name: 'search' } | { name: 'settings' } | { name: 'sourceEdit'; sourceId?: string }
+export type Route =
+  | { name: 'home' }
+  | { name: 'search' }
+  | { name: 'settings' }
+  | { name: 'sourceEdit'; sourceId?: string }
+  /** listId: the group the channel was picked from (Favorites, a category, ...), for zapping. */
+  | { name: 'player'; channelId: string; listId: string }
 
 export type ScreenName = Route['name']
 

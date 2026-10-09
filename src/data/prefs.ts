@@ -1,5 +1,8 @@
 import { useSyncExternalStore } from 'react'
 
+export const ASPECTS = ['fit', 'fill', '16:9', '4:3'] as const
+export type Aspect = (typeof ASPECTS)[number]
+
 /** Small user settings kept in localStorage. Playlists and the guide live in IndexedDB. */
 export interface Prefs {
   /** Channel ids in the user's order. */
@@ -17,12 +20,14 @@ export interface Prefs {
   /** Last channel played and the list it was played from, for resume on launch. */
   lastChannelId?: string
   lastListId?: string
+  /** Picture shape in the player. */
+  aspect: Aspect
 }
 
 export const MAX_RECENTS = 20
 
 const KEY = 'iptv-player.prefs'
-const DEFAULTS: Prefs = { favorites: [], recents: [], lockedCategories: [], epgOffsetMinutes: 0, epgRefreshHours: 12 }
+const DEFAULTS: Prefs = { favorites: [], recents: [], lockedCategories: [], epgOffsetMinutes: 0, epgRefreshHours: 12, aspect: 'fit' }
 
 function load(): Prefs {
   try {

@@ -12,12 +12,17 @@ export class LoadError extends Error {
   }
 }
 
+const PROXY = '/__proxy/'
+
 /**
  * Desktop browsers block cross-origin requests that the TV allows, so the dev server proxies them
- * (see vite.config.ts). Production builds use the URL unchanged.
+ * (see vite.config.ts) as /__proxy/<scheme>/<host>/<path>: relative URLs inside proxied playlists
+ * then resolve to proxied URLs too. Production builds use the URL unchanged.
  */
 export function proxied(url: string): string {
-  return import.meta.env.DEV && /^https?:/i.test(url) ? `/__proxy?url=${encodeURIComponent(url)}` : url
+  if (!import.meta.env.DEV || url.indexOf(location.origin + PROXY) === 0) return url
+  const match = /^(https?):\/\/(.*)$/i.exec(url)
+  return match ? PROXY + match[1].toLowerCase() + '/' + match[2] : url
 }
 
 const TIMEOUT_MS = 30_000

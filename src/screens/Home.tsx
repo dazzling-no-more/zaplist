@@ -27,6 +27,8 @@ interface HomeMemo {
   groupIndex?: number
   groupId?: string
   channelIndex?: number
+  /** The last played channel when Home was last shown; a different one means the player was used since. */
+  lastPlayed?: string
 }
 
 export function HomeScreen({ entry }: ScreenProps<'home'>) {
@@ -61,9 +63,14 @@ function Browse({ entry }: ScreenProps<'home'>) {
     [categories, sources, prefs.pin, prefs.lockedCategories],
   )
   const byCategory = useMemo(() => channelsByCategory(channels), [channels])
-  const [groupIndex, setGroupIndex] = useState(() => clampIndex(memo.groupIndex ?? 2, groups.length))
-  const [groupId, setGroupId] = useState(memo.groupId ?? ALL)
-  const [channelIndex, setChannelIndex] = useState(memo.channelIndex ?? 0)
+  // First visit: open the group of the last played channel (resume on launch lands here on Back).
+  const [groupId, setGroupId] = useState(() => {
+    if (memo.groupId) return memo.groupId
+    return groups.some((g) => g.id === prefs.lastListId) ? prefs.lastListId! : ALL
+  })
+  const [groupIndex, setGroupIndex] = useState(() =>
+    clampIndex(memo.groupIndex ?? Math.max(0, groups.findIndex((g) => g.id === groupId)), groups.length),
+  )
   const [menu, setMenu] = useState<Channel>()
   const [moving, setMoving] = useState<string>()
   const [askPin, setAskPin] = useState(false)
@@ -72,10 +79,15 @@ function Browse({ entry }: ScreenProps<'home'>) {
     () => channelsForGroup(groupId, channels, (id) => library.channel(id), byCategory, prefs, unlocked),
     [groupId, channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked],
   )
+  // Coming back from the player: show the channel watched last (it may have changed by zapping).
+  const [channelIndex, setChannelIndex] = useState(() => {
+    const played = memo.lastPlayed !== prefs.lastChannelId ? list.findIndex((c) => c.id === prefs.lastChannelId) : -1
+    return played >= 0 ? played : (memo.channelIndex ?? 0)
+  })
   const group: ChannelGroup | undefined = groups.find((g) => g.id === groupId)
   const index = clampIndex(channelIndex, list.length)
   const locked = !!group?.locked && !unlocked
-  Object.assign(memo, { groupIndex, groupId, channelIndex: index })
+  Object.assign(memo, { groupIndex, groupId, channelIndex: index, lastPlayed: prefs.lastChannelId })
 
   useScreenFocus(entry, list.length ? 'home-channels' : 'home-groups')
 

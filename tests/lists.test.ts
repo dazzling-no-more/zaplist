@@ -20,7 +20,7 @@ const labels = { favorites: 'Favorites', recent: 'Recent', all: 'All' }
 let prefs: Prefs
 
 beforeEach(() => {
-  prefs = { favorites: ['3', '1', 'gone'], recents: ['2', '3'], lockedCategories: [], epgOffsetMinutes: 0, epgRefreshHours: 12 }
+  prefs = { favorites: ['3', '1', 'gone'], recents: ['2', '3'], lockedCategories: [], epgOffsetMinutes: 0, epgRefreshHours: 12, aspect: 'fit' }
 })
 
 describe('buildGroups', () => {

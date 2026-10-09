@@ -10,5 +10,5 @@
   "resolution": "1920x1080",
   "disableBackHistoryAPI": true,
   "handlesRelaunch": true,
-  "requiredACG": []
+  "requiredACG": ["network.query"]
 }

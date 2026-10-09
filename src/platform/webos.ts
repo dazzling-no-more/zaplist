@@ -1,8 +1,16 @@
 // Thin wrappers over the webOS globals. webOSTV.js (public/) defines `window.webOS`; the web engine
 // defines `webOSSystem` (older firmware: `PalmSystem`). In desktop browsers only `webOS` exists.
 
+interface LunaRequestOptions<T> {
+  method: string
+  parameters?: Record<string, unknown>
+  onSuccess?: (response: T) => void
+  onFailure?: (error: { errorCode?: number; errorText?: string }) => void
+}
+
 interface WebOSTV {
   platformBack(): void
+  service: { request<T>(uri: string, options: LunaRequestOptions<T>): { cancel(): void } }
 }
 
 interface WebOSSystem {

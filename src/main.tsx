@@ -5,8 +5,10 @@ import { App } from './App'
 import { library } from './data/library'
 import { onRemoteKey } from './platform/keys'
 import { installLifecycle } from './platform/lifecycle'
+import { ErrorBoundary } from './ui/ErrorBoundary'
 import { initFocus } from './ui/focus'
 import { backStack } from './ui/navigation'
+import { resumeLastChannel } from './ui/play'
 import './styles.css'
 
 initFocus()
@@ -20,10 +22,12 @@ onRemoteKey((key, event) => {
   if (active instanceof HTMLInputElement) active.blur()
   else backStack.back()
 })
-library.init()
+library.init().then(resumeLastChannel)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 )

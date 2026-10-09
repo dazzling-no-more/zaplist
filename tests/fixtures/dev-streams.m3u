@@ -1,0 +1,15 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="bbb.test" tvg-chno="1" group-title="HLS",Big Buck Bunny (HLS)
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="bipbop.test" tvg-chno="2" group-title="HLS",Apple Bipbop (audio + subtitles)
+https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8
+#EXTINF:-1 tvg-id="angel.test" tvg-chno="3" group-title="HLS",Angel One (several languages)
+https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8
+#EXTINF:-1 tvg-id="tears.test" tvg-chno="4" group-title="HLS",Tears of Steel
+https://test-streams.mux.dev/tos_ismc/main.m3u8
+#EXTINF:-1 tvg-id="ts.test" tvg-chno="5" group-title="MPEG-TS",Big Buck Bunny (one 10 s .ts segment)
+https://test-streams.mux.dev/x36xhzz/url_0/url_462/193039199_mp4_h264_aac_hd_7.ts
+#EXTINF:-1 tvg-chno="6" group-title="Errors",Unreachable server
+http://127.0.0.1:9/live/unreachable.m3u8
+#EXTINF:-1 tvg-chno="7" group-title="Errors",Not a stream
+https://test-streams.mux.dev/x36xhzz/missing-file.ts
