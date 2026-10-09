@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { playbackAttempts, PlaybackError, streamKind, type Attempt, type Engine } from '../src/player/streams'
+import { playbackAttempts, PlaybackError, streamKind, summarizeFailures, type Attempt, type Engine } from '../src/player/streams'
 
 // Fake engines: each attempt's outcome comes from `outcomes` (keyed by engine name), in order.
 const outcomes: Record<string, (() => Promise<void>)[]> = {}
@@ -7,6 +7,7 @@ const created: { attempt: Attempt; engine: Engine & { destroyed: boolean } }[] =
 
 vi.mock('../src/player/engines', () => ({
   mseSupport: () => ({ hls: true, mpegts: true }),
+  nativePlaysMpegTs: () => true,
   releaseVideo: vi.fn(),
   createEngine: (attempt: Attempt) => {
     const next = outcomes[attempt.engine]?.shift() ?? (() => Promise.reject(new PlaybackError('format')))
@@ -64,10 +65,36 @@ describe('playbackAttempts', () => {
     ])
   })
 
-  it('tries both MSE engines for URLs without a known extension, and none without MSE', () => {
-    expect(playbackAttempts(['x'], all).map((a) => a.engine)).toEqual(['native', 'hls.js', 'mpegts.js'])
+  it('tries both MSE engines (MPEG-TS first) for URLs without a known extension, and none without MSE', () => {
+    expect(playbackAttempts(['x'], all).map((a) => a.engine)).toEqual(['native', 'mpegts.js', 'hls.js'])
     expect(playbackAttempts(['x.mp4'], all).map((a) => a.engine)).toEqual(['native'])
     expect(playbackAttempts(['a.m3u8'], { hls: false, mpegts: false }).map((a) => a.engine)).toEqual(['native'])
+  })
+
+  it('tries the native player last for MPEG-TS where it cannot play it (desktop browsers)', () => {
+    expect(playbackAttempts(['a.ts', 'x', 'a.m3u8'], all, false).map((a) => a.engine)).toEqual([
+      'mpegts.js', 'native',
+      'mpegts.js', 'hls.js', 'native',
+      'native', 'hls.js',
+    ])
+    expect(playbackAttempts(['a.ts'], { hls: true, mpegts: false }, false).map((a) => a.engine)).toEqual(['native'])
+  })
+})
+
+describe('summarizeFailures', () => {
+  it('headlines the first MSE engine and lists every reason', () => {
+    const error = summarizeFailures([
+      { engine: 'mpegts.js', error: new PlaybackError('network', 'HttpStatusCodeInvalid (HTTP 403)') },
+      { engine: 'hls.js', error: new PlaybackError('format', 'manifestParsingError') },
+      { engine: 'native', error: new PlaybackError('format') },
+    ])
+    expect(error.code).toBe('network')
+    expect(error.detail).toBe('mpegts.js: HttpStatusCodeInvalid (HTTP 403) · hls.js: manifestParsingError · native: format')
+  })
+
+  it('uses the native error when it was the only engine', () => {
+    expect(summarizeFailures([{ engine: 'native', error: new PlaybackError('network', 'x') }])).toMatchObject({ code: 'network', detail: 'native: x' })
+    expect(summarizeFailures([]).code).toBe('format')
   })
 })
 
@@ -105,9 +132,10 @@ describe('Playback', () => {
       vi.advanceTimersByTime(1)
       await flush()
     }
-    expect(playback.getStatus()).toMatchObject({ state: 'failed', error: { code: 'format' } })
+    // The detail names the engine that failed last, for the error panel and Settings > About.
+    expect(playback.getStatus()).toMatchObject({ state: 'failed', error: { code: 'format', detail: 'native: format' } })
     expect(created).toHaveLength(4)
-    expect(diagnostics.lastError).toBe('format')
+    expect(diagnostics.lastError).toBe('format: native: format')
   })
 
   it('recovers when a retry works and starts counting retries again', async () => {

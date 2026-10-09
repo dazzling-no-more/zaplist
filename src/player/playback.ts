@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { diagnostics, recordError } from './diagnostics'
-import { createEngine, mseSupport, releaseVideo } from './engines'
-import { playbackAttempts, PlaybackError, type Engine } from './streams'
+import { createEngine, mseSupport, nativePlaysMpegTs, releaseVideo } from './engines'
+import { playbackAttempts, PlaybackError, summarizeFailures, type Engine, type Failure } from './streams'
 
 /** Waits before each retry of a failed stream; after the last one playback gives up. */
 export const RETRY_DELAYS_MS = [1000, 2000, 4000]
@@ -70,8 +70,8 @@ export class Playback {
 
   private async load(token: number): Promise<void> {
     this.set({ state: 'loading' })
-    let lastError = new PlaybackError('format', 'No playable stream')
-    for (const attempt of playbackAttempts(this.urls, mseSupport())) {
+    const failures: Failure[] = []
+    for (const attempt of playbackAttempts(this.urls, mseSupport(), nativePlaysMpegTs())) {
       if (token !== this.token) return
       const engine = createEngine(attempt, this.video)
       this.starting = engine
@@ -79,7 +79,7 @@ export class Playback {
         await engine.start()
       } catch (error) {
         engine.destroy()
-        lastError = error instanceof PlaybackError ? error : new PlaybackError('format', String(error))
+        failures.push({ engine: attempt.engine, error: error instanceof PlaybackError ? error : new PlaybackError('format', String(error)) })
         continue
       } finally {
         if (this.starting === engine) this.starting = undefined
@@ -92,7 +92,8 @@ export class Playback {
       this.set({ state: 'playing' })
       return
     }
-    this.fail(token, lastError)
+    // The detail names each engine's reason: shown under the error message and in Settings > About.
+    this.fail(token, summarizeFailures(failures))
   }
 
   private fail(token: number, error: PlaybackError): void {

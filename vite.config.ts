@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { Readable } from 'node:stream'
+import { pipeline, Readable } from 'node:stream'
 import { createRequire } from 'node:module'
 import react from '@vitejs/plugin-react'
 import compat from 'core-js-compat'
@@ -110,11 +110,20 @@ function devProxy(): Plugin {
           return
         }
         const target = `${match[1]}://${match[2]}`
+        // Logs name the server only: IPTV stream URLs carry the login in their path.
+        const origin = new URL(target).origin
+        const log = (message: string) => server.config.logger.warn(`[dev proxy] ${origin}: ${message}`, { timestamp: true })
         const controller = new AbortController()
         req.on('close', () => controller.abort())
         try {
-          const range = req.headers.range
-          const upstream = await fetch(target, { signal: controller.signal, headers: range ? { range } : {} })
+          // Pass on the browser's User-Agent: some IPTV servers refuse requests that don't look like a player.
+          const headers: Record<string, string> = {}
+          for (const name of ['range', 'user-agent']) {
+            const value = req.headers[name]
+            if (typeof value === 'string') headers[name] = value
+          }
+          const upstream = await fetch(target, { signal: controller.signal, headers })
+          if (!upstream.ok) log(`answered HTTP ${upstream.status}${upstream.redirected ? ` (after a redirect to ${new URL(upstream.url).origin})` : ''}`)
           res.statusCode = upstream.status
           for (const name of forwarded) {
             const value = upstream.headers.get(name)
@@ -122,9 +131,13 @@ function devProxy(): Plugin {
           }
           res.setHeader('access-control-allow-origin', '*')
           if (!upstream.body) return void res.end()
-          Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream).pipe(res)
+          // pipeline (not pipe) handles stream errors; a cancelled request must not crash the dev server.
+          pipeline(Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream), res, () => {})
         } catch (error) {
           if (controller.signal.aborted) return
+          // The proxy itself couldn't get an answer: say why (DNS, refused, timeout, malformed HTTP, ...).
+          const cause = (error as { cause?: { code?: string; message?: string } }).cause
+          log(`request failed (proxy answers 502): ${cause?.code ?? ''} ${cause?.message ?? String(error)}`.trim())
           res.statusCode = 502
           res.end(String(error))
         }

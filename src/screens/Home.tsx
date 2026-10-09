@@ -1,7 +1,7 @@
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { library, useLibrary } from '../data/library'
-import { ALL, buildGroups, channelsByCategory, channelsForGroup, FAVORITES, RECENT, type ChannelGroup } from '../data/lists'
+import { ALL, buildGroups, channelsByCategory, channelsForGroup, FAVORITES, type ChannelGroup } from '../data/lists'
 import type { Channel } from '../data/models'
 import { unlock, useUnlocked } from '../data/parental'
 import { moveFavorite, toggleFavorite, usePrefs } from '../data/prefs'
@@ -9,6 +9,7 @@ import { t } from '../i18n'
 import { Button } from '../ui/Button'
 import { ChannelRow } from '../ui/ChannelRow'
 import { Dialog } from '../ui/Dialog'
+import { emptyListText, groupLabels, GroupRow } from '../ui/GroupRow'
 import { navigate, useBackHandler, useScreenFocus, type ScreenProps } from '../ui/navigation'
 import { PinDialog } from '../ui/PinDialog'
 import { playChannel } from '../ui/play'
@@ -21,7 +22,7 @@ const GROUP_LIST_HEIGHT = 544
 const CHANNEL_ROW = 84
 const CHANNEL_LIST_HEIGHT = 840
 /** Moving through the sidebar shows a category after it stays focused this long. */
-const GROUP_SELECT_DELAY_MS = 250
+const GROUP_SELECT_DELAY_MS = 150
 
 interface HomeMemo {
   groupIndex?: number
@@ -59,17 +60,23 @@ function Browse({ entry }: ScreenProps<'home'>) {
   const memo = entry.memo as HomeMemo
 
   const groups = useMemo(
-    () => buildGroups(categories, sources, prefs, { favorites: t('home.favorites'), recent: t('home.recent'), all: t('home.all') }),
+    () => buildGroups(categories, sources, prefs, groupLabels()),
     [categories, sources, prefs.pin, prefs.lockedCategories],
   )
   const byCategory = useMemo(() => channelsByCategory(channels), [channels])
-  // First visit: open the group of the last played channel (resume on launch lands here on Back).
+  // Open the group of the last played channel on the first visit and after the player was used (it can
+  // switch groups); otherwise keep the group the user left Home on.
   const [groupId, setGroupId] = useState(() => {
-    if (memo.groupId) return memo.groupId
-    return groups.some((g) => g.id === prefs.lastListId) ? prefs.lastListId! : ALL
+    const lastList = groups.some((g) => g.id === prefs.lastListId) ? prefs.lastListId : undefined
+    const playedSince = memo.lastPlayed !== prefs.lastChannelId
+    if (memo.groupId && !(playedSince && lastList)) return memo.groupId
+    return lastList ?? ALL
   })
   const [groupIndex, setGroupIndex] = useState(() =>
-    clampIndex(memo.groupIndex ?? Math.max(0, groups.findIndex((g) => g.id === groupId)), groups.length),
+    clampIndex(
+      groupId === memo.groupId && memo.groupIndex !== undefined ? memo.groupIndex : Math.max(0, groups.findIndex((g) => g.id === groupId)),
+      groups.length,
+    ),
   )
   const [menu, setMenu] = useState<Channel>()
   const [moving, setMoving] = useState<string>()
@@ -115,9 +122,7 @@ function Browse({ entry }: ScreenProps<'home'>) {
     playChannel(channel, groupId)
   }
 
-  const empty = locked ? null : (
-    <p className="dim empty">{t(groupId === FAVORITES ? 'home.noFavorites' : groupId === RECENT ? 'home.noRecents' : 'home.noChannels')}</p>
-  )
+  const empty = locked ? null : <p className="dim empty">{emptyListText(groupId, false)}</p>
 
   return (
     <div className="screen">
@@ -146,15 +151,7 @@ function Browse({ entry }: ScreenProps<'home'>) {
             if (g.locked && !unlocked) setAskPin(true)
             else if (g.id === groupId ? list.length : true) setFocus('home-channels')
           }}
-          renderRow={(g, _, focused) => (
-            <div className={`group-row${focused ? ' focused' : ''}${g.id === groupId ? ' selected' : ''}`}>
-              <span className="group-name">
-                {g.locked && <span className={`lock-icon${unlocked ? ' open' : ''}`} />}
-                {g.name}
-              </span>
-              {g.detail && <span className="group-detail">{g.detail}</span>}
-            </div>
-          )}
+          renderRow={(g, _, focused) => <GroupRow group={g} focused={focused} selected={g.id === groupId} unlocked={unlocked} />}
         />
       </Region>
       <Region focusKey="home-content" className="content" focusable={locked || list.length > 0}>

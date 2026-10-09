@@ -30,10 +30,17 @@ describe('buildGroups', () => {
     expect(groups.every((g) => !g.locked && !g.detail)).toBe(true)
   })
 
-  it('names the source when there are several, and marks locked categories only when a PIN is set', () => {
+  it('names the source only for category names that several sources use', () => {
     const sources = [{ id: 's', name: 'Src' }, { id: 't', name: 'Other' }] as Source[]
+    const withDuplicate = [...categories, { id: 'news2', sourceId: 't', name: 'News' }]
+    const groups = buildGroups(withDuplicate, sources, prefs, labels)
+    expect(groups.map((g) => g.detail)).toEqual([undefined, undefined, undefined, 'Src', undefined, 'Other'])
+  })
+
+  it('marks locked categories only when a PIN is set', () => {
+    const sources = [{ id: 's', name: 'Src' }] as Source[]
     prefs.lockedCategories = ['kids']
-    expect(buildGroups(categories, sources, prefs, labels)[4]).toMatchObject({ detail: 'Src', locked: false })
+    expect(buildGroups(categories, sources, prefs, labels)[4]).toMatchObject({ locked: false })
     prefs.pin = '1234'
     expect(buildGroups(categories, sources, prefs, labels)[4]).toMatchObject({ locked: true })
   })

@@ -50,16 +50,37 @@ export interface Attempt {
 }
 
 /**
- * The order to try: for each URL, the native player first (webOS plays HLS and MPEG-TS itself),
- * then the MSE engine that fits the stream type, when MSE is available.
+ * The order to try for each URL: the native player first, since webOS plays HLS and MPEG-TS itself;
+ * then the MSE engine that fits the stream type. URLs without an extension (typical IPTV live links)
+ * are usually raw MPEG-TS, so mpegts.js goes before hls.js for them. Where the native player can't
+ * play MPEG-TS (desktop browsers, which take seconds to fail), it goes last for those URLs.
  */
-export function playbackAttempts(urls: string[], mse: { hls: boolean; mpegts: boolean }): Attempt[] {
+export function playbackAttempts(urls: string[], mse: { hls: boolean; mpegts: boolean }, nativeMpegTs = true): Attempt[] {
   const attempts: Attempt[] = []
   for (const url of urls) {
     const kind = streamKind(url)
-    attempts.push({ url, engine: 'native' })
+    const tsLike = kind === 'ts' || kind === 'unknown'
+    const nativeLast = tsLike && !nativeMpegTs && mse.mpegts
+    if (!nativeLast) attempts.push({ url, engine: 'native' })
+    if (tsLike && mse.mpegts) attempts.push({ url, engine: 'mpegts.js' })
     if ((kind === 'hls' || kind === 'unknown') && mse.hls) attempts.push({ url, engine: 'hls.js' })
-    if ((kind === 'ts' || kind === 'unknown') && mse.mpegts) attempts.push({ url, engine: 'mpegts.js' })
+    if (nativeLast) attempts.push({ url, engine: 'native' })
   }
   return attempts
+}
+
+export interface Failure {
+  engine: EngineName
+  error: PlaybackError
+}
+
+/**
+ * One error for a stream that no engine could play. The headline comes from the first MSE engine
+ * tried, which knows the stream type best (the native player reports nearly everything as a format
+ * error); the detail lists every engine's reason.
+ */
+export function summarizeFailures(failures: Failure[]): PlaybackError {
+  if (!failures.length) return new PlaybackError('format', 'No playable stream')
+  const main = failures.find((f) => f.engine !== 'native') ?? failures[failures.length - 1]
+  return new PlaybackError(main.error.code, failures.map((f) => `${f.engine}: ${f.error.detail ?? f.error.code}`).join(' · '))
 }

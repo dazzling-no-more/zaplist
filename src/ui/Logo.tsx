@@ -32,8 +32,11 @@ export function clearLogoCache(): void {
 /** Rows that scroll past quickly never start a download. */
 const LOAD_DELAY_MS = 150
 
+// Leading tags such as "PT:", "DE |", "UK -" or "[FR]" say nothing about the channel itself.
+const TAG = /^\s*(\[[^\]]{1,8}\]|[A-Z0-9]{2,4}\s*[:|\-])\s*/
+
 function initials(name: string): string {
-  const words = name.split(/[\s\-_.,:;|/\\()[\]{}'"!?+*&#@]+/).filter(Boolean)
+  const words = (name.replace(TAG, '') || name).split(/[\s\-_.,:;|/\\()[\]{}'"!?+*&#@]+/).filter(Boolean)
   return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? '').slice(0, 2)).toUpperCase()
 }
 
@@ -54,6 +57,8 @@ export function Logo({ url, name }: { url?: string; name: string }) {
         <img
           src={url}
           alt=""
+          // Some logo hosts (imgur) refuse hotlinked images that carry a Referer.
+          referrerPolicy="no-referrer"
           className={state === 'ok' ? 'shown' : ''}
           onLoad={() => {
             loaded.add(url)

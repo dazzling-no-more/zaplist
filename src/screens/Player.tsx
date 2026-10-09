@@ -1,7 +1,7 @@
 import { getCurrentFocusKey, setFocus, useFocusable } from '@noriginmedia/norigin-spatial-navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { library, useLibrary } from '../data/library'
-import { ALL, channelsByCategory, channelsForGroup } from '../data/lists'
+import { ALL, buildGroups, channelsByCategory, channelsForGroup } from '../data/lists'
 import type { Channel } from '../data/models'
 import { useUnlocked } from '../data/parental'
 import { ASPECTS, toggleFavorite, updatePrefs, usePrefs, type Aspect } from '../data/prefs'
@@ -9,20 +9,27 @@ import { t } from '../i18n'
 import { onRemoteKey } from '../platform/keys'
 import { onNetworkChange } from '../platform/network'
 import type { Engine, PlaybackError } from '../player/streams'
+import { useSoundBlocked } from '../player/autoplay'
 import { Playback, usePlaybackStatus } from '../player/playback'
 import { Button } from '../ui/Button'
 import { ChannelRow } from '../ui/ChannelRow'
 import { Dialog } from '../ui/Dialog'
+import { emptyListText, groupLabels, GroupRow } from '../ui/GroupRow'
 import { Logo } from '../ui/Logo'
 import { NowNext } from '../ui/NowPlaying'
 import { backStack, useBackHandler, type ScreenProps } from '../ui/navigation'
 import { recordPlay } from '../ui/play'
+import { formatCount } from '../ui/format'
 import { Region } from '../ui/Region'
+import { clampIndex } from '../ui/scroll'
 import { VirtualList } from '../ui/VirtualList'
 
 const OSD_TIMEOUT_MS = 5000
 const DIGIT_TIMEOUT_MS = 1500
 const TOAST_MS = 2500
+const GROUP_SELECT_DELAY_MS = 150
+/** Channel list overlay: 1080 minus the safe area, panel padding and column header. */
+const MINI_LIST_HEIGHT = 884
 const ASPECT_CLASS: Record<Aspect, string> = { fit: 'fit', fill: 'fill', '16:9': 'ratio-16-9', '4:3': 'ratio-4-3' }
 
 function describeError(error: PlaybackError): string {
@@ -30,20 +37,24 @@ function describeError(error: PlaybackError): string {
 }
 
 export function PlayerScreen({ entry }: ScreenProps<'player'>) {
-  const { channels } = useLibrary()
+  const { channels, categories, sources } = useLibrary()
   const prefs = usePrefs()
   const unlocked = useUnlocked()
-  const memo = entry.memo as { channelId?: string }
+  const memo = entry.memo as { channelId?: string; listId?: string }
   const [channelId, setChannelId] = useState(memo.channelId ?? entry.channelId)
-  memo.channelId = channelId
+  // The group zapping moves through; picking a channel from another group in the list switches it.
+  const [listId, setListId] = useState(memo.listId ?? entry.listId)
+  Object.assign(memo, { channelId, listId })
 
   const byCategory = useMemo(() => channelsByCategory(channels), [channels])
   const visible = (groupId: string) => channelsForGroup(groupId, channels, (id) => library.channel(id), byCategory, prefs, unlocked)
+  const listDeps = [channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked]
   // Zapping stays in the list the channel was picked from, or All when it's no longer in it.
   const list = useMemo(() => {
-    const fromList = visible(entry.listId)
+    const fromList = visible(listId)
     return fromList.some((c) => c.id === channelId) ? fromList : visible(ALL)
-  }, [channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked, channelId])
+  }, [...listDeps, listId, channelId])
+  const groups = useMemo(() => buildGroups(categories, sources, prefs, groupLabels()), [categories, sources, prefs.pin, prefs.lockedCategories])
   const channel = library.channel(channelId)
   const index = list.findIndex((c) => c.id === channelId)
 
@@ -56,12 +67,18 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
 
   const [osd, setOsd] = useState(true)
   const [miniList, setMiniList] = useState(false)
+  // Channel list overlay: the group shown, the focused group row and the focused channel row.
+  const [browseGroup, setBrowseGroup] = useState(listId)
+  const [groupIndex, setGroupIndex] = useState(0)
   const [listIndex, setListIndex] = useState(0)
+  const browseList = useMemo(() => visible(browseGroup), [...listDeps, browseGroup])
+  const browseLocked = !!groups.find((g) => g.id === browseGroup)?.locked && !unlocked
   const [picker, setPicker] = useState<'audio' | 'subtitles'>()
   const [digits, setDigits] = useState('')
   const [toast, setToast] = useState<string>()
   const osdTimer = useRef<ReturnType<typeof setTimeout>>()
   const aspect: Aspect = prefs.aspect
+  const soundBlocked = useSoundBlocked()
 
   useEffect(() => {
     const instance = new Playback(video.current!)
@@ -91,7 +108,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   const showOsd = (focusButtons: boolean) => {
     setOsd(true)
     armOsd()
-    if (focusButtons) setFocus('osd-favorite')
+    if (focusButtons) setFocus('osd-channels')
   }
   const hideOsd = () => {
     clearTimeout(osdTimer.current)
@@ -116,8 +133,9 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
     return () => clearTimeout(timer)
   }, [toast])
 
-  const tune = (target: Channel) => {
-    recordPlay(target, entry.listId)
+  const tune = (target: Channel, fromList = listId) => {
+    recordPlay(target, fromList)
+    setListId(fromList)
     setChannelId(target.id)
     setAttempt((n) => n + 1)
     showOsd(false)
@@ -133,9 +151,27 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   }
   const openList = () => {
     hideOsd()
-    setListIndex(Math.max(0, index))
+    // Open on the zapping list; from All, open on the channel's own category, which is easier to browse.
+    const start = listId === ALL && channel?.categoryId && groups.some((g) => g.id === channel.categoryId) ? channel.categoryId : listId
+    setBrowseGroup(start)
+    setGroupIndex(Math.max(0, groups.findIndex((g) => g.id === start)))
+    setListIndex(Math.max(0, visible(start).findIndex((c) => c.id === channelId)))
     setMiniList(true)
   }
+  const showBrowseGroup = (groupId: string) => {
+    if (groupId === browseGroup) return
+    setBrowseGroup(groupId)
+    setListIndex(0)
+  }
+
+  // Moving through the categories shows a category once it stays focused briefly (as on Home).
+  useEffect(() => {
+    if (!miniList) return
+    const next = groups[groupIndex]
+    if (!next || next.id === browseGroup) return
+    const timer = setTimeout(() => showBrowseGroup(next.id), GROUP_SELECT_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [groupIndex])
   const closeList = () => {
     setMiniList(false)
     setFocus('player-surface')
@@ -222,7 +258,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
       <div ref={surface} className="player-surface" onClick={() => showOsd(true)} />
 
       {channel && (osd || status.state !== 'playing') && !miniList && (
-        <div className="osd">
+        <div className="osd" onMouseMove={() => osd && armOsd()}>
           <div className="osd-info">
             <span className="osd-number">{channel.number}</span>
             <Logo url={channel.logo} name={channel.name} />
@@ -234,6 +270,9 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
           </div>
           {osd && (
             <Region focusKey="osd-buttons" className="osd-buttons">
+              <Button focusKey="osd-channels" onPress={openList}>
+                {t('player.channelList')}
+              </Button>
               <Button focusKey="osd-favorite" onPress={favorite}>
                 {t(prefs.favorites.includes(channel.id) ? 'menu.removeFavorite' : 'menu.addFavorite')}
               </Button>
@@ -254,11 +293,13 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
       {(status.state === 'loading' || status.state === 'retrying') && <div className="spinner" />}
 
       {!online && <div className="banner">{t('player.offline')}</div>}
+      {online && soundBlocked && <div className="toast">{t('player.soundBlocked')}</div>}
 
       {status.state === 'failed' && channel && (
         <Region focusKey="player-error" className="player-error" isFocusBoundary>
           <h2>{t('player.failed', { name: channel.name })}</h2>
           <p className="dim">{describeError(status.error)}</p>
+          {status.error.detail && <p className="dim small">{status.error.detail}</p>}
           <div className="button-row">
             <Button focusKey="player-retry" onPress={() => setAttempt((n) => n + 1)}>
               {t('common.retry')}
@@ -275,25 +316,52 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
 
       {miniList && (
         <div className="mini-list">
-          <VirtualList
-            focusKey="player-list"
-            items={list}
-            itemKey={(c) => c.id}
-            rowHeight={84}
-            height={924}
-            index={listIndex}
-            onIndexChange={setListIndex}
-            onSelect={(c) => {
-              closeList()
-              if (c.id !== channelId) tune(c)
-            }}
-            renderRow={(c, _, focused) => (
-              <ChannelRow channel={c} focused={focused} favorite={prefs.favorites.includes(c.id)} current={c.id === channelId} />
-            )}
-          />
+          <div className="mini-groups">
+            <div className="mini-header">{t('player.categories')}</div>
+            <VirtualList
+              focusKey="player-groups"
+              items={groups}
+              itemKey={(g) => g.id}
+              rowHeight={62}
+              height={MINI_LIST_HEIGHT}
+              index={groupIndex}
+              onIndexChange={setGroupIndex}
+              onSelect={(g) => {
+                showBrowseGroup(g.id)
+                if (visible(g.id).length) setFocus('player-list')
+              }}
+              renderRow={(g, _, focused) => <GroupRow group={g} focused={focused} selected={g.id === browseGroup} unlocked={unlocked} />}
+            />
+          </div>
+          <div className="mini-channels">
+            <div className="mini-header">
+              <span className="mini-title">{groups.find((g) => g.id === browseGroup)?.name}</span>
+              <span className="dim">
+                {browseList.length ? `${clampIndex(listIndex, browseList.length) + 1} / ${formatCount(browseList.length)}` : ''}
+              </span>
+            </div>
+            <VirtualList
+              focusKey="player-list"
+              items={browseList}
+              itemKey={(c) => c.id}
+              rowHeight={76}
+              height={MINI_LIST_HEIGHT}
+              index={listIndex}
+              onIndexChange={setListIndex}
+              onSelect={(c) => {
+                closeList()
+                if (c.id !== channelId) tune(c, browseGroup)
+                else setListId(browseGroup)
+              }}
+              renderRow={(c, _, focused) => (
+                <ChannelRow channel={c} focused={focused} favorite={prefs.favorites.includes(c.id)} current={c.id === channelId} />
+              )}
+              empty={<p className="dim empty">{emptyListText(browseGroup, browseLocked)}</p>}
+            />
+          </div>
         </div>
       )}
-      {miniList && <FocusOnMount focusKey="player-list" />}
+      {miniList && <FocusOnMount focusKey={browseList.length ? 'player-list' : 'player-groups'} />}
 
       {picker && <TrackDialog kind={picker} engine={playback?.current()} onClose={() => setPicker(undefined)} />}
     </div>

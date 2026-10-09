@@ -10,7 +10,7 @@ export const ALL = 'all'
 export interface ChannelGroup {
   id: string
   name: string
-  /** Source name, shown when there are several sources. */
+  /** Source name, shown when another source has a category with the same name. */
   detail?: string
   /** Hidden behind the parental PIN. */
   locked: boolean
@@ -39,7 +39,8 @@ export const isCategoryLocked = (categoryId: string | undefined, prefs: Pick<Pre
 
 export function buildGroups(categories: readonly Category[], sources: readonly Source[], prefs: Prefs, labels: GroupLabels): ChannelGroup[] {
   const sourceNames = new Map(sources.map((s) => [s.id, s.name]))
-  const several = sources.length > 1
+  const nameCount = new Map<string, number>()
+  for (const c of categories) nameCount.set(c.name, (nameCount.get(c.name) ?? 0) + 1)
   return [
     { id: FAVORITES, name: labels.favorites, locked: false },
     { id: RECENT, name: labels.recent, locked: false },
@@ -47,7 +48,7 @@ export function buildGroups(categories: readonly Category[], sources: readonly S
     ...categories.map((c) => ({
       id: c.id,
       name: c.name,
-      detail: several ? sourceNames.get(c.sourceId) : undefined,
+      detail: (nameCount.get(c.name) ?? 0) > 1 ? sourceNames.get(c.sourceId) : undefined,
       locked: isCategoryLocked(c.id, prefs),
     })),
   ]

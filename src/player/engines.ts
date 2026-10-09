@@ -2,6 +2,7 @@ import type { ErrorData } from 'hls.js'
 import type Mpegts from 'mpegts.js'
 import { proxied } from '../data/http'
 import { isWebOS } from '../platform/webos'
+import { playWithSound } from './autoplay'
 import { PlaybackError, type Attempt, type Engine, type Track } from './streams'
 import { loadHls, loadMpegts, type Hls } from './vendor'
 
@@ -15,6 +16,9 @@ export function mseSupport(): { hls: boolean; mpegts: boolean } {
   return { hls: mse, mpegts: mse && typeof ReadableStream !== 'undefined' }
 }
 
+/** webOS plays MPEG-TS in <video>; desktop browsers don't. */
+export const nativePlaysMpegTs = (): boolean => isWebOS()
+
 /** Stops the element and frees its decoder. */
 export function releaseVideo(video: HTMLVideoElement): void {
   video.pause()
@@ -26,17 +30,6 @@ function mediaError(video: HTMLVideoElement): PlaybackError {
   const code = video.error?.code
   // MEDIA_ERR_NETWORK = 2; DECODE = 3 and SRC_NOT_SUPPORTED = 4 mean the format can't be played.
   return new PlaybackError(code === 2 ? 'network' : 'format', video.error?.message || (code ? `MediaError ${code}` : undefined))
-}
-
-async function playVideo(video: HTMLVideoElement): Promise<void> {
-  try {
-    await video.play()
-  } catch (error) {
-    // Desktop browsers block sound before the first user input; the TV does not.
-    if ((error as Error)?.name !== 'NotAllowedError') return
-    video.muted = true
-    await video.play().catch(() => undefined)
-  }
 }
 
 /** Waits for the first frames; `failed` lets the engine abort the wait with its own error. */
@@ -101,7 +94,7 @@ class NativeEngine implements Engine {
   async start(): Promise<void> {
     this.video.src = this.url
     const started = waitForPlaying(this.video, new Promise<never>(() => {}))
-    void playVideo(this.video)
+    void playWithSound(this.video)
     await started
     this.unwatch = watchVideo(this.video, this)
   }
@@ -184,7 +177,8 @@ class HlsEngine implements Engine {
           hls.recoverMediaError()
           return
         }
-        const error = new PlaybackError(data.type === Hls.ErrorTypes.NETWORK_ERROR ? 'network' : 'format', data.details)
+        const status = data.response?.code ? ` (HTTP ${data.response.code})` : ''
+        const error = new PlaybackError(data.type === Hls.ErrorTypes.NETWORK_ERROR ? 'network' : 'format', data.details + status)
         if (this.started) this.onFatal?.(error)
         else reject(error)
       })
@@ -192,7 +186,7 @@ class HlsEngine implements Engine {
     hls.loadSource(this.url)
     hls.attachMedia(this.video)
     const started = waitForPlaying(this.video, failed)
-    void playVideo(this.video)
+    void playWithSound(this.video)
     await started
     this.started = true
     this.unwatch = watchVideo(this.video, this)
@@ -251,11 +245,14 @@ class MpegtsEngine implements Engine {
     if (this.destroyed) throw new PlaybackError('format', 'cancelled')
     const player = (this.player = mpegts.createPlayer(
       { type: 'mpegts', isLive: true, url: proxied(this.url) },
-      { enableWorker: false, liveBufferLatencyChasing: true, autoCleanupSourceBuffer: true },
+      // No latency chasing: it keeps under a second buffered, so every network hiccup stalls the
+      // picture. Without it, each stall adds to the buffer and playback settles.
+      { enableWorker: false, liveBufferLatencyChasing: false, autoCleanupSourceBuffer: true },
     ))
     const failed = new Promise<never>((_, reject) => {
-      player.on(mpegts.Events.ERROR, (type: string, detail: string) => {
-        const error = new PlaybackError(type === mpegts.ErrorTypes.NETWORK_ERROR ? 'network' : 'format', detail)
+      player.on(mpegts.Events.ERROR, (type: string, detail: string, info?: { code?: number; msg?: string }) => {
+        const extra = info?.code && info.code > 0 ? ` (HTTP ${info.code})` : info?.msg ? ` (${info.msg})` : ''
+        const error = new PlaybackError(type === mpegts.ErrorTypes.NETWORK_ERROR ? 'network' : 'format', detail + extra)
         if (this.started) this.onFatal?.(error)
         else reject(error)
       })
@@ -263,7 +260,7 @@ class MpegtsEngine implements Engine {
     player.attachMediaElement(this.video)
     player.load()
     const started = waitForPlaying(this.video, failed)
-    void playVideo(this.video)
+    void playWithSound(this.video)
     await started
     this.started = true
     this.unwatch = watchVideo(this.video, this)
