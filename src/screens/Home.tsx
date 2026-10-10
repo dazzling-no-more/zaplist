@@ -251,6 +251,7 @@ function Browse({ entry }: ScreenProps<'home'>) {
                 favorite={prefs.favorites.includes(channel.id)}
                 onToggleFavorite={() => toggleFavorite(channel.id)}
                 moving={channel.id === moving}
+                onMove={(delta) => setChannelIndex(moveFavorite(channel.id, delta))}
               />
             )}
             empty={empty}

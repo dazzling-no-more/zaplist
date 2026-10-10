@@ -275,7 +275,7 @@ try {
     (Item 'Yellow' 'In the player: change the picture mode. In Favorites: move the channel.'),
     (Item 'Info' 'In the player: show or hide the info bar.'),
     (Item 'Play / Pause / Stop' 'In the player: resume, pause, or return to the previous screen.'),
-    (Item 'Magic Remote' 'Point and click any item; the wheel scrolls lists and the TV guide.')
+    (Item 'Magic Remote' 'Point and click any item; hold OK on a channel for its menu; the wheel scrolls lists and the TV guide.')
   )
   [void](Add-Table $keys 27 80 @(130, 596) $rows 9)
   Set-Details $keys @(
@@ -363,7 +363,7 @@ try {
     @(@(355, 278, 570, 165), @(382, 358, 258, 54), @(642, 358, 252, 54)) `
     @('Channel menu', 'Add to / remove from Favorites', 'Cancel') `
     @(
-      'In Favorites the menu also offers Move: Up/Down reorder the channel and OK finishes.',
+      'In Favorites the menu also offers Move: Up/Down, or the arrows shown on the channel, reorder it; OK finishes.',
       'Back closes the menu.'
     )
 

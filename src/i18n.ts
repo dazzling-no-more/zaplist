@@ -30,7 +30,7 @@ const en = {
   'hint.more': 'Hold OK: more',
   'hint.favoriteRight': 'Right: favorite',
   'hint.moveMenu': 'Hold OK: move',
-  'hint.moving': 'Up/Down: move · OK: done',
+  'hint.moving': 'Up/Down or the arrows: move · OK: done',
 
   'menu.addFavorite': 'Add to favorites',
   'menu.removeFavorite': 'Remove from favorites',

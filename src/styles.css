@@ -897,8 +897,21 @@ h3 {
   width: 1100px;
 }
 
+/* Long titles and descriptions end in an ellipsis so the dialog stays inside the safe area. */
+.details-dialog h2 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .details-dialog p {
+  display: -webkit-box;
+  max-height: 567px; /* 15 lines */
+  overflow: hidden;
   white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 15;
 }
 
 .channel-row.current {
@@ -1066,6 +1079,11 @@ h3 {
 .row-action.focused {
   background: var(--focus-bg);
   color: var(--focus-text);
+}
+
+/* The pointer's feedback on the star and the move arrows, on light (focused) and dark rows alike. */
+.row-action:hover {
+  background: rgba(127, 127, 127, 0.3);
 }
 
 /* Player channel list: Search and Guide above the categories */

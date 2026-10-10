@@ -24,7 +24,7 @@ export interface VirtualListProps<T> {
   onSelect?: (item: T, index: number) => void
   /** The row's button (e.g. favorite): Right moves onto it, Left back, OK presses it. */
   onRowAction?: (item: T, index: number) => void
-  /** Holding OK. Without it, OK selects on key down instead of key up. */
+  /** Holding OK, also with the pointer. Without it, OK selects on key down instead of key up. */
   onLongPress?: (item: T, index: number) => void
   /** Up/Down before the list moves focus; return true when handled (e.g. reordering). */
   onVertical?: (direction: 1 | -1, index: number) => boolean
@@ -43,6 +43,8 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
   const latest = useRef(props)
   latest.current = props
   const press = useRef<{ at: number; last: number; long: boolean } | null>(null)
+  /** OK held with the pointer shown: the Magic Remote holds the mouse button. */
+  const hold = useRef<{ timer: ReturnType<typeof setTimeout>; long: boolean } | null>(null)
   const top = useRef(0)
   const [actionMode, setActionMode] = useState(false)
   const action = useRef(false)
@@ -141,7 +143,21 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
           focusSelf()
           if (latest.current.index !== i) latest.current.onIndexChange(i)
         }}
+        onMouseDown={() => {
+          if (!latest.current.onLongPress) return
+          clearTimeout(hold.current?.timer)
+          const timer = setTimeout(() => {
+            if (hold.current) hold.current.long = true
+            latest.current.onLongPress?.(item, i)
+          }, LONG_PRESS_MS)
+          hold.current = { timer, long: false }
+        }}
+        onMouseUp={() => clearTimeout(hold.current?.timer)}
+        onMouseLeave={() => clearTimeout(hold.current?.timer)}
         onClick={() => {
+          const held = hold.current?.long
+          hold.current = null
+          if (held) return // the hold opened something instead
           latest.current.onIndexChange(i)
           latest.current.onSelect?.(item, i)
         }}

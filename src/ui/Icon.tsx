@@ -26,6 +26,8 @@ const PATHS = {
   pause: 'M6 19h4V5H6v14zm8-14v14h4V5h-4z',
   tv: 'M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z',
   add: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
+  up: 'M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z',
+  down: 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z',
 }
 
 export type IconName = keyof typeof PATHS
