@@ -47,8 +47,8 @@ First release.
 
 ## Support
 
-- E-mail: `<your support e-mail>`
-- Privacy policy URL (if asked): `<public URL of store/privacy-policy.md>`
+- E-mail: nomoredazzling@gmail.com
+- Privacy policy URL (if asked): https://github.com/dazzling-no-more/zaplist/blob/main/store/privacy-policy.md
 
 ## Images
 

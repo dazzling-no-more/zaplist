@@ -20,4 +20,4 @@ don't control them.
 
 **Children.** The app has no content of its own. A parental control PIN can lock categories.
 
-**Contact.** `<your support e-mail>`
+**Contact.** nomoredazzling@gmail.com

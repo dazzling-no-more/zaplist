@@ -3,13 +3,13 @@ Builds the UX scenario document LG Seller Lounge asks for, from LG's own templat
 (ux_scenario_document_*.ppt in "documents for app QA"), with the screenshots in store/.
 Needs Windows with Microsoft PowerPoint.
 
-  pwsh store/lg-qa/ux-scenario.ps1 -Email support@example.com -PlaylistUrl https://example.com/zaplist.m3u
+  pwsh store/lg-qa/ux-scenario.ps1 -PlaylistUrl https://example.com/zaplist.m3u [-Email support@example.com]
 
 Writes store/lg-qa/Zaplist_UX_Scenario_<version>.pptx. -PreviewDir also exports every slide as PNG.
 #>
 param(
-  [string]$Email = '<support e-mail>',
-  [string]$PlaylistUrl = '<test playlist URL>',
+  [string]$Email = 'nomoredazzling@gmail.com',
+  [string]$PlaylistUrl = 'https://raw.githubusercontent.com/dazzling-no-more/zaplist/main/store/test-playlist.m3u',
   [datetime]$Date = (Get-Date),
   [string]$Template,
   [string]$PreviewDir

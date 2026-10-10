@@ -23,25 +23,27 @@ two files online, a test on a real TV, a seller account and the submission form.
 The app ID is `zaplist.player` (`appinfo.json`). LG fixes the ID at the first submission; change it
 before then if you want another one (for example the reverse domain of a website you own).
 
-## 1. Put two files online
+## 1. The two files online
 
-- **Test playlist**: publish `store/test-playlist.m3u` at a public URL: a public GitHub repository or
-  gist, GitHub Pages, or any web host. LG's testers type it with a remote, so keep it short (a URL
-  shortener is fine). Open it on the TV's browser to check it's reachable.
-- **Privacy policy**: put your support e-mail into `store/privacy-policy.md` (and the date, if you
-  change the text) and publish it the same way.
+The public repository [dazzling-no-more/zaplist](https://github.com/dazzling-no-more/zaplist) hosts
+both, from the `main` branch:
 
-## 2. Put your details into the UX scenario
+- **Test playlist**: https://raw.githubusercontent.com/dazzling-no-more/zaplist/main/store/test-playlist.m3u
+- **Privacy policy**: https://github.com/dazzling-no-more/zaplist/blob/main/store/privacy-policy.md
 
-The UX scenario names your support e-mail and the test playlist URL. Rebuild it with yours (needs
-Windows with PowerPoint; it downloads LG's template itself):
+Both addresses are already in the UX scenario (page 6) and `store/listing.md`. The playlist address
+is long to type with a remote: if you shorten it (tinyurl.com, is.gd; the app follows redirects),
+rebuild the UX scenario with the short one (Windows with PowerPoint; it downloads LG's template
+itself):
 
 ```powershell
-pwsh store/lg-qa/ux-scenario.ps1 -Email support@example.com -PlaylistUrl https://example.com/zaplist.m3u
+pwsh store/lg-qa/ux-scenario.ps1 -PlaylistUrl https://tinyurl.com/your-link
 ```
 
-Open the result and page through it once. Without PowerPoint, edit the placeholders by hand instead:
-the e-mail on the cover and in the appendix (last page), and the URL in the table on page 6.
+## 2. Check the UX scenario
+
+Open `store/lg-qa/Zaplist_UX_Scenario_1.0.0.pptx` and page through it once. It names the support
+e-mail (nomoredazzling@gmail.com) and the test playlist address.
 
 ## 3. Build the package
 
