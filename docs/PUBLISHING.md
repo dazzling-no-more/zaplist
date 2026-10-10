@@ -16,7 +16,7 @@ two files online, a test on a real TV, a seller account and the submission form.
 | `store/screenshots/*.png` | Primary + 5 secondary screenshots, 1280×720 |
 | `public/splash.png` | Launcher/splash background, 1920×1080 (also inside the IPK) |
 | `store/test-playlist.m3u`, `store/test-guide.xml.gz` | Playlist and TV guide for LG's testers (public test streams only) |
-| `store/xtream-test-server.js` | Xtream Codes test server for LG's testers (deployed in step 2) |
+| `store/xtream-test-server.js` | Xtream Codes test server for LG's testers (running, see step 2) |
 | `store/privacy-policy.md` | Privacy policy, in case the form asks for a URL |
 | `store/lg-qa/*.ps1`, `*.py` | Scripts that rebuild the two LG documents from LG's templates |
 | `store/art/*.svg` | Sources of the icon and splash |
@@ -43,30 +43,32 @@ itself):
 pwsh store/lg-qa/ux-scenario.ps1 -PlaylistUrl https://tinyurl.com/your-link
 ```
 
-## 2. Deploy the Xtream Codes test server
+## 2. The Xtream Codes test server
 
 LG's testers can only try an Xtream Codes login against a server that answers like a provider.
 `store/xtream-test-server.js` is one: it accepts the login `zaplist` / `review` and serves the same
-test channels and guide as the test playlist. It runs free on Cloudflare Workers:
+test channels and guide as the test playlist. It runs on Cloudflare Workers (free plan) at
+**<https://zaplist-test.zaplist.workers.dev>**, which the UX scenario names on page 6 and in the
+appendix. Keep it running until LG approves the app, and during the review of every update.
 
-1. Create a Cloudflare account at [dash.cloudflare.com](https://dash.cloudflare.com) (for example
-   with nomoredazzling@gmail.com) and choose a workers.dev subdomain when asked.
-2. *Workers & Pages* → *Create* → *Create Worker*; name it `zaplist-test`; *Deploy*.
-3. *Edit code*, replace the sample with the contents of `store/xtream-test-server.js`, *Deploy*.
-4. Open `https://zaplist-test.<your-subdomain>.workers.dev`: it should say "Zaplist test server for
-   LG app review".
-5. Put it into the UX scenario (page 6 and the appendix then name the server and the login):
+To deploy it again (another account or address):
 
-```powershell
-pwsh store/lg-qa/ux-scenario.ps1 -XtreamServer https://zaplist-test.<your-subdomain>.workers.dev
-```
-
-Without this step the UX scenario tells LG that Xtream Codes needs a provider account.
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com), *Workers & Pages* → *Create
+   application* → *Start with Hello World!*; name it `zaplist-test`; leave Cloudflare Access off;
+   *Deploy*.
+2. *Edit code*, replace the sample with the contents of `store/xtream-test-server.js`, *Deploy*.
+3. The address is `https://zaplist-test.<subdomain>.workers.dev`. The subdomain belongs to the
+   account (*Workers & Pages* → *Your subdomain* → *Change*) and appears in LG's documents, so keep it
+   neutral. A new subdomain needs a few minutes before HTTPS works.
+4. Open the address: it should say "Zaplist test server for LG app review".
+5. Set the new address as the `-XtreamServer` default in `store/lg-qa/ux-scenario.ps1` (or pass it)
+   and rebuild the UX scenario. With `-XtreamServer ''` it tells LG that Xtream Codes needs a
+   provider account instead.
 
 ## 3. Check the UX scenario
 
 Open `store/lg-qa/Zaplist_UX_Scenario_1.0.0.pptx` and page through it once. It names the support
-e-mail (nomoredazzling@gmail.com), the test playlist address and, after step 2, the Xtream test server.
+e-mail (nomoredazzling@gmail.com), the test playlist address and the Xtream test server with its login.
 
 ## 4. Build the package
 
@@ -142,8 +144,8 @@ and third-party guides and may differ slightly.
    app itself: no built-in content, users load their own playlists, parental control PIN.
 5. **Test info**: upload `Zaplist_Self_Checklist_1.0.0.xlsx` and `Zaplist_UX_Scenario_1.0.0.pptx`.
    As test account information: "No account needed: add the test playlist from page 6 of the UX
-   scenario", followed by the playlist URL, and, after step 2, the Xtream test server with the login
-   `zaplist` / `review`.
+   scenario", followed by the playlist URL, and "Xtream Codes test server:
+   `https://zaplist-test.zaplist.workers.dev`, username zaplist, password review".
 6. Save each tab, then submit.
 
 ## 8. Review

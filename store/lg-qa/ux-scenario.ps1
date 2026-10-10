@@ -3,15 +3,15 @@ Builds the UX scenario document LG Seller Lounge asks for, from LG's own templat
 (ux_scenario_document_*.ppt in "documents for app QA"), with the screenshots in store/.
 Needs Windows with Microsoft PowerPoint.
 
-  pwsh store/lg-qa/ux-scenario.ps1 [-XtreamServer https://zaplist-test.<you>.workers.dev] [-PlaylistUrl ...] [-Email ...]
+  pwsh store/lg-qa/ux-scenario.ps1 [-XtreamServer ...] [-PlaylistUrl ...] [-Email ...]
 
 Writes store/lg-qa/Zaplist_UX_Scenario_<version>.pptx. -PreviewDir also exports every slide as PNG.
 #>
 param(
   [string]$Email = 'nomoredazzling@gmail.com',
   [string]$PlaylistUrl = 'https://raw.githubusercontent.com/dazzling-no-more/zaplist/main/store/test-playlist.m3u',
-  # Address of the deployed store/xtream-test-server.js; without it, Xtream is described as needing a provider account.
-  [string]$XtreamServer = '',
+  # Address of the deployed store/xtream-test-server.js; with '', Xtream is described as needing a provider account.
+  [string]$XtreamServer = 'https://zaplist-test.zaplist.workers.dev',
   [datetime]$Date = (Get-Date),
   [string]$Template,
   [string]$PreviewDir
@@ -415,7 +415,7 @@ try {
       $sh.TextFrame.TextRange.Text = @(
         'If you have anything to let the LG QA Management know, please comment here. Any detailed references will be welcome.',
         '',
-        '1. Zaplist includes no channels. Add the test playlist from 4 to test playback and the TV guide; it uses public test streams (Blender Foundation open movies, Apple and Google test streams) and comes with guide data.',
+        '1. Zaplist includes no channels. Add the test playlist from page 6 to test playback and the TV guide; it uses public test streams (Blender Foundation open movies, Apple and Google test streams) and comes with guide data.',
         $(if ($XtreamServer) { "2. To test Xtream Codes, use the test server $XtreamServer with username zaplist and password review (page 6). It serves the same test channels and guide." } else { '2. Xtream Codes sources need an account from an IPTV provider, which we can''t supply; the M3U path covers the same screens.' }),
         '3. Back on the first screen calls webOS.platformBack(), so the TV shows its exit popup or Home screen depending on the webOS version.',
         '4. No credentials are hard-coded. The words "password", "credential" and "token" in the package come from the Xtream Codes API parameters, the login form field, the core-js URL polyfill (URL.password) and the XHR/fetch withCredentials options in hls.js and mpegts.js. Playlist URLs, logins, the cached channel lists and guide addresses, and the parental PIN are stored only on the TV, encrypted (AES-GCM, key generated on the TV).',

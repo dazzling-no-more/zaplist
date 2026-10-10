@@ -69,7 +69,7 @@ ITEMS = {
     45: ('Pass', 'Live TV: Play/Pause button in the info bar and the Play, Pause and Stop keys; channel up/down instead of previous/next. No seek, fast forward or rewind: the streams are live.'),
     46: ('NA', 'Live channels only; no series or video on demand.'),
     47: ('Pass', ''),
-    48: ('Pass', 'The Subtitles button lists the stream\'s subtitle tracks ("Apple test stream" in the test playlist has several).'),
+    48: ('Pass', 'The Subtitles button lists the stream\'s subtitle tracks ("Angel One" in the test playlist has four, "Apple test stream" one).'),
     49: ('NA', 'No video on demand; on launch the app reopens the last channel.'),
     50: ('Pass', 'Plays the resolutions the user\'s streams provide; the test playlist has SD to Full HD streams.'),
     51: ('Pass', 'Plays the codecs the TV supports (e.g. H.264, AAC) through the TV\'s player or Media Source Extensions.'),
