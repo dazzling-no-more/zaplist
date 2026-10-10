@@ -18,4 +18,10 @@ export function visibleRange(top: number, rowHeight: number, viewport: number, c
   return [first, last]
 }
 
-export const clampIndex = (index: number, count: number): number => Math.max(0, Math.min(count - 1, index))
+/** Scrolls `box` as little as possible to show all of `child`; `box` must be the child's offsetParent. */
+export function revealChild(box: HTMLElement, child: HTMLElement): void {
+  if (child.offsetTop < box.scrollTop) box.scrollTop = child.offsetTop
+  else if (child.offsetTop + child.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = child.offsetTop + child.offsetHeight - box.clientHeight
+}
+
+export const clampIndex =(index: number, count: number): number => Math.max(0, Math.min(count - 1, index))

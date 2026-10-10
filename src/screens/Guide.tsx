@@ -229,7 +229,13 @@ const GuideRow = memo(function GuideRow({ channel, top, viewStart, offsetMinutes
   if (!cells.length) {
     const isFocused = focusTime !== undefined
     cells.push(
-      <div key="none" className={`guide-cell empty${isFocused ? ' focused' : ''}`} style={{ left: 0, width: GRID_WIDTH - 4 }} onClick={() => onPointer(viewStart, true)}>
+      <div
+        key="none"
+        className={`guide-cell empty${isFocused ? ' focused' : ''}`}
+        style={{ left: 0, width: GRID_WIDTH - 4 }}
+        onMouseEnter={() => onPointer(viewStart, false)}
+        onClick={() => onPointer(viewStart, true)}
+      >
         {t('guide.noInfo')}
       </div>,
     )

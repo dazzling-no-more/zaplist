@@ -678,6 +678,15 @@ h3 {
   font-weight: normal;
 }
 
+/* 8.5 options (86px each) show; more scroll. The side padding leaves room for the focus scale. */
+.dialog-options {
+  position: relative;
+  max-height: 736px;
+  margin: 0 -24px;
+  padding: 4px 24px 0;
+  overflow: hidden;
+}
+
 .dialog-options .button {
   margin-bottom: 10px;
 }

@@ -1,5 +1,5 @@
 import { getCurrentFocusKey, setFocus, useFocusable } from '@noriginmedia/norigin-spatial-navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
 import { library, useLibrary } from '../data/library'
 import { ALL, buildGroups, channelsByCategory, channelsForGroup } from '../data/lists'
 import type { Channel } from '../data/models'
@@ -22,7 +22,7 @@ import { backStack, navigate, useBackHandler, type ScreenProps } from '../ui/nav
 import { recordPlay } from '../ui/play'
 import { formatCount } from '../ui/format'
 import { Region } from '../ui/Region'
-import { clampIndex } from '../ui/scroll'
+import { clampIndex, revealChild } from '../ui/scroll'
 import { VirtualList } from '../ui/VirtualList'
 
 const OSD_TIMEOUT_MS = 5000
@@ -437,6 +437,15 @@ function TrackDialog({ kind, engine, onClose }: { kind: 'audio' | 'subtitles'; e
     onClose()
   }
   const options = kind === 'subtitles' && tracks.length ? [{ id: -1, label: t('player.subtitlesOff') }, ...tracks] : tracks
+  // Long track lists scroll inside the dialog, which stays on screen.
+  const list = useRef<HTMLDivElement>(null)
+  const reveal = (i: number) => {
+    const option = list.current?.children[i]
+    if (list.current && option) revealChild(list.current, option as HTMLElement)
+  }
+  const scroll = (event: WheelEvent) => {
+    if (list.current) list.current.scrollTop += event.deltaY > 0 ? 86 : -86
+  }
   return (
     <Dialog
       title={t(kind === 'audio' ? 'player.audio' : 'player.subtitles')}
@@ -446,9 +455,9 @@ function TrackDialog({ kind, engine, onClose }: { kind: 'audio' | 'subtitles'; e
       onCancel={onClose}
     >
       {options.length > 0 && (
-        <div className="dialog-options">
+        <div ref={list} className="dialog-options" onWheel={scroll}>
           {options.map((option, i) => (
-            <Button key={option.id} focusKey={`track-${i}`} selected={option.id === selected} onPress={() => select(option.id)}>
+            <Button key={option.id} focusKey={`track-${i}`} selected={option.id === selected} onFocus={() => reveal(i)} onPress={() => select(option.id)}>
               {option.label}
             </Button>
           ))}

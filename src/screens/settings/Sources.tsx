@@ -8,6 +8,7 @@ import { Dialog } from '../../ui/Dialog'
 import { describeError, describeProgress, formatCount, formatDate } from '../../ui/format'
 import { navigate } from '../../ui/navigation'
 import { Region } from '../../ui/Region'
+import { revealChild } from '../../ui/scroll'
 
 export function SourcesSection() {
   const { sources, channels, progress } = useLibrary()
@@ -22,11 +23,8 @@ export function SourcesSection() {
   // The list scrolls inside a fixed height so "Add a source" stays on screen however many there are.
   const list = useRef<HTMLDivElement>(null)
   const reveal = (sourceId: string) => {
-    const box = list.current
-    const row = box?.querySelector<HTMLElement>(`[data-source="${sourceId}"]`)
-    if (!box || !row) return
-    if (row.offsetTop < box.scrollTop) box.scrollTop = row.offsetTop
-    else if (row.offsetTop + row.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = row.offsetTop + row.offsetHeight - box.clientHeight
+    const row = list.current?.querySelector<HTMLElement>(`[data-source="${sourceId}"]`)
+    if (list.current && row) revealChild(list.current, row)
   }
   const scroll = (event: WheelEvent) => {
     if (list.current) list.current.scrollTop += event.deltaY > 0 ? 124 : -124

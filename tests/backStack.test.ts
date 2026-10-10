@@ -54,6 +54,19 @@ describe('BackStack', () => {
     expect(stack.getState().screens[1].id).not.toBe(first)
   })
 
+  it('closes a screen for async work only while it is still on top', () => {
+    const stack = create()
+    stack.push({ name: 'sourceEdit' })
+    const form = stack.getState().screens[1].id
+    stack.back() // the user leaves while the playlist downloads...
+    stack.push({ name: 'search' }) // ...and opens another screen
+    expect(stack.close(form)).toBe(false)
+    expect(names(stack)).toEqual(['home', 'search'])
+    expect(stack.close(stack.getState().screens[1].id)).toBe(true)
+    expect(names(stack)).toEqual(['home'])
+    expect(stack.close(stack.getState().screens[0].id)).toBe(false) // never the root
+  })
+
   it('lets the newest handler consume Back before screens pop', () => {
     const stack = create()
     stack.push({ name: 'settings' })

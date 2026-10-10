@@ -76,6 +76,12 @@ export class BackStack<R extends Route> {
     return true
   }
 
+  /** Closes the screen visit `id` only if it is still on top: async work must not close a screen the user opened since. */
+  close(id: number): boolean {
+    const { screens } = this.state
+    return screens[screens.length - 1].id === id && this.pop()
+  }
+
   private set(patch: Partial<BackStackState<R>>): void {
     this.state = { ...this.state, ...patch }
     this.listeners.forEach((listener) => listener())

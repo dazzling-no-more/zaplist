@@ -58,7 +58,7 @@ export function SourceEditScreen({ entry }: ScreenProps<'sourceEdit'>) {
     try {
       await library.save(source)
       void guide.refresh()
-      backStack.pop()
+      backStack.close(entry.id) // the user may have left the form while the playlist downloaded
     } catch (error) {
       setMessage({ text: describeError(error), error: true })
     }
