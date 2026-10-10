@@ -4,9 +4,11 @@
 
 Writes store/lg-qa/Zaplist_Self_Checklist_<version>.xlsx. Only LG's input columns are written: the
 test result and the developer comment. LG wants results of a test on a TV: without --tv-verified,
-the items that need one are left empty (N/A items, which follow from what the app is, are filled).
-Run the TV test in docs/PUBLISHING.md, fix or mark Fail anything that doesn't pass, then build the
-file again with --tv-verified.
+the items that need one are left empty (N/A items, which follow from what the app is, are filled),
+and so is the check that no other app in the LG Content Store is called Zaplist. Run the TV test in
+docs/PUBLISHING.md (it includes that store search), fix or mark Fail anything that doesn't pass,
+then build the file again with --tv-verified. The image facts the file declares are checked on
+every run. Needs openpyxl and Pillow.
 """
 
 import argparse
@@ -17,6 +19,7 @@ import urllib.request
 import zipfile
 
 import openpyxl
+from PIL import Image
 
 QA_DOCUMENTS = 'https://webostv.developer.lge.com/assets/checklist/documents_for_app_qa.zip'
 
@@ -77,17 +80,34 @@ ITEMS = {
     53: ('Pass', 'Nothing device-specific is stored; after a reset and reinstall the app starts at the welcome screen.'),
 }
 
-# Other Check Points: item number -> comment. All are "Pass" (none of the listed problems applies).
+# Other Check Points: item number -> comment. "Pass" means none of the listed problems applies.
 OTHER = {
     1: 'Title "Zaplist" is a coined name.',
+    3: 'Web and trademark searches found no app or trademark named Zaplist.',
     4: 'Seller is not LG and the listing does not suggest it.',
+    5: 'The LG Content Store on the TV lists no other app called Zaplist.',
     6: 'Square 400x400 icon, square corners, opaque background.',
     7: 'Square corners.',
     8: 'Opaque background.',
     9: 'Screenshots show the app with demo channel names and Blender Foundation open movies (CC BY).',
-    15: 'Title and description are in English, the app is in English, and it is not geo-blocked.',
+    10: 'Six different screenshots.',
+    14: 'Launcher and splash background: 1920x1080 image (public/splash.png).',
+    15: 'Title, description and app are in English; Geo-IP block is set to No in the submission.',
     16: 'The app has no content of its own: users play their own playlists. Categories can be locked with a PIN.',
 }
+# Other Check Points known only after searching the LG Content Store on a TV.
+NEEDS_TV = {5}
+
+
+def check_images(root: pathlib.Path) -> None:
+    """Stops instead of declaring Other Check Points 6, 8, 10 and 14 for images that don't meet them."""
+    for name, size in (('store/icon-400.png', 400), ('public/icon.png', 80), ('public/largeIcon.png', 130)):
+        icon = Image.open(root / name)
+        assert icon.size == (size, size), f'{name} must be {size}x{size}'
+        assert 'A' not in icon.getbands() or icon.getchannel('A').getextrema() == (255, 255), f'{name} must be opaque'
+    assert Image.open(root / 'public/splash.png').size == (1920, 1080), 'public/splash.png must be 1920x1080'
+    shots = [path.read_bytes() for path in (root / 'store/screenshots').glob('*.png')]
+    assert len(set(shots)) == len(shots), 'store/screenshots has duplicate images'
 
 
 def template_path(arg: str | None) -> io.BytesIO | pathlib.Path:
@@ -102,10 +122,11 @@ def template_path(arg: str | None) -> io.BytesIO | pathlib.Path:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--template')
-    parser.add_argument('--tv-verified', action='store_true', help='every item marked Pass was checked on a TV')
+    parser.add_argument('--tv-verified', action='store_true', help='every item marked Pass was checked on a TV, including the store search')
     args = parser.parse_args()
 
     here = pathlib.Path(__file__).resolve().parent
+    check_images(here.parents[1])
     version = json.loads((here.parents[1] / 'appinfo.json').read_text(encoding='utf-8'))['version']
     book = openpyxl.load_workbook(template_path(args.template))
 
@@ -127,14 +148,15 @@ def main() -> None:
         number = other[f'B{row}'].value
         if number is None or not str(number).isdigit():
             continue
-        other[f'G{row}'] = 'Pass'
-        other[f'H{row}'] = OTHER.get(int(number))
+        known = int(number) not in NEEDS_TV or args.tv_verified
+        other[f'G{row}'] = 'Pass' if known else None
+        other[f'H{row}'] = OTHER.get(int(number)) if known else None
         count += 1
     assert count == 51, f'found {count} other check points: the template layout changed'
 
     out = here / f'Zaplist_Self_Checklist_{version}.xlsx'
     book.save(out)
-    pending = 0 if args.tv_verified else sum(1 for result, _ in ITEMS.values() if result != 'NA')
+    pending = 0 if args.tv_verified else sum(1 for result, _ in ITEMS.values() if result != 'NA') + len(NEEDS_TV)
     print(f'Wrote {out} ({filled} test items, {count} other check points)')
     if pending:
         print(f'{pending} results are empty until the TV test: build again with --tv-verified after it passes.')

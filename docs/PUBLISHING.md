@@ -106,16 +106,24 @@ Checklist item whose result is still empty. In particular:
       playback stops while the app is hidden.
 - [ ] Typing with the LG keyboard in the playlist, login and search fields: upper and lower case, the
       < > cursor buttons, voice input.
+- [ ] With the pointer: holding OK on a channel opens its menu; in Favorites, *Move* shows arrows
+      that reorder the channel.
+- [ ] The Xtream Codes test server from page 6 logs in and its channels play.
+- [ ] The LG Content Store on the TV has no other app called "Zaplist": LG rejects a title another
+      app already uses. Web searches found no app or trademark with this name, but they can't see
+      the store.
+
+LG tests on every webOS version you select in step 7. The app is built for webOS TV 4.0 (2018
+models) and later, but a newer TV can't show how it runs on an older one. If you can, run the list
+on an older TV too (webOS 4.x or 5.x, 2018–2020); if not, select only the webOS versions you tested
+and add older ones in an update after testing them.
 
 If something fails, fix it and rebuild (step 4); LG rejects any app with a failed item. When
-everything passes, fill in the checklist's results:
+everything passes, fill in the checklist's results (this also marks the store search as done):
 
 ```sh
 python store/lg-qa/self-checklist.py --tv-verified
 ```
-
-Also search the LG Content Store on the TV for "Zaplist": LG rejects a title that another app in the
-store already uses. Web searches found no app or trademark with this name, but they can't see the store.
 
 ## 6. Register as a seller
 
@@ -133,7 +141,8 @@ and third-party guides and may differ slightly.
 
 1. **App ID**: `zaplist.player`.
 2. **File upload**: service platform *webOS*; upload `out/zaplist.player_1.0.0_all.ipk`; display
-   resolution 1920×1080 (FHD); webOS TV 4.0 and later; file title "Zaplist", version `1.0.0`. A
+   resolution 1920×1080 (FHD); the webOS TV versions you tested (step 5; the app supports 4.0 and
+   later); file title "Zaplist", version `1.0.0`. A
    *deep link URL* field is for apps hosted on a website: leave it at its default.
 3. **Images**: the table in `store/listing.md` (400×400 icon, primary + 5 secondary screenshots,
    1920×1080 launcher and splash background, tile color `#3b82ea`).
