@@ -59,7 +59,7 @@ First release.
 | Primary screenshot            | `store/screenshots/1-home.png`         | 1280 × 720        |
 | Secondary screenshots (2–5)   | `store/screenshots/2-player.png` … `6-add-source.png` | 1280 × 720 |
 | Launcher / splash background  | `public/splash.png`                    | 1920 × 1080       |
-| App tile color (if asked)     | `#3b82ea`                              |                   |
+| App tile color (if asked)     | `#7b2ff7`                              |                   |
 
 Screenshots use demo channel names. The video in them is from Blender Foundation open movies:
 *Big Buck Bunny* (© Blender Foundation, CC BY 3.0) and *Tears of Steel* (© Blender Foundation, CC BY 3.0).

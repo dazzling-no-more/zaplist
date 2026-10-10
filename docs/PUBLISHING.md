@@ -8,7 +8,7 @@ for "Add from your phone" (step 2), a test on a real TV, a seller account and th
 
 | File | Used for |
 | ---- | -------- |
-| `out/zaplist.player_1.0.0_all.ipk` | The app package (built in step 4) |
+| `out/zaplist.player_1.0.0_all.ipk`, `out/zaplist.player_1.0.0_all_1280x720.ipk` | The app packages, 1920×1080 for UHD TVs and 1280×720 for Full HD TVs (built in step 4) |
 | `store/lg-qa/Zaplist_UX_Scenario_1.0.0.pptx` | LG's UX scenario document, filled in (checked in step 3) |
 | `store/lg-qa/Zaplist_Self_Checklist_1.0.0.xlsx` | LG's Self Checklist: comments and N/A items filled in; the results that need a TV test stay empty until step 5 |
 | `store/listing.md` | App name, descriptions, category, image list for the form |
@@ -20,7 +20,7 @@ for "Add from your phone" (step 2), a test on a real TV, a seller account and th
 | `relay/` | Relay and phone page for "Add from your phone" (deployed in step 2) |
 | `store/privacy-policy.md` | Privacy policy, in case the form asks for a URL |
 | `store/lg-qa/*.ps1`, `*.py` | Scripts that rebuild the two LG documents from LG's templates |
-| `store/art/*.svg` | Sources of the icon and splash |
+| `store/art/*.svg` | Sources of the icon and splash; `splash-1280x720.png` is the splash of the 1280×720 package |
 
 The app ID is `zaplist.player` (`appinfo.json`). LG fixes the ID at the first submission; change it
 before then if you want another one (for example the reverse domain of a website you own).
@@ -100,8 +100,14 @@ e-mail (nomoredazzling@gmail.com), the test playlist address and the Xtream test
 npm ci
 npm test
 npm run build      # also checks the bundle for webOS 4 (Chromium 53)
-npm run package    # → out/zaplist.player_1.0.0_all.ipk
+npm run package    # → out/zaplist.player_1.0.0_all.ipk and out/zaplist.player_1.0.0_all_1280x720.ipk
 ```
+
+Seller Lounge recommends one package per graphics resolution: 1920×1080 for UHD TVs and 1280×720
+for Full HD TVs. Both hold the same app, which scales itself to the screen; the second only declares
+1280×720 in `appinfo.json` and has a splash image of that size. To try it on your TV:
+`npx ares-install -d tv out/zaplist.player_1.0.0_all_1280x720.ipk` (`npm run install:tv` puts the
+1920×1080 one back).
 
 ## 5. Test on your TV
 
@@ -166,12 +172,14 @@ In Seller Lounge, *APP MANAGEMENT* → *App Submission*. The field names below c
 and third-party guides and may differ slightly.
 
 1. **App ID**: `zaplist.player`.
-2. **File upload**: service platform *webOS*; upload `out/zaplist.player_1.0.0_all.ipk`; display
-   resolution 1920×1080 (FHD); the webOS TV versions you tested (step 5; the app supports 4.0 and
-   later); file title "Zaplist", version `1.0.0`. A
-   *deep link URL* field is for apps hosted on a website: leave it at its default.
+2. **File upload**: service platform *webOS*; chipset *All*. Add both packages as separate files:
+   `out/zaplist.player_1.0.0_all.ipk` with resolution 1920×1080 and
+   `out/zaplist.player_1.0.0_all_1280x720.ipk` with resolution 1280×720. For each: the webOS TV
+   versions you tested (step 5; the app supports 4.0 and later), version `1.0.0`. Answer Yes when
+   asked to use `appinfo.json`; it fills in the title, version and tile color but not the 400×400
+   icon. A *deep link URL* field is for apps hosted on a website: leave it at its default.
 3. **Images**: the table in `store/listing.md` (400×400 icon, primary + 5 secondary screenshots,
-   1920×1080 launcher and splash background, tile color `#3b82ea`).
+   1920×1080 launcher and splash background, tile color `#7b2ff7`).
 4. **Service info**: name, short and full description (English), category *Entertainment*, price
    *Free*, the countries you want, support e-mail and privacy policy URL, all from
    `store/listing.md`. Set **Geo-IP block to No** and include English as the service language: LG
