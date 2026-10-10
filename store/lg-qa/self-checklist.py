@@ -100,11 +100,16 @@ NEEDS_TV = {5}
 
 
 def check_images(root: pathlib.Path) -> None:
-    """Stops instead of declaring Other Check Points 6, 8, 10 and 14 for images that don't meet them."""
+    """Stops instead of declaring Other Check Points 6, 8, 10 and 14 for images that don't meet them.
+    Seller Lounge also wants the icon's background in one plain color, the app tile color."""
+    tile = json.loads((root / 'appinfo.json').read_text(encoding='utf-8'))['iconColor']
+    tile_rgb = tuple(int(tile[i:i + 2], 16) for i in (1, 3, 5))
     for name, size in (('store/icon-400.png', 400), ('public/icon.png', 80), ('public/largeIcon.png', 130)):
         icon = Image.open(root / name)
         assert icon.size == (size, size), f'{name} must be {size}x{size}'
         assert 'A' not in icon.getbands() or icon.getchannel('A').getextrema() == (255, 255), f'{name} must be opaque'
+        corners = {icon.convert('RGB').getpixel(p) for p in ((0, 0), (size - 1, 0), (0, size - 1), (size - 1, size - 1))}
+        assert corners == {tile_rgb}, f'{name}: the background must be the tile color {tile} (appinfo.json iconColor)'
     assert Image.open(root / 'public/splash.png').size == (1920, 1080), 'public/splash.png must be 1920x1080'
     shots = [path.read_bytes() for path in (root / 'store/screenshots').glob('*.png')]
     assert len(set(shots)) == len(shots), 'store/screenshots has duplicate images'
