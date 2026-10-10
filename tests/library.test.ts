@@ -53,3 +53,48 @@ describe('library startup', () => {
     await vi.waitFor(() => expect(ingestSource).toHaveBeenCalledWith(source, expect.any(Function)))
   })
 })
+
+describe('deleting a source', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    db.getSecretSettings.mockResolvedValue(undefined)
+    db.getSources.mockResolvedValue([source])
+    db.getPlaylistMeta.mockResolvedValue({ sourceId: 's', categories: [], epgUrls: [], chunks: 1 })
+    db.getChannelChunk.mockResolvedValue([channel])
+    db.deleteSource.mockResolvedValue(undefined)
+  })
+
+  it('wins over a refresh that is still downloading', async () => {
+    const library = await load()
+    await library.init()
+    let finish = () => {}
+    ingestSource.mockReturnValue(new Promise((resolve) => (finish = () => resolve({ source, channels: 1, categories: 0 }))))
+    const refresh = library.refresh('s')
+    await vi.waitFor(() => expect(ingestSource).toHaveBeenCalledOnce())
+
+    const removal = library.remove('s')
+    await vi.waitFor(() => expect(library.getState().sources).toEqual([]))
+    // Deleted at once (the app may be closed before the download ends)...
+    await vi.waitFor(() => expect(db.deleteSource).toHaveBeenCalledOnce())
+    // ...and again after the download, which stores the source when it finishes.
+    finish()
+    await expect(refresh).rejects.toThrow('Source deleted')
+    await removal
+    expect(db.deleteSource).toHaveBeenCalledTimes(2)
+    expect(db.deleteSource.mock.invocationCallOrder[1]).toBeGreaterThan(ingestSource.mock.invocationCallOrder[0])
+    expect(library.getState()).toMatchObject({ sources: [], channels: [] })
+
+    // A save that was still to come (clearing the cache goes through every source) doesn't download it again.
+    await expect(library.save(source)).rejects.toThrow('Source deleted')
+    expect(ingestSource).toHaveBeenCalledOnce()
+  })
+
+  it('shows the source again when it could not be deleted', async () => {
+    const library = await load()
+    await library.init()
+    db.deleteSource.mockRejectedValue(new Error('storage unavailable'))
+    await expect(library.remove('s')).rejects.toThrow('storage unavailable')
+    expect(library.getState()).toMatchObject({ sources: [source], channels: [channel] })
+  })
+})

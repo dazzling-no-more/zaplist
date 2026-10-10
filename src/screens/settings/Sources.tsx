@@ -94,7 +94,7 @@ export function SourcesSection() {
               label: t('sources.delete'),
               onPress: () => {
                 setDeleting(undefined)
-                library.remove(deleting.id)
+                library.remove(deleting.id).catch(() => setErrors((e) => ({ ...e, [deleting.id]: t('sources.deleteFailed') })))
               },
             },
             { label: t('common.cancel'), onPress: () => setDeleting(undefined) },

@@ -59,6 +59,7 @@ const en = {
   'parental.locked': 'Locked',
   'parental.unlocked': 'Not locked',
   'parental.noCategories': 'No categories yet.',
+  'parental.saveFailed': 'The change couldn’t be saved, so parental control is as before. Try again.',
 
   'settings.title': 'Settings',
   'settings.sources': 'Sources',
@@ -73,6 +74,7 @@ const en = {
   'sources.delete': 'Delete',
   'sources.deleteTitle': 'Delete “{name}”?',
   'sources.deleteMessage': 'Its channels are removed from this TV.',
+  'sources.deleteFailed': 'The playlist couldn’t be deleted. Try again.',
   'sources.m3u': 'M3U playlist',
   'sources.xtream': 'Xtream Codes',
   'sources.channels': '{count} channel|{count} channels',

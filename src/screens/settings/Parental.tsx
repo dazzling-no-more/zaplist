@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLibrary } from '../../data/library'
 import { markUnlocked, unlock, useUnlocked } from '../../data/parental'
-import { updatePrefs, usePrefs } from '../../data/prefs'
+import { saveParental, usePrefs } from '../../data/prefs'
 import { t } from '../../i18n'
 import { Button } from '../../ui/Button'
 import { Icon } from '../../ui/Icon'
@@ -19,12 +19,24 @@ export function ParentalSection() {
   const [newPin, setNewPin] = useState('')
   const [mismatch, setMismatch] = useState(false)
   const [index, setIndex] = useState(0)
+  const [failed, setFailed] = useState(false)
   const several = sources.length > 1
   const sourceName = (id: string) => sources.find((s) => s.id === id)?.name
 
+  const save = (patch: Parameters<typeof saveParental>[0]) => {
+    setFailed(false)
+    return saveParental(patch).then(
+      () => true,
+      () => {
+        setFailed(true)
+        return false
+      },
+    )
+  }
+
   const toggle = (categoryId: string) => {
     const locked = prefs.lockedCategories
-    updatePrefs({ lockedCategories: locked.includes(categoryId) ? locked.filter((id) => id !== categoryId) : [...locked, categoryId] })
+    void save({ lockedCategories: locked.includes(categoryId) ? locked.filter((id) => id !== categoryId) : [...locked, categoryId] })
   }
 
   const dialog =
@@ -59,9 +71,10 @@ export function ParentalSection() {
             setStep('new')
             return
           }
-          updatePrefs({ pin })
-          markUnlocked()
-          setStep(undefined)
+          void save({ pin }).then((saved) => {
+            if (saved) markUnlocked()
+            setStep(undefined)
+          })
         }}
         onCancel={() => setStep(undefined)}
       />
@@ -70,6 +83,7 @@ export function ParentalSection() {
   return (
     <Region focusKey="settings-content" className="content">
       <h2>{t('settings.parental')}</h2>
+      {failed && <p className="error">{t('parental.saveFailed')}</p>}
       {!prefs.pin ? (
         <>
           <p className="dim">{t('parental.off')}</p>
@@ -88,7 +102,7 @@ export function ParentalSection() {
         <>
           <div className="button-row">
             <Button onPress={() => setStep('new')}>{t('parental.changePin')}</Button>
-            <Button onPress={() => updatePrefs({ pin: undefined, lockedCategories: [] })}>{t('parental.turnOff')}</Button>
+            <Button onPress={() => void save({ pin: undefined, lockedCategories: [] })}>{t('parental.turnOff')}</Button>
           </div>
           <h3>{t('parental.categories')}</h3>
           <VirtualList

@@ -51,19 +51,46 @@ export const getPrefs = (): Prefs => prefs
 type Secrets = Pick<Prefs, 'pin' | 'epgUrl'>
 const secretsOf = ({ pin, epgUrl }: Prefs): Secrets => ({ pin, epgUrl })
 
+function writeLocal(value: Prefs): void {
+  const { pin: _pin, epgUrl: _epgUrl, ...rest } = value
+  localStorage.setItem(KEY, JSON.stringify(rest))
+}
+
 function saveLocal(): void {
-  const { pin: _pin, epgUrl: _epgUrl, ...rest } = prefs
   try {
-    localStorage.setItem(KEY, JSON.stringify(rest))
+    writeLocal(prefs)
   } catch {
     // Storage full or unavailable: keep the change for this session.
   }
 }
 
-export function updatePrefs(patch: Partial<Prefs>): void {
+/** Parental control: changed only through `saveParental`, which reports storage failures. */
+type ParentalPrefs = Pick<Prefs, 'pin' | 'lockedCategories'>
+
+/** Changes everyday settings; if storage fails they still apply for this session. */
+export function updatePrefs(patch: Partial<Omit<Prefs, keyof ParentalPrefs>>): void {
   prefs = { ...prefs, ...patch }
   saveLocal()
-  if ('pin' in patch || 'epgUrl' in patch) void putSecretSettings(secretsOf(prefs)).catch(() => undefined)
+  if ('epgUrl' in patch) void putSecretSettings(secretsOf(prefs)).catch(() => undefined)
+  listeners.forEach((listener) => listener())
+}
+
+/**
+ * Changes parental control. A setting that applied now but was lost at the next start would quietly
+ * unlock the TV, so this resolves only once the change is stored and rejects, changing nothing, when it can't be.
+ */
+export async function saveParental(patch: Partial<ParentalPrefs>): Promise<void> {
+  const next = { ...prefs, ...patch }
+  if ('lockedCategories' in patch) writeLocal(next)
+  if ('pin' in patch) {
+    try {
+      await putSecretSettings(secretsOf(next))
+    } catch (error) {
+      saveLocal() // puts back the locked categories written above
+      throw error
+    }
+  }
+  prefs = { ...prefs, ...patch }
   listeners.forEach((listener) => listener())
 }
 

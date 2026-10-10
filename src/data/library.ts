@@ -32,6 +32,10 @@ class Library {
   private byId = new Map<string, Channel>()
   private readonly listeners = new Set<() => void>()
   private initializing: Promise<void> | undefined
+  /** Per source, the end of its queue of saves and deletion. */
+  private readonly tasks = new Map<string, Promise<unknown>>()
+  /** Sources deleted in this session: saves still queued or downloading for them must not bring them back. */
+  private readonly removed = new Set<string>()
 
   getState = (): LibraryState => this.state
 
@@ -73,17 +77,22 @@ class Library {
   /** Validates and stores a new or edited source by downloading it. Rejects with a LoadError. */
   async save(source: Source): Promise<Source> {
     await this.init() // the startup load would otherwise overwrite this change
-    this.setProgress(source.id, { stage: 'download' })
-    try {
-      const result = await ingestSource(source, (progress) => this.setProgress(source.id, progress))
-      await this.load(result.source)
-      const others = this.state.sources.filter((s) => s.id !== source.id)
-      const sources = [...others, result.source].sort((a, b) => a.addedAt - b.addedAt)
-      this.set({ sources, ...this.combine(sources) })
-      return result.source
-    } finally {
-      this.setProgress(source.id, undefined)
-    }
+    return this.queue(source.id, async () => {
+      if (this.removed.has(source.id)) throw new Error('Source deleted')
+      this.setProgress(source.id, { stage: 'download' })
+      try {
+        const result = await ingestSource(source, (progress) => this.setProgress(source.id, progress))
+        // Deleted while downloading: the deletion queued behind this save removes what it stored.
+        if (this.removed.has(source.id)) throw new Error('Source deleted')
+        await this.load(result.source)
+        const others = this.state.sources.filter((s) => s.id !== source.id)
+        const sources = [...others, result.source].sort((a, b) => a.addedAt - b.addedAt)
+        this.set({ sources, ...this.combine(sources) })
+        return result.source
+      } finally {
+        this.setProgress(source.id, undefined)
+      }
+    })
   }
 
   refresh(sourceId: string): Promise<Source> {
@@ -92,12 +101,28 @@ class Library {
     return this.save(source)
   }
 
+  /** Removes a source and its stored data, also what a save still running for it stores afterwards. */
   async remove(sourceId: string): Promise<void> {
     await this.init()
-    await deleteSource(sourceId)
+    const source = this.state.sources.find((s) => s.id === sourceId)
+    if (!source) return
+    const data = this.data.get(sourceId)
+    this.removed.add(sourceId)
     this.data.delete(sourceId)
-    const sources = this.state.sources.filter((s) => s.id !== sourceId)
-    this.set({ sources, ...this.combine(sources) })
+    const remaining = this.state.sources.filter((s) => s !== source)
+    this.set({ sources: remaining, ...this.combine(remaining) })
+    try {
+      await deleteSource(sourceId)
+      // A save still downloading stores the source again when it finishes: delete it once more after that.
+      await this.queue(sourceId, () => deleteSource(sourceId))
+    } catch (error) {
+      // Still stored, so it would come back on the next start: show it again.
+      this.removed.delete(sourceId)
+      if (data) this.data.set(sourceId, data)
+      const sources = [...this.state.sources, source].sort((a, b) => a.addedAt - b.addedAt)
+      this.set({ sources, ...this.combine(sources) })
+      throw error
+    }
   }
 
   /** Deletes cached channels and the guide, then downloads every source again. Returns how many failed. */
@@ -110,6 +135,13 @@ class Library {
     let failed = 0
     for (const source of sources) await this.save(source).catch(() => failed++)
     return failed
+  }
+
+  /** Runs `job` once the source's earlier saves and deletion have finished, whether or not they failed. */
+  private queue<T>(sourceId: string, job: () => Promise<T>): Promise<T> {
+    const result = (this.tasks.get(sourceId) ?? Promise.resolve()).then(job)
+    this.tasks.set(sourceId, result.catch(() => undefined))
+    return result
   }
 
   /** Reads a source's cached channels; false when none are cached. */
