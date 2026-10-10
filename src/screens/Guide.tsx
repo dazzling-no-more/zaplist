@@ -92,12 +92,13 @@ export function GuideScreen({ entry }: ScreenProps<'guide'>) {
       const before = programmeCovering(programmes, edge - 1)
       show(before ? Math.max(before.start, range.from) : edge - SLOT)
     },
-    select: () => {
-      if (!channel) return
-      if (focused && focused.start <= now && now < focused.stop) playChannel(channel, entry.listId)
-      else if (focused) setDetails({ channel, programme: focused })
-      else playChannel(channel, entry.listId)
+    /** OK on a programme: one on air (or no guide data) plays the channel, others show their details. */
+    open: (target: Channel | undefined, programme: Programme | undefined) => {
+      if (!target) return
+      if (programme && !(programme.start <= now && now < programme.stop)) setDetails({ channel: target, programme })
+      else playChannel(target, entry.listId)
     },
+    select: () => actions.open(channel, focused),
   }
   const latest = useRef(actions)
   latest.current = actions
@@ -143,12 +144,13 @@ export function GuideScreen({ entry }: ScreenProps<'guide'>) {
         viewStart={viewStart}
         offsetMinutes={prefs.epgOffsetMinutes}
         focusTime={gridFocused && i === current ? focusTime : undefined}
-        onPointer={(time, select) => {
+        onPointer={(time, select, programme) => {
           if (!canHover() && !select) return
           focusSelf()
           setRow(i)
           setFocusTime(time)
-          if (select) latest.current.select()
+          // The clicked row and programme: the focused ones are still from before this click.
+          if (select) latest.current.open(list[i], programme)
         }}
       />,
     )
@@ -197,7 +199,8 @@ interface RowProps {
   offsetMinutes: number
   /** Set on the focused row: the time whose programme is highlighted. */
   focusTime?: number
-  onPointer: (time: number, select: boolean) => void
+  /** `programme`: the one under the pointer, if any. */
+  onPointer: (time: number, select: boolean, programme?: Programme) => void
 }
 
 const GuideRow = memo(function GuideRow({ channel, top, viewStart, offsetMinutes, focusTime, onPointer }: RowProps) {
@@ -216,8 +219,8 @@ const GuideRow = memo(function GuideRow({ channel, top, viewStart, offsetMinutes
         key={p.start}
         className={`guide-cell${isFocused ? ' focused' : ''}`}
         style={{ left, width: Math.max(0, width - 4) }}
-        onMouseEnter={() => onPointer(time, false)}
-        onClick={() => onPointer(time, true)}
+        onMouseEnter={() => onPointer(time, false, p)}
+        onClick={() => onPointer(time, true, p)}
       >
         {p.title}
       </div>,

@@ -72,6 +72,8 @@ Test data (all legal and public):
   `tests/fixtures/large.m3u` (not committed) for scale testing.
 - The [iptv-org](https://github.com/iptv-org/iptv) playlist, `https://iptv-org.github.io/iptv/index.m3u`.
 - `tests/fixtures/` also holds messy M3U files, XMLTV (+ `.gz`) and Xtream JSON responses used by the tests.
+- `store/test-playlist.m3u` is the playlist for LG's testers: public test streams plus guide data in
+  `store/test-guide.xml.gz` (`node scripts/make-test-guide.mjs` regenerates it for the next six months).
 
 ## Running on a TV
 

@@ -32,6 +32,21 @@ function mediaError(video: HTMLVideoElement): PlaybackError {
   return new PlaybackError(code === 2 ? 'network' : 'format', video.error?.message || (code ? `MediaError ${code}` : undefined))
 }
 
+/**
+ * Ends a start() that is still waiting when the engine is destroyed (the user changed channels), so a
+ * stopped engine never acts on the <video> element, which by then belongs to the next engine.
+ */
+function cancellation(): { promise: Promise<never>; cancel: () => void } {
+  let cancel = () => {}
+  const promise = new Promise<never>((_, reject) => {
+    cancel = () => reject(new PlaybackError('format', 'cancelled'))
+  })
+  promise.catch(() => undefined) // after start() has finished, nobody is waiting for it
+  return { promise, cancel }
+}
+
+const cancelled = () => new PlaybackError('format', 'cancelled')
+
 /** Waits for the first frames; `failed` lets the engine abort the wait with its own error. */
 function waitForPlaying(video: HTMLVideoElement, failed: Promise<never>): Promise<void> {
   let cleanup = () => {}
@@ -84,6 +99,8 @@ interface MediaTrackList {
 class NativeEngine implements Engine {
   readonly name = 'native'
   onFatal?: (error: PlaybackError) => void
+  private destroyed = false
+  private readonly cancellation = cancellation()
   private unwatch = () => {}
 
   constructor(
@@ -93,9 +110,10 @@ class NativeEngine implements Engine {
 
   async start(): Promise<void> {
     this.video.src = this.url
-    const started = waitForPlaying(this.video, new Promise<never>(() => {}))
+    const started = waitForPlaying(this.video, this.cancellation.promise)
     void playWithSound(this.video)
     await started
+    if (this.destroyed) throw cancelled()
     this.unwatch = watchVideo(this.video, this)
   }
 
@@ -142,6 +160,9 @@ class NativeEngine implements Engine {
   }
 
   destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
+    this.cancellation.cancel()
     this.unwatch()
     releaseVideo(this.video)
   }
@@ -154,6 +175,7 @@ class HlsEngine implements Engine {
   private started = false
   private recovered = false
   private destroyed = false
+  private readonly cancellation = cancellation()
   private unwatch = () => {}
 
   constructor(
@@ -163,7 +185,7 @@ class HlsEngine implements Engine {
 
   async start(): Promise<void> {
     const Hls = await loadHls().catch((error: Error) => Promise.reject(new PlaybackError('format', error.message)))
-    if (this.destroyed) throw new PlaybackError('format', 'cancelled')
+    if (this.destroyed) throw cancelled()
     const hls = (this.hls = new Hls({
       // On the TV hls.js is only the fallback to native HLS; its Blob-URL worker is unreliable there.
       enableWorker: !isWebOS(),
@@ -185,9 +207,10 @@ class HlsEngine implements Engine {
     })
     hls.loadSource(this.url)
     hls.attachMedia(this.video)
-    const started = waitForPlaying(this.video, failed)
+    const started = waitForPlaying(this.video, Promise.race([failed, this.cancellation.promise]))
     void playWithSound(this.video)
     await started
+    if (this.destroyed) throw cancelled()
     this.started = true
     this.unwatch = watchVideo(this.video, this)
   }
@@ -221,6 +244,7 @@ class HlsEngine implements Engine {
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
+    this.cancellation.cancel()
     this.unwatch()
     this.hls?.destroy()
     releaseVideo(this.video)
@@ -233,6 +257,7 @@ class MpegtsEngine implements Engine {
   private player?: Mpegts.Player
   private started = false
   private destroyed = false
+  private readonly cancellation = cancellation()
   private unwatch = () => {}
 
   constructor(
@@ -242,7 +267,7 @@ class MpegtsEngine implements Engine {
 
   async start(): Promise<void> {
     const mpegts = await loadMpegts().catch((error: Error) => Promise.reject(new PlaybackError('format', error.message)))
-    if (this.destroyed) throw new PlaybackError('format', 'cancelled')
+    if (this.destroyed) throw cancelled()
     const player = (this.player = mpegts.createPlayer(
       { type: 'mpegts', isLive: true, url: proxied(this.url) },
       // No latency chasing: it keeps under a second buffered, so every network hiccup stalls the
@@ -259,9 +284,10 @@ class MpegtsEngine implements Engine {
     })
     player.attachMediaElement(this.video)
     player.load()
-    const started = waitForPlaying(this.video, failed)
+    const started = waitForPlaying(this.video, Promise.race([failed, this.cancellation.promise]))
     void playWithSound(this.video)
     await started
+    if (this.destroyed) throw cancelled()
     this.started = true
     this.unwatch = watchVideo(this.video, this)
   }
@@ -277,6 +303,7 @@ class MpegtsEngine implements Engine {
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
+    this.cancellation.cancel()
     this.unwatch()
     if (this.player) {
       this.player.pause()

@@ -1,11 +1,11 @@
-#EXTM3U
-#EXTINF:-1 tvg-chno="1" group-title="Open movies",Big Buck Bunny
+#EXTM3U url-tvg="https://raw.githubusercontent.com/dazzling-no-more/zaplist/main/store/test-guide.xml.gz"
+#EXTINF:-1 tvg-id="bbb.zaplist" tvg-chno="1" group-title="Open movies",Big Buck Bunny
 https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
-#EXTINF:-1 tvg-chno="2" group-title="Open movies",Tears of Steel
+#EXTINF:-1 tvg-id="tos.zaplist" tvg-chno="2" group-title="Open movies",Tears of Steel
 https://test-streams.mux.dev/tos_ismc/main.m3u8
-#EXTINF:-1 tvg-chno="3" group-title="Open movies",Angel One (several audio languages)
+#EXTINF:-1 tvg-id="angel.zaplist" tvg-chno="3" group-title="Open movies",Angel One (several audio languages)
 https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8
-#EXTINF:-1 tvg-chno="4" group-title="Test streams",Apple test stream (audio tracks and subtitles)
+#EXTINF:-1 tvg-id="bipbop.zaplist" tvg-chno="4" group-title="Test streams",Apple test stream (audio tracks and subtitles)
 https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8
-#EXTINF:-1 tvg-chno="5" group-title="Test streams",MPEG-TS test (10 seconds)
+#EXTINF:-1 tvg-id="ts.zaplist" tvg-chno="5" group-title="Test streams",MPEG-TS test (10 seconds)
 https://test-streams.mux.dev/x36xhzz/url_0/url_462/193039199_mp4_h264_aac_hd_7.ts

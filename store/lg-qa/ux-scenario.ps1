@@ -288,7 +288,7 @@ try {
     @('Source type: M3U playlist or Xtream Codes login', 'Name shown in the source list', 'Playlist URL (M3U/M3U8)', 'TV guide (XMLTV) URL, optional', 'Check and save: downloads the playlist and saves it') `
     @(
       'Zaplist has no sign-in, account or activation, and it includes no channels: users add a playlist from their TV provider.',
-      'To test: on the start page press OK on "Add a playlist", enter any name and the test playlist URL from the table, then press "Check and save". Home opens with 5 channels in 2 categories.',
+      'To test: on the start page press OK on "Add a playlist", enter any name and the test playlist URL from the table, then press "Check and save". Home opens with 5 channels in 2 categories; the TV guide fills in moments later.',
       'The Xtream Codes tab asks for a server address, username and password, and checks the login before saving.'
     ) `
     @((Section 'Test playlist (no account needed)'), (Item '1' $PlaylistUrl), (Section 'Xtream Codes test account'), (Item '-' 'Needs an account from an IPTV provider; not supplied. The M3U path covers the same screens.'), (Section 'Activation codes'), (Item '-' 'Not applicable'))
@@ -336,7 +336,7 @@ try {
     @(
       'Arrow keys move through programmes and channels; CH +/- page; the wheel scrolls. OK on a programme on air plays its channel.',
       'Guide data comes from XMLTV named in the playlist, in Settings, or by the Xtream server.',
-      'The test playlist has no guide data, so its rows read "No programme information".'
+      'The test playlist comes with guide data, so every test channel shows programmes.'
     )
 
   Write-Screen (& $s 12) $sub '4. Search' (Join-Path $shots '5-search.png') `
@@ -403,7 +403,7 @@ try {
       $sh.TextFrame.TextRange.Text = @(
         'If you have anything to let the LG QA Management know, please comment here. Any detailed references will be welcome.',
         '',
-        '1. Zaplist includes no channels. Add the test playlist from 4 to test playback; it uses public test streams (Blender Foundation open movies, Apple and Google test streams).',
+        '1. Zaplist includes no channels. Add the test playlist from 4 to test playback and the TV guide; it uses public test streams (Blender Foundation open movies, Apple and Google test streams) and comes with guide data.',
         '2. Xtream Codes sources need an account from an IPTV provider, which we can''t supply; the M3U path covers the same screens.',
         '3. Back on the first screen calls webOS.platformBack(), so the TV shows its exit popup or Home screen depending on the webOS version.',
         '4. No credentials are hard-coded. The words "password", "credential" and "token" in the package come from the Xtream Codes API parameters, the login form field, the core-js URL polyfill (URL.password) and the XHR/fetch withCredentials options in hls.js and mpegts.js. Playlist URLs, logins, the cached channel lists and guide addresses, and the parental PIN are stored only on the TV, encrypted (AES-GCM, key generated on the TV).',

@@ -31,7 +31,9 @@ both, from the `main` branch:
 - **Test playlist**: https://raw.githubusercontent.com/dazzling-no-more/zaplist/main/store/test-playlist.m3u
 - **Privacy policy**: https://github.com/dazzling-no-more/zaplist/blob/main/store/privacy-policy.md
 
-Both addresses are already in the UX scenario (page 6) and `store/listing.md`. The playlist address
+Both addresses are already in the UX scenario (page 6) and `store/listing.md`. The test playlist
+names a guide, `store/test-guide.xml.gz`, with programmes until 2027-04-11: before submitting later
+than that, run `node scripts/make-test-guide.mjs` and push the new file. The playlist address
 is long to type with a remote: if you shorten it (tinyurl.com, is.gd; the app follows redirects),
 rebuild the UX scenario with the short one (Windows with PowerPoint; it downloads LG's template
 itself):
@@ -131,7 +133,8 @@ time; plan for weeks. Questions go to the *1:1 Q&A* in Seller Lounge.
 
 ## Updates
 
-Every change after approval goes through the same review. For each release: raise `version` in
+Every change after approval goes through the same review. For each release: regenerate the test
+guide (`node scripts/make-test-guide.mjs`), raise `version` in
 `appinfo.json` and `package.json`, build, package, test on the TV, rebuild both LG documents
 (`ux-scenario.ps1`, and `self-checklist.py --tv-verified` after the TV test), update "What's new" in
 `store/listing.md`, and submit the new IPK as an update. When screens change, retake the screenshots
