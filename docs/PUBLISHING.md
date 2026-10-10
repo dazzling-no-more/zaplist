@@ -1,8 +1,8 @@
 # Publishing Zaplist on the LG Content Store
 
 Step-by-step for submitting Zaplist to LG's app store (LG Content Store, also called LG Apps) through
-LG Seller Lounge. The app and LG's paperwork are ready; what's left needs you: your contact details,
-two files online, a test on a real TV, a seller account and the submission form.
+LG Seller Lounge. The app and LG's paperwork are ready; what's left needs you: deploying the relay
+for "Add from your phone" (step 2), a test on a real TV, a seller account and the submission form.
 
 ## What's ready
 
@@ -17,6 +17,7 @@ two files online, a test on a real TV, a seller account and the submission form.
 | `public/splash.png` | Launcher/splash background, 1920×1080 (also inside the IPK) |
 | `store/test-playlist.m3u`, `store/test-guide.xml.gz` | Playlist and TV guide for LG's testers (public test streams only) |
 | `store/xtream-test-server.js` | Xtream Codes test server for LG's testers (running, see step 2) |
+| `relay/` | Relay and phone page for "Add from your phone" (deployed in step 2) |
 | `store/privacy-policy.md` | Privacy policy, in case the form asks for a URL |
 | `store/lg-qa/*.ps1`, `*.py` | Scripts that rebuild the two LG documents from LG's templates |
 | `store/art/*.svg` | Sources of the icon and splash |
@@ -43,7 +44,30 @@ itself):
 pwsh store/lg-qa/ux-scenario.ps1 -PlaylistUrl https://tinyurl.com/your-link
 ```
 
-## 2. The Xtream Codes test server
+## 2. The Cloudflare workers
+
+Both run on the Cloudflare account that hosts `zaplist.workers.dev` (free plan).
+
+### Relay for "Add from your phone"
+
+The "Add a source" screen shows a QR code. It opens a page served by `relay/worker.js` where the user
+types their playlist on the phone; the relay passes it to the TV, encrypted end to end (the key is
+only in the QR code). It is part of the app, so keep it running for as long as the app is in the
+store; if it is down, only this option fails. It must answer at **<https://add.zaplist.workers.dev>**,
+the address in `src/data/relay.ts`. It uses a Durable Object (included in the free plan), which the
+dashboard's code editor can't set up, so deploy it with Cloudflare's CLI:
+
+```powershell
+npx wrangler login                                  # sign in to the Cloudflare account in the browser
+npx wrangler deploy --config relay/wrangler.toml
+```
+
+Then open <https://add.zaplist.workers.dev> on a phone: it should ask you to scan the code on the TV.
+Leave the worker's logs off (the default). Redeploy the same way after changing `relay/worker.js`.
+If the account's subdomain ever changes, change `RELAY_URL` in `src/data/relay.ts` and the address in
+`store/privacy-policy.md`, then release an update.
+
+### Xtream Codes test server
 
 LG's testers can only try an Xtream Codes login against a server that answers like a provider.
 `store/xtream-test-server.js` is one: it accepts the login `zaplist` / `review` and serves the same
@@ -109,6 +133,8 @@ Checklist item whose result is still empty. In particular:
 - [ ] With the pointer: holding OK on a channel opens its menu; in Favorites, *Move* shows arrows
       that reorder the channel.
 - [ ] The Xtream Codes test server from page 6 logs in and its channels play.
+- [ ] Add from your phone: scan the QR code on "Add a source" with a phone and enter the test
+      playlist there; it appears in the TV's form within a few seconds and saves.
 - [ ] The LG Content Store on the TV has no other app called "Zaplist": LG rejects a title another
       app already uses. Web searches found no app or trademark with this name, but they can't see
       the store.

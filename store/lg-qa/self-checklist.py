@@ -39,7 +39,7 @@ ITEMS = {
     12: ('NA', 'No on-screen Exit button.'),
     13: ('Pass', ''),
     14: ('Pass', 'If the network drops, a message shows and playback resumes when the connection returns.'),
-    15: ('Pass', 'Playlist name and URL, Xtream login, guide URL and search are standard input fields using the LG virtual keyboard.'),
+    15: ('Pass', 'Playlist name and URL, Xtream login, guide URL and search are standard input fields using the LG virtual keyboard. Playlists can also be typed on a phone through the QR code on the form.'),
     16: ('Pass', ''),
     17: ('Pass', 'Standard input fields: the keyboard\'s own buttons, including voice input, enter text normally.'),
     18: ('NA', 'No terms of service.'),

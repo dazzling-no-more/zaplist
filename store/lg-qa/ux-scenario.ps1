@@ -296,12 +296,13 @@ try {
   }
   $login = & $s 6
   Write-Screen $login '4. Detailed Login Information' '1. Adding a playlist (the app has no user accounts)' (Join-Path $shots '6-add-source.png') `
-    @(@(397, 35, 326, 54), @(400, 100, 668, 80), @(400, 188, 668, 80), @(400, 276, 668, 80), @(400, 365, 182, 52)) `
-    @('Source type: M3U playlist or Xtream Codes login', 'Name shown in the source list', 'Playlist URL (M3U/M3U8)', 'TV guide (XMLTV) URL, optional', 'Check and save: downloads the playlist and saves it') `
+    @(@(397, 35, 326, 54), @(400, 100, 668, 80), @(400, 188, 668, 80), @(400, 276, 668, 80), @(400, 365, 182, 52), @(54, 92, 308, 338)) `
+    @('Source type: M3U playlist or Xtream Codes login', 'Name shown in the source list', 'Playlist URL (M3U/M3U8)', 'TV guide (XMLTV) URL, optional', 'Check and save: downloads the playlist and saves it', 'Or use your phone: fills this form from a phone') `
     @(
       'Zaplist has no sign-in, account or activation, and it includes no channels: users add a playlist from their TV provider.',
       'To test: on the start page press OK on "Add a playlist", enter any name and the test playlist URL from the table, then press "Check and save". Home opens with 5 channels in 2 categories; the TV guide fills in moments later.',
-      $xtreamHow
+      $xtreamHow,
+      'Optional: the QR code opens a web page on a phone where the playlist can be typed instead. It is sent encrypted (the key is in the QR code) and fills this form for "Check and save".'
     ) `
     (@((Section 'Test playlist (no account needed)'), (Item '1' $PlaylistUrl), (Section 'Xtream Codes test account')) + $xtreamRows + @((Section 'Activation codes'), (Item '-' 'Not applicable')))
 

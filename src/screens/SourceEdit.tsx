@@ -1,12 +1,15 @@
+import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { useMemo, useState } from 'react'
 import { guide } from '../data/guide'
 import { library, newSourceId, useLibrary } from '../data/library'
 import type { Source } from '../data/models'
+import type { PhoneEntry } from '../data/relay'
 import { normalizeHost } from '../data/xtream'
 import { t, type StringKey } from '../i18n'
 import { Button } from '../ui/Button'
 import { describeError, describeProgress, formatCount } from '../ui/format'
 import { backStack, useScreenFocus, type ScreenProps } from '../ui/navigation'
+import { PhonePanel } from '../ui/PhonePanel'
 import { Region } from '../ui/Region'
 import { TextField } from '../ui/TextField'
 
@@ -64,6 +67,22 @@ export function SourceEditScreen({ entry }: ScreenProps<'sourceEdit'>) {
     }
   }
 
+  /** Fills the form with what the user entered on their phone; they check it and save on the TV. */
+  const fill = (entry: PhoneEntry) => {
+    if (saving) return
+    setKind(entry.kind)
+    if (entry.name) setName(entry.name)
+    if (entry.kind === 'm3u') setUrl(entry.url)
+    else {
+      setHost(entry.host)
+      setUsername(entry.username)
+      setPassword(entry.password)
+    }
+    if (entry.epgUrl) setEpgUrl(entry.epgUrl)
+    setMessage({ text: t('phone.received'), error: false })
+    setFocus('source-save')
+  }
+
   const status = saving ? { text: describeProgress(saving), error: false } : message
   const count = useMemo(() => library.getState().channels.filter((c) => c.sourceId === id).length, [sources])
 
@@ -72,6 +91,7 @@ export function SourceEditScreen({ entry }: ScreenProps<'sourceEdit'>) {
       <div className="sidebar">
         <h1>{t(existing ? 'source.editTitle' : 'source.addTitle')}</h1>
         {existing && <p className="dim">{t('sources.channels', { count: formatCount(count) })}</p>}
+        <PhonePanel onReceive={fill} />
       </div>
       <Region focusKey="source-form" className="content form">
         <div className="segmented">

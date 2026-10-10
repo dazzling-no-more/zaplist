@@ -96,6 +96,12 @@ const en = {
   'source.required': 'Fill in “{field}”.',
   'source.saved': 'Saved: {count} channel.|Saved: {count} channels.',
 
+  'phone.title': 'Or use your phone',
+  'phone.scan': 'Scan the code with your phone’s camera and enter the playlist there. It appears in this form, ready to save.',
+  'phone.received': 'Received from your phone. Check it, then press “Check and save”.',
+  'phone.expired': 'The code has expired.',
+  'phone.newCode': 'New code',
+
   'progress.connecting': 'Connecting…',
   'progress.download': 'Downloading… {size}',
   'progress.parse': 'Reading the channel list…',

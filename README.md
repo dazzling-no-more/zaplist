@@ -9,6 +9,9 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 - **Sources**: several M3U URLs and Xtream Codes logins, each checked by downloading it before it is
   saved. Xtream accounts show their expiry date and connection limit. Refresh, edit or delete
   sources at any time.
+- **Add from your phone**: the source form shows a QR code. It opens a page on the phone where the
+  playlist or login can be typed; it arrives in the TV's form, end-to-end encrypted (the key is only
+  in the QR code), through a small relay (`relay/`, a Cloudflare Worker) that can't read it.
 - **Browse**: sidebar with Search, TV guide, Settings, Favorites, Recent, All channels and the playlist
   categories; a virtualized channel list (50,000+ channels) with logos, numbers and the programme on now.
 - **Search** across channel names (ignores case, accents and punctuation), updating as you type.
@@ -137,6 +140,7 @@ tests/                 Vitest tests and fixtures
 store/                 LG Content Store material: icon, screenshots, listing text, test playlist, privacy policy
 store/lg-qa/           LG's UX scenario and Self Checklist, filled in, and the scripts that build them
 store/xtream-test-server.js  Xtream Codes test server for LG's testers (a Cloudflare Worker)
+relay/                 relay and phone page for "Add from your phone" (a Cloudflare Worker)
 docs/PUBLISHING.md     how to submit the app to the LG Content Store
 ```
 

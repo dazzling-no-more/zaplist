@@ -1,0 +1,16 @@
+# The relay for "Add from your phone". Deploy with Cloudflare's CLI (needs the Cloudflare account):
+#   npx wrangler login
+#   npx wrangler deploy --config relay/wrangler.toml
+# It is served at https://add.<account subdomain>.workers.dev; src/data/relay.ts names that address.
+name = "add"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "Session"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Session"]

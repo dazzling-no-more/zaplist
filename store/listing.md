@@ -29,6 +29,7 @@ Xtream Codes login from your provider. Only watch content you have the right to 
 
 Features:
 • Add several M3U playlists and Xtream Codes logins
+• Type them on your phone: scan the code on the TV, and the playlist appears there, encrypted on the way
 • Fast channel list for very large playlists, with categories and channel logos
 • Search channels as you type
 • Favorites in your own order, and recently watched channels

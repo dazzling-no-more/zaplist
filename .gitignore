@@ -3,3 +3,4 @@ dist/
 out/
 *.log
 tests/fixtures/large.m3u
+.wrangler/
