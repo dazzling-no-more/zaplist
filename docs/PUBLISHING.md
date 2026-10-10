@@ -8,14 +8,15 @@ two files online, a test on a real TV, a seller account and the submission form.
 
 | File | Used for |
 | ---- | -------- |
-| `out/zaplist.player_1.0.0_all.ipk` | The app package (built in step 3) |
-| `store/lg-qa/Zaplist_UX_Scenario_1.0.0.pptx` | LG's UX scenario document, filled in (built in step 2) |
-| `store/lg-qa/Zaplist_Self_Checklist_1.0.0.xlsx` | LG's Self Checklist: comments and N/A items filled in; the results that need a TV test stay empty until step 4 |
+| `out/zaplist.player_1.0.0_all.ipk` | The app package (built in step 4) |
+| `store/lg-qa/Zaplist_UX_Scenario_1.0.0.pptx` | LG's UX scenario document, filled in (checked in step 3) |
+| `store/lg-qa/Zaplist_Self_Checklist_1.0.0.xlsx` | LG's Self Checklist: comments and N/A items filled in; the results that need a TV test stay empty until step 5 |
 | `store/listing.md` | App name, descriptions, category, image list for the form |
 | `store/icon-400.png` | Store icon, 400×400 |
 | `store/screenshots/*.png` | Primary + 5 secondary screenshots, 1280×720 |
 | `public/splash.png` | Launcher/splash background, 1920×1080 (also inside the IPK) |
-| `store/test-playlist.m3u` | Playlist for LG's testers (public test streams only) |
+| `store/test-playlist.m3u`, `store/test-guide.xml.gz` | Playlist and TV guide for LG's testers (public test streams only) |
+| `store/xtream-test-server.js` | Xtream Codes test server for LG's testers (deployed in step 2) |
 | `store/privacy-policy.md` | Privacy policy, in case the form asks for a URL |
 | `store/lg-qa/*.ps1`, `*.py` | Scripts that rebuild the two LG documents from LG's templates |
 | `store/art/*.svg` | Sources of the icon and splash |
@@ -42,12 +43,32 @@ itself):
 pwsh store/lg-qa/ux-scenario.ps1 -PlaylistUrl https://tinyurl.com/your-link
 ```
 
-## 2. Check the UX scenario
+## 2. Deploy the Xtream Codes test server
+
+LG's testers can only try an Xtream Codes login against a server that answers like a provider.
+`store/xtream-test-server.js` is one: it accepts the login `zaplist` / `review` and serves the same
+test channels and guide as the test playlist. It runs free on Cloudflare Workers:
+
+1. Create a Cloudflare account at [dash.cloudflare.com](https://dash.cloudflare.com) (for example
+   with nomoredazzling@gmail.com) and choose a workers.dev subdomain when asked.
+2. *Workers & Pages* → *Create* → *Create Worker*; name it `zaplist-test`; *Deploy*.
+3. *Edit code*, replace the sample with the contents of `store/xtream-test-server.js`, *Deploy*.
+4. Open `https://zaplist-test.<your-subdomain>.workers.dev`: it should say "Zaplist test server for
+   LG app review".
+5. Put it into the UX scenario (page 6 and the appendix then name the server and the login):
+
+```powershell
+pwsh store/lg-qa/ux-scenario.ps1 -XtreamServer https://zaplist-test.<your-subdomain>.workers.dev
+```
+
+Without this step the UX scenario tells LG that Xtream Codes needs a provider account.
+
+## 3. Check the UX scenario
 
 Open `store/lg-qa/Zaplist_UX_Scenario_1.0.0.pptx` and page through it once. It names the support
-e-mail (nomoredazzling@gmail.com) and the test playlist address.
+e-mail (nomoredazzling@gmail.com), the test playlist address and, after step 2, the Xtream test server.
 
-## 3. Build the package
+## 4. Build the package
 
 ```sh
 npm ci
@@ -56,7 +77,7 @@ npm run build      # also checks the bundle for webOS 4 (Chromium 53)
 npm run package    # → out/zaplist.player_1.0.0_all.ipk
 ```
 
-## 4. Test on your TV
+## 5. Test on your TV
 
 Zaplist has been tested in desktop Chrome only. LG tests on real TVs, and the Self Checklist states
 results for a TV, so run it on one first; a rejection costs a review round.
@@ -84,7 +105,7 @@ Checklist item whose result is still empty. In particular:
 - [ ] Typing with the LG keyboard in the playlist, login and search fields: upper and lower case, the
       < > cursor buttons, voice input.
 
-If something fails, fix it and rebuild (step 3); LG rejects any app with a failed item. When
+If something fails, fix it and rebuild (step 4); LG rejects any app with a failed item. When
 everything passes, fill in the checklist's results:
 
 ```sh
@@ -94,16 +115,16 @@ python store/lg-qa/self-checklist.py --tv-verified
 Also search the LG Content Store on the TV for "Zaplist": LG rejects a title that another app in the
 store already uses. Web searches found no app or trademark with this name, but they can't see the store.
 
-## 5. Register as a seller
+## 6. Register as a seller
 
 1. Open [LG Seller Lounge](https://seller.lgappstv.com) and sign in with an LG account (create one
    from the sign-in page if needed).
 2. Register as an **individual seller** (a company can register as a corporate seller instead). You
    must be 18 or older. The seller name you enter is shown in the store next to the app.
 3. Download the Seller Lounge guide: *APP MANAGEMENT* → *LG Seller Lounge Guide Download*. It
-   describes every field of the form; where it differs from step 6, follow it.
+   describes every field of the form; where it differs from step 7, follow it.
 
-## 6. Submit
+## 7. Submit
 
 In Seller Lounge, *APP MANAGEMENT* → *App Submission*. The field names below come from LG's pages
 and third-party guides and may differ slightly.
@@ -121,10 +142,11 @@ and third-party guides and may differ slightly.
    app itself: no built-in content, users load their own playlists, parental control PIN.
 5. **Test info**: upload `Zaplist_Self_Checklist_1.0.0.xlsx` and `Zaplist_UX_Scenario_1.0.0.pptx`.
    As test account information: "No account needed: add the test playlist from page 6 of the UX
-   scenario", followed by the playlist URL.
+   scenario", followed by the playlist URL, and, after step 2, the Xtream test server with the login
+   `zaplist` / `review`.
 6. Save each tab, then submit.
 
-## 7. Review
+## 8. Review
 
 LG tests in three stages: a pretest of the submitted information, a function test and a content
 test. A rejection comes back with a list of issues; fix them, rebuild and resubmit (raise the

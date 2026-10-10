@@ -136,6 +136,7 @@ src/i18n.ts            every user-facing string
 tests/                 Vitest tests and fixtures
 store/                 LG Content Store material: icon, screenshots, listing text, test playlist, privacy policy
 store/lg-qa/           LG's UX scenario and Self Checklist, filled in, and the scripts that build them
+store/xtream-test-server.js  Xtream Codes test server for LG's testers (a Cloudflare Worker)
 docs/PUBLISHING.md     how to submit the app to the LG Content Store
 ```
 

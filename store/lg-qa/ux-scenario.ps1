@@ -3,13 +3,15 @@ Builds the UX scenario document LG Seller Lounge asks for, from LG's own templat
 (ux_scenario_document_*.ppt in "documents for app QA"), with the screenshots in store/.
 Needs Windows with Microsoft PowerPoint.
 
-  pwsh store/lg-qa/ux-scenario.ps1 -PlaylistUrl https://example.com/zaplist.m3u [-Email support@example.com]
+  pwsh store/lg-qa/ux-scenario.ps1 [-XtreamServer https://zaplist-test.<you>.workers.dev] [-PlaylistUrl ...] [-Email ...]
 
 Writes store/lg-qa/Zaplist_UX_Scenario_<version>.pptx. -PreviewDir also exports every slide as PNG.
 #>
 param(
   [string]$Email = 'nomoredazzling@gmail.com',
   [string]$PlaylistUrl = 'https://raw.githubusercontent.com/dazzling-no-more/zaplist/main/store/test-playlist.m3u',
+  # Address of the deployed store/xtream-test-server.js; without it, Xtream is described as needing a provider account.
+  [string]$XtreamServer = '',
   [datetime]$Date = (Get-Date),
   [string]$Template,
   [string]$PreviewDir
@@ -282,6 +284,16 @@ try {
   )
 
   # 6. Login information: the app has no accounts; testers add a playlist.
+  $xtreamRows = if ($XtreamServer) {
+    @((Item '1' "Server address: $XtreamServer"), (Item '2' 'Username: zaplist'), (Item '3' 'Password: review'))
+  } else {
+    @((Item '-' 'Needs an account from an IPTV provider; not supplied. The M3U path covers the same screens.'))
+  }
+  $xtreamHow = if ($XtreamServer) {
+    'To test Xtream Codes: choose the Xtream Codes tab and enter the test server, username and password from the table. It serves the same test channels and guide.'
+  } else {
+    'The Xtream Codes tab asks for a server address, username and password, and checks the login before saving.'
+  }
   $login = & $s 6
   Write-Screen $login '4. Detailed Login Information' '1. Adding a playlist (the app has no user accounts)' (Join-Path $shots '6-add-source.png') `
     @(@(397, 35, 326, 54), @(400, 100, 668, 80), @(400, 188, 668, 80), @(400, 276, 668, 80), @(400, 365, 182, 52)) `
@@ -289,9 +301,9 @@ try {
     @(
       'Zaplist has no sign-in, account or activation, and it includes no channels: users add a playlist from their TV provider.',
       'To test: on the start page press OK on "Add a playlist", enter any name and the test playlist URL from the table, then press "Check and save". Home opens with 5 channels in 2 categories; the TV guide fills in moments later.',
-      'The Xtream Codes tab asks for a server address, username and password, and checks the login before saving.'
+      $xtreamHow
     ) `
-    @((Section 'Test playlist (no account needed)'), (Item '1' $PlaylistUrl), (Section 'Xtream Codes test account'), (Item '-' 'Needs an account from an IPTV provider; not supplied. The M3U path covers the same screens.'), (Section 'Activation codes'), (Item '-' 'Not applicable'))
+    (@((Section 'Test playlist (no account needed)'), (Item '1' $PlaylistUrl), (Section 'Xtream Codes test account')) + $xtreamRows + @((Section 'Activation codes'), (Item '-' 'Not applicable')))
 
   # 7-8. Main pages
   Write-Screen (& $s 7) '5. Main Page Description' '1. Start page (first launch)' (Join-Path $images 'welcome.png') `
@@ -404,7 +416,7 @@ try {
         'If you have anything to let the LG QA Management know, please comment here. Any detailed references will be welcome.',
         '',
         '1. Zaplist includes no channels. Add the test playlist from 4 to test playback and the TV guide; it uses public test streams (Blender Foundation open movies, Apple and Google test streams) and comes with guide data.',
-        '2. Xtream Codes sources need an account from an IPTV provider, which we can''t supply; the M3U path covers the same screens.',
+        $(if ($XtreamServer) { "2. To test Xtream Codes, use the test server $XtreamServer with username zaplist and password review (page 6). It serves the same test channels and guide." } else { '2. Xtream Codes sources need an account from an IPTV provider, which we can''t supply; the M3U path covers the same screens.' }),
         '3. Back on the first screen calls webOS.platformBack(), so the TV shows its exit popup or Home screen depending on the webOS version.',
         '4. No credentials are hard-coded. The words "password", "credential" and "token" in the package come from the Xtream Codes API parameters, the login form field, the core-js URL polyfill (URL.password) and the XHR/fetch withCredentials options in hls.js and mpegts.js. Playlist URLs, logins, the cached channel lists and guide addresses, and the parental PIN are stored only on the TV, encrypted (AES-GCM, key generated on the TV).',
         "5. Contact: $Email"
