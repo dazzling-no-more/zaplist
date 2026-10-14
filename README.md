@@ -22,6 +22,11 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
   picture shape (fit, zoom, fill, 16:9, 4:3), automatic retries and a readable error otherwise. Playback
   stops when the app is hidden or the network drops and resumes on its own. The last channel reopens
   when the app starts.
+- **Movies and series**: from Xtream Codes servers (VOD and series lists, episodes and details on
+  request) and from M3U playlists (`/movie/` and `/series/` links, video files, `S01E02` names grouped
+  into series). Poster grids by category, details, seasons and episodes; the player seeks, resumes where
+  you stopped and goes on to the next episode; Continue watching lists what you started. Movie and
+  series categories can be locked with the parental PIN like channel categories.
 - **TV guide**: XMLTV (plain or gzipped) from the playlist, the Xtream server or a URL you enter; the
   Xtream short EPG as a fallback. Grid guide, time offset, automatic refresh every 6/12/24 hours.
 - **Parental control**: a 4-digit PIN locks the categories you choose until it is entered.
@@ -44,6 +49,10 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 |            | Red / Yellow                 | Favorite / picture shape                                |
 |            | Play, Pause, Stop            | Resume, pause, leave the player                         |
 | Guide      | Arrows, OK                   | Move through programmes; OK watches what's on now       |
+| Movie/episode player | Left/Right         | 10 s back / ahead (on the progress bar too)             |
+|            | Rewind / Fast forward        | 30 s back / ahead                                       |
+|            | OK, Play/Pause               | Pause or resume                                         |
+|            | Up/Down, Info                | Controls: audio, subtitles, picture, next episode       |
 
 Every action also works with arrows and OK alone (the Magic Remote has no color keys). In a desktop
 browser, Escape and Backspace act as Back, and double-clicking the picture toggles full screen.
@@ -69,8 +78,8 @@ the URLs directly.
 
 Test data (all legal and public):
 
-- `tests/fixtures/dev-streams.m3u`: public HLS and MPEG-TS test streams plus two broken ones for the
-  error paths. Add it as a source with `http://localhost:5173/tests/fixtures/dev-streams.m3u`.
+- `tests/fixtures/dev-streams.m3u`: public HLS and MPEG-TS test streams, two broken ones for the
+  error paths, and a movie and a two-episode series (Blender open movie files). Add it as a source with `http://localhost:5173/tests/fixtures/dev-streams.m3u`.
 - `node scripts/make-large-playlist.mjs [count]` writes a 50,000-channel playlist to
   `tests/fixtures/large.m3u` (not committed) for scale testing.
 - The [iptv-org](https://github.com/iptv-org/iptv) playlist, `https://iptv-org.github.io/iptv/index.m3u`.

@@ -40,8 +40,8 @@ function initials(name: string): string {
   return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? '').slice(0, 2)).toUpperCase()
 }
 
-/** Channel logo, loaded lazily, with the channel's initials as the placeholder. */
-export function Logo({ url, name }: { url?: string; name: string }) {
+/** A logo or poster loaded lazily: the image while it loads and once it has, `false` for the placeholder. */
+function LazyImage({ url, onState }: { url?: string; onState: (shown: boolean) => void }) {
   const [state, setState] = useState<'idle' | 'loading' | 'ok' | 'failed'>(() =>
     !url || failed.has(url) ? 'failed' : loaded.has(url) ? 'loading' : 'idle',
   )
@@ -50,27 +50,46 @@ export function Logo({ url, name }: { url?: string; name: string }) {
     const timer = setTimeout(() => setState('loading'), LOAD_DELAY_MS)
     return () => clearTimeout(timer)
   }, [])
+  useEffect(() => onState(state === 'ok'), [state])
 
+  if ((state !== 'loading' && state !== 'ok') || !url) return null
+  return (
+    <img
+      src={url}
+      alt=""
+      // Some logo hosts (imgur) refuse hotlinked images that carry a Referer.
+      referrerPolicy="no-referrer"
+      className={state === 'ok' ? 'shown' : ''}
+      onLoad={() => {
+        loaded.add(url)
+        setState('ok')
+      }}
+      onError={() => {
+        failed.add(url)
+        setState('failed')
+      }}
+    />
+  )
+}
+
+/** Channel logo, loaded lazily, with the channel's initials as the placeholder. */
+export function Logo({ url, name }: { url?: string; name: string }) {
+  const [shown, setShown] = useState(false)
   return (
     <div className="logo">
-      {(state === 'loading' || state === 'ok') && url && (
-        <img
-          src={url}
-          alt=""
-          // Some logo hosts (imgur) refuse hotlinked images that carry a Referer.
-          referrerPolicy="no-referrer"
-          className={state === 'ok' ? 'shown' : ''}
-          onLoad={() => {
-            loaded.add(url)
-            setState('ok')
-          }}
-          onError={() => {
-            failed.add(url)
-            setState('failed')
-          }}
-        />
-      )}
-      {state !== 'ok' && <span>{initials(name)}</span>}
+      <LazyImage url={url} onState={setShown} />
+      {!shown && <span>{initials(name)}</span>}
+    </div>
+  )
+}
+
+/** Movie or series poster (2:3), with the title as the placeholder. */
+export function Poster({ url, name, className }: { url?: string; name: string; className?: string }) {
+  const [shown, setShown] = useState(false)
+  return (
+    <div className={`poster${className ? ' ' + className : ''}`}>
+      {!shown && <span>{name}</span>}
+      <LazyImage url={url} onState={setShown} />
     </div>
   )
 }

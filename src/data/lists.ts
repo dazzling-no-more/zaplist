@@ -37,21 +37,27 @@ export function channelsByCategory(channels: readonly Channel[]): Map<string, Ch
 export const isCategoryLocked = (categoryId: string | undefined, prefs: Pick<Prefs, 'pin' | 'lockedCategories'>): boolean =>
   !!prefs.pin && !!categoryId && prefs.lockedCategories.includes(categoryId)
 
+/** The sidebar for live TV: Favorites, Recent, All channels and the live categories. */
 export function buildGroups(categories: readonly Category[], sources: readonly Source[], prefs: Prefs, labels: GroupLabels): ChannelGroup[] {
-  const sourceNames = new Map(sources.map((s) => [s.id, s.name]))
-  const nameCount = new Map<string, number>()
-  for (const c of categories) nameCount.set(c.name, (nameCount.get(c.name) ?? 0) + 1)
   return [
     { id: FAVORITES, name: labels.favorites, locked: false },
     { id: RECENT, name: labels.recent, locked: false },
     { id: ALL, name: labels.all, locked: false },
-    ...categories.map((c) => ({
-      id: c.id,
-      name: c.name,
-      detail: (nameCount.get(c.name) ?? 0) > 1 ? sourceNames.get(c.sourceId) : undefined,
-      locked: isCategoryLocked(c.id, prefs),
-    })),
+    ...categoryGroups(categories.filter((c) => !c.kind), sources, prefs),
   ]
+}
+
+/** One group per category; categories that share a name are told apart by their source. */
+export function categoryGroups(categories: readonly Category[], sources: readonly Source[], prefs: Prefs): ChannelGroup[] {
+  const sourceNames = new Map(sources.map((s) => [s.id, s.name]))
+  const nameCount = new Map<string, number>()
+  for (const c of categories) nameCount.set(c.name, (nameCount.get(c.name) ?? 0) + 1)
+  return categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    detail: (nameCount.get(c.name) ?? 0) > 1 ? sourceNames.get(c.sourceId) : undefined,
+    locked: isCategoryLocked(c.id, prefs),
+  }))
 }
 
 /**
@@ -75,15 +81,15 @@ export function channelsForGroup(
   return byCategory.get(groupId) ?? []
 }
 
-const searchKeys = new WeakMap<readonly Channel[], string[]>()
+const searchKeys = new WeakMap<readonly { name: string }[], string[]>()
 
-/** Channels whose name contains the query (ignoring case, accents, spaces and punctuation). */
-export function searchChannels(channels: readonly Channel[], query: string): Channel[] {
+/** Channels, movies or series whose name contains the query (ignoring case, accents, spaces and punctuation). */
+export function searchChannels<T extends { name: string }>(items: readonly T[], query: string): T[] {
   const needle = normalizeName(query)
   if (!needle) return []
-  let keys = searchKeys.get(channels)
-  if (!keys) searchKeys.set(channels, (keys = channels.map((c) => normalizeName(c.name))))
-  const results: Channel[] = []
-  for (let i = 0; i < channels.length; i++) if (keys[i].indexOf(needle) >= 0) results.push(channels[i])
+  let keys = searchKeys.get(items)
+  if (!keys) searchKeys.set(items, (keys = items.map((c) => normalizeName(c.name))))
+  const results: T[] = []
+  for (let i = 0; i < items.length; i++) if (keys[i].indexOf(needle) >= 0) results.push(items[i])
   return results
 }

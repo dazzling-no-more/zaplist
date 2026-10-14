@@ -13,6 +13,8 @@ export interface IngestProgress {
 export interface IngestResult {
   source: Source
   channels: number
+  movies: number
+  series: number
   categories: number
 }
 

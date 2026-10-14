@@ -11,14 +11,17 @@ import { Region } from '../../ui/Region'
 import { revealChild } from '../../ui/scroll'
 
 export function SourcesSection() {
-  const { sources, channels, progress } = useLibrary()
+  const { sources, channels, movies, series, progress } = useLibrary()
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [deleting, setDeleting] = useState<Source>()
   const counts = useMemo(() => {
-    const result: Record<string, number> = {}
-    for (const channel of channels) result[channel.sourceId] = (result[channel.sourceId] ?? 0) + 1
+    const result: Record<string, { channels: number; movies: number; series: number }> = {}
+    const count = (sourceId: string) => (result[sourceId] ??= { channels: 0, movies: 0, series: 0 })
+    for (const channel of channels) count(channel.sourceId).channels++
+    for (const movie of movies) count(movie.sourceId).movies++
+    for (const show of series) count(show.sourceId).series++
     return result
-  }, [channels])
+  }, [channels, movies, series])
 
   // The list scrolls inside a fixed height so "Add a source" stays on screen however many there are.
   const list = useRef<HTMLDivElement>(null)
@@ -47,7 +50,9 @@ export function SourcesSection() {
           const busy = progress[source.id]
           const details = [
             t(source.kind === 'm3u' ? 'sources.m3u' : 'sources.xtream'),
-            t('sources.channels', { count: formatCount(counts[source.id] ?? 0) }),
+            t('sources.channels', { count: formatCount(counts[source.id]?.channels ?? 0) }),
+            counts[source.id]?.movies ? t('sources.movies', { count: formatCount(counts[source.id].movies) }) : '',
+            counts[source.id]?.series ? t('sources.series', { count: formatCount(counts[source.id].series) }) : '',
             source.refreshedAt ? t('sources.updated', { date: formatDate(source.refreshedAt) }) : '',
           ]
           const account = source.kind === 'xtream' ? source.account : undefined

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { library, useLibrary } from '../data/library'
 import { ALL, channelsByCategory, channelsForGroup, searchChannels } from '../data/lists'
+import type { Channel, Movie, Series } from '../data/models'
 import { useUnlocked } from '../data/parental'
 import { toggleFavorite, usePrefs } from '../data/prefs'
+import { isVodLocked } from '../data/vod'
 import { t } from '../i18n'
 import { ChannelRow } from '../ui/ChannelRow'
 import { formatCount } from '../ui/format'
-import { useScreenFocus, type ScreenProps } from '../ui/navigation'
+import { Poster } from '../ui/Logo'
+import { navigate, useScreenFocus, type ScreenProps } from '../ui/navigation'
 import { playChannel } from '../ui/play'
 import { Region } from '../ui/Region'
 import { clampIndex } from '../ui/scroll'
@@ -17,13 +20,15 @@ const DEBOUNCE_MS = 300
 const ROW = 84
 const LIST_HEIGHT = 672
 
+type Result = { kind: 'channel'; item: Channel } | { kind: 'movie'; item: Movie } | { kind: 'series'; item: Series }
+
 interface SearchMemo {
   query?: string
   index?: number
 }
 
 export function SearchScreen({ entry }: ScreenProps<'search'>) {
-  const { channels } = useLibrary()
+  const { channels, movies, series } = useLibrary()
   const prefs = usePrefs()
   const unlocked = useUnlocked()
   const memo = entry.memo as SearchMemo
@@ -46,7 +51,19 @@ export function SearchScreen({ entry }: ScreenProps<'search'>) {
     () => channelsForGroup(ALL, channels, (id) => library.channel(id), channelsByCategory(channels), prefs, unlocked),
     [channels, prefs.pin, prefs.lockedCategories, unlocked],
   )
-  const results = useMemo(() => searchChannels(searchable, debounced), [searchable, debounced])
+  // Channels first, then movies, then series; locked categories stay out here too.
+  const results = useMemo((): Result[] => {
+    const shown = (item: Movie | Series) => !isVodLocked(item, prefs, unlocked)
+    return [
+      ...searchChannels(searchable, debounced).map((item): Result => ({ kind: 'channel', item })),
+      ...searchChannels(movies, debounced)
+        .filter(shown)
+        .map((item): Result => ({ kind: 'movie', item })),
+      ...searchChannels(series, debounced)
+        .filter(shown)
+        .map((item): Result => ({ kind: 'series', item })),
+    ]
+  }, [searchable, movies, series, debounced, prefs.pin, prefs.lockedCategories, unlocked])
   const current = clampIndex(index, results.length)
   Object.assign(memo, { query, index: current })
 
@@ -66,27 +83,42 @@ export function SearchScreen({ entry }: ScreenProps<'search'>) {
         <VirtualList
           focusKey="search-results"
           items={results}
-          itemKey={(c) => c.id}
+          itemKey={(r) => r.item.id}
           rowHeight={ROW}
           height={LIST_HEIGHT}
           index={current}
           onIndexChange={setIndex}
-          onSelect={(channel) => playChannel(channel, ALL)}
-          onKey={(key, channel) => {
-            if (key !== 'red' || !channel) return false
-            toggleFavorite(channel.id)
+          onSelect={(r) => {
+            if (r.kind === 'channel') playChannel(r.item, ALL)
+            else navigate(r.kind === 'movie' ? { name: 'movie', movieId: r.item.id } : { name: 'series', seriesId: r.item.id })
+          }}
+          onKey={(key, r) => {
+            if (key !== 'red' || r?.kind !== 'channel') return false
+            toggleFavorite(r.item.id)
             return true
           }}
-          onRowAction={(channel) => toggleFavorite(channel.id)}
-          renderRow={(channel, _, focused, action) => (
-            <ChannelRow
-              channel={channel}
-              focused={focused}
-              actionFocused={action}
-              favorite={prefs.favorites.includes(channel.id)}
-              onToggleFavorite={() => toggleFavorite(channel.id)}
-            />
-          )}
+          onRowAction={(r) => {
+            if (r.kind === 'channel') toggleFavorite(r.item.id)
+          }}
+          renderRow={(r, _, focused, action) =>
+            r.kind === 'channel' ? (
+              <ChannelRow
+                channel={r.item}
+                focused={focused}
+                actionFocused={action}
+                favorite={prefs.favorites.includes(r.item.id)}
+                onToggleFavorite={() => toggleFavorite(r.item.id)}
+              />
+            ) : (
+              <div className={`channel-row${focused ? ' focused' : ''}`}>
+                <Poster url={r.item.poster} name={r.item.name} className="poster-small" />
+                <div className="channel-text">
+                  <div className="channel-name">{r.item.name}</div>
+                </div>
+                <span className="result-kind">{t(r.kind === 'movie' ? 'search.movie' : 'search.series')}</span>
+              </div>
+            )
+          }
         />
       </Region>
     </div>

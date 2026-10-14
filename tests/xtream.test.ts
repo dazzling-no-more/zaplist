@@ -6,10 +6,13 @@ import {
   liveUrls,
   normalizeHost,
   parseAccount,
+  parseSeriesInfo,
   parseShortEpg,
+  parseVodInfo,
   xmltvUrl,
   XtreamAuthError,
   xtreamToPlaylist,
+  xtreamVod,
 } from '../src/data/xtream'
 
 const json = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'))
@@ -126,5 +129,76 @@ describe('parseShortEpg', () => {
       { start: 1791547200000, stop: 1791554400000, title: 'Morning Show: Café', description: undefined },
       { start: 1791554400000, stop: 1791561600000, title: 'Late Match', description: 'Second half — live' },
     ])
+  })
+})
+
+describe('movies and series', () => {
+  const vod = xtreamVod(
+    source,
+    [
+      { category_id: 10, category_name: 'Action' },
+      { category_id: 11, category_name: 'Empty' },
+    ],
+    [
+      { stream_id: 9001, name: 'Film One', stream_icon: 'http://img/1.jpg', category_id: '10', container_extension: 'mkv' },
+      { stream_id: '9002', name: 'Film Two', category_id: 99 },
+      { name: 'No id' },
+    ],
+    [{ category_id: '20', category_name: 'Drama' }],
+    [{ series_id: 70, name: 'Show', cover: 'http://img/show.jpg', plot: 'Plot', releaseDate: '2020-01-02', category_id: 20 }],
+  )
+
+  it('maps movies with their file URLs, and keeps only categories that have something', () => {
+    expect(vod.movies[0]).toEqual({
+      id: 'x1:m:9001',
+      sourceId: 'x1',
+      categoryId: 'x1:mc:10',
+      name: 'Film One',
+      poster: 'http://img/1.jpg',
+      urls: ['http://example.com:8080/movie/demo/p%40ss%20word/9001.mkv'],
+      vodId: 9001,
+    })
+    expect(vod.movies[1].urls).toEqual(['http://example.com:8080/movie/demo/p%40ss%20word/9002.mp4'])
+    expect(vod.movies).toHaveLength(2)
+    expect(vod.categories).toEqual([
+      { id: 'x1:mc:10', sourceId: 'x1', name: 'Action', kind: 'movie' },
+      { id: 'x1:mc:99', sourceId: 'x1', name: '99', kind: 'movie' },
+      { id: 'x1:sc:20', sourceId: 'x1', name: 'Drama', kind: 'series' },
+    ])
+  })
+
+  it('maps series without episodes, which the server lists per series', () => {
+    expect(vod.series).toEqual([
+      { id: 'x1:s:70', sourceId: 'x1', categoryId: 'x1:sc:20', name: 'Show', poster: 'http://img/show.jpg', plot: 'Plot', released: '2020-01-02', seriesId: 70 },
+    ])
+  })
+
+  it('reads a series’ episodes from get_series_info', () => {
+    const episodes = parseSeriesInfo(source, {
+      episodes: {
+        '2': [{ id: '502', episode_num: 1, title: 'Two-one', season: 2, container_extension: 'mp4', info: { duration_secs: '2700', plot: 'P' } }],
+        '1': [
+          { id: 402, episode_num: '2', title: 'One-two', season: '1', container_extension: 'mkv', info: [] },
+          { id: 401, episode_num: 1, title: 'One-one', season: 1, container_extension: 'mkv' },
+        ],
+      },
+    })
+    expect(episodes.map((e) => [e.id, e.season, e.episode])).toEqual([
+      ['x1:e:401', 1, 1],
+      ['x1:e:402', 1, 2],
+      ['x1:e:502', 2, 1],
+    ])
+    expect(episodes[2]).toMatchObject({ urls: ['http://example.com:8080/series/demo/p%40ss%20word/502.mp4'], duration: 2700, plot: 'P' })
+  })
+
+  it('reads movie details from get_vod_info', () => {
+    expect(parseVodInfo({ info: { description: 'About', releasedate: '2017', duration_secs: '5400', genre: 'Drama', actors: 'A, B' } })).toEqual({
+      plot: 'About',
+      released: '2017',
+      duration: 5400,
+      genre: 'Drama',
+      cast: 'A, B',
+      director: undefined,
+    })
   })
 })

@@ -1,5 +1,5 @@
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Category, Channel, Playlist, Programme, Source } from './models'
+import type { Category, Channel, Movie, Playlist, Programme, Series, Source } from './models'
 import { canSeal, newVaultKey, seal, unseal, type Sealed } from './vault'
 
 const NAME = 'iptv-player'
@@ -12,7 +12,12 @@ export interface PlaylistMeta {
   categories: Category[]
   epgUrls: string[]
   chunks: number
+  /** Chunks in `vodChunks`; absent in playlists saved before movies and series were kept apart. */
+  vodChunks?: number
 }
+
+/** A chunk of movies or of series. A series counts as one item plus one per episode it carries. */
+export type VodChunk = { movies: Movie[]; series?: undefined } | { series: Series[]; movies?: undefined }
 
 export interface GuideRecord {
   /** Guide channel key: lower-cased XMLTV id, or `name:` + normalized display name. */
@@ -32,6 +37,7 @@ interface Schema extends DBSchema {
   sources: { key: string; value: StoredSource }
   playlists: { key: string; value: Omit<PlaylistMeta, 'epgUrls'> & { epgUrls: Stored<string[]> } }
   channelChunks: { key: [string, number]; value: { sourceId: string; index: number; channels: Stored<Channel[]> } }
+  vodChunks: { key: [string, number]; value: { sourceId: string; index: number; items: Stored<VodChunk> } }
   guide: { key: string; value: GuideRecord }
   meta: { key: string; value: unknown }
   /** The vault key. Kept apart from `meta`, which "clear cache" empties. */
@@ -45,7 +51,7 @@ export type Db = IDBPDatabase<Schema>
 let opening: Promise<Db> | undefined
 
 export function db(): Promise<Db> {
-  opening ??= openDB<Schema>(NAME, 3, {
+  opening ??= openDB<Schema>(NAME, 4, {
     upgrade(database, oldVersion, _newVersion, transaction) {
       if (oldVersion < 1) {
         database.createObjectStore('sources', { keyPath: 'id' })
@@ -60,6 +66,14 @@ export function db(): Promise<Db> {
         // Older versions cached channel lists unencrypted: drop them, the library downloads them again.
         void transaction.objectStore('playlists').clear()
         void transaction.objectStore('channelChunks').clear()
+      }
+      if (oldVersion < 4) {
+        database.createObjectStore('vodChunks', { keyPath: ['sourceId', 'index'] })
+        // Playlists cached before listed movies and episodes as channels: download them again.
+        if (oldVersion >= 3) {
+          void transaction.objectStore('playlists').clear()
+          void transaction.objectStore('channelChunks').clear()
+        }
       }
     },
   })
@@ -123,21 +137,44 @@ export async function putSource(source: Source): Promise<void> {
   await (await db()).put('sources', await storeSource(source))
 }
 
-/** Replaces a source and all of its channels in one transaction. */
+/** Splits movies and series into chunks of about CHUNK_SIZE items, episodes included. */
+export function vodChunks(movies: readonly Movie[], series: readonly Series[]): VodChunk[] {
+  const chunks: VodChunk[] = []
+  for (let i = 0; i < movies.length; i += CHUNK_SIZE) chunks.push({ movies: movies.slice(i, i + CHUNK_SIZE) })
+  let current: Series[] = []
+  let size = 0
+  for (const show of series) {
+    current.push(show)
+    size += 1 + (show.episodes?.length ?? 0)
+    if (size >= CHUNK_SIZE) {
+      chunks.push({ series: current })
+      current = []
+      size = 0
+    }
+  }
+  if (current.length) chunks.push({ series: current })
+  return chunks
+}
+
+/** Replaces a source and all of its channels, movies and series in one transaction. */
 export async function savePlaylist(source: Source, playlist: Playlist): Promise<void> {
   // Encrypt first: a transaction closes while it waits for anything but IndexedDB.
   const stored = await storeSource(source)
   const epgUrls = await protect(playlist.epgUrls)
   const chunks: Stored<Channel[]>[] = []
   for (let i = 0; i < playlist.channels.length; i += CHUNK_SIZE) chunks.push(await protect(playlist.channels.slice(i, i + CHUNK_SIZE)))
+  const vod: Stored<VodChunk>[] = []
+  for (const chunk of vodChunks(playlist.movies, playlist.series)) vod.push(await protect(chunk))
 
-  const tx = (await db()).transaction(['sources', 'playlists', 'channelChunks'], 'readwrite')
+  const tx = (await db()).transaction(['sources', 'playlists', 'channelChunks', 'vodChunks'], 'readwrite')
   const writes: Promise<unknown>[] = [
     tx.objectStore('sources').put(stored),
-    tx.objectStore('playlists').put({ sourceId: source.id, categories: playlist.categories, epgUrls, chunks: chunks.length }),
+    tx.objectStore('playlists').put({ sourceId: source.id, categories: playlist.categories, epgUrls, chunks: chunks.length, vodChunks: vod.length }),
     tx.objectStore('channelChunks').delete(chunkRange(source.id)),
+    tx.objectStore('vodChunks').delete(chunkRange(source.id)),
   ]
   chunks.forEach((channels, index) => writes.push(tx.objectStore('channelChunks').put({ sourceId: source.id, index, channels })))
+  vod.forEach((items, index) => writes.push(tx.objectStore('vodChunks').put({ sourceId: source.id, index, items })))
   await Promise.all([...writes, tx.done])
 }
 
@@ -151,6 +188,11 @@ export async function getChannelChunk(sourceId: string, index: number): Promise<
   return chunk ? reveal(chunk.channels) : []
 }
 
+export async function getVodChunk(sourceId: string, index: number): Promise<VodChunk> {
+  const chunk = await (await db()).get('vodChunks', [sourceId, index])
+  return chunk ? reveal(chunk.items) : { movies: [] }
+}
+
 export async function getSecretSettings<T>(): Promise<T | undefined> {
   const stored = (await (await db()).get('settings', 'secrets')) as Stored<T> | undefined
   return stored === undefined ? undefined : reveal(stored)
@@ -161,11 +203,12 @@ export async function putSecretSettings<T>(value: T): Promise<void> {
 }
 
 export async function deleteSource(sourceId: string): Promise<void> {
-  const tx = (await db()).transaction(['sources', 'playlists', 'channelChunks'], 'readwrite')
+  const tx = (await db()).transaction(['sources', 'playlists', 'channelChunks', 'vodChunks'], 'readwrite')
   await Promise.all([
     tx.objectStore('sources').delete(sourceId),
     tx.objectStore('playlists').delete(sourceId),
     tx.objectStore('channelChunks').delete(chunkRange(sourceId)),
+    tx.objectStore('vodChunks').delete(chunkRange(sourceId)),
     tx.done,
   ])
 }
@@ -196,10 +239,11 @@ export async function getGuide(key: string): Promise<Programme[] | undefined> {
 
 /** Removes cached playlists and the guide; sources stay and download again on refresh. */
 export async function clearCache(): Promise<void> {
-  const tx = (await db()).transaction(['playlists', 'channelChunks', 'guide', 'meta'], 'readwrite')
+  const tx = (await db()).transaction(['playlists', 'channelChunks', 'vodChunks', 'guide', 'meta'], 'readwrite')
   await Promise.all([
     tx.objectStore('playlists').clear(),
     tx.objectStore('channelChunks').clear(),
+    tx.objectStore('vodChunks').clear(),
     tx.objectStore('guide').clear(),
     tx.objectStore('meta').clear(),
     tx.done,

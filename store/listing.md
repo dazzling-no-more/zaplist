@@ -18,7 +18,7 @@ Free (no in-app purchases, no ads)
 
 ## Short description
 
-IPTV player for your own playlists (M3U or Xtream Codes), with a TV guide, favorites and search.
+IPTV player for your own playlists (M3U or Xtream Codes): live TV with a guide, movies and series.
 
 ## Description
 
@@ -31,7 +31,8 @@ Features:
 • Add several M3U playlists and Xtream Codes logins
 • Type them on your phone: scan the code on the TV, and the playlist appears there, encrypted on the way
 • Fast channel list for very large playlists, with categories and channel logos
-• Search channels as you type
+• Movies and series from your playlists: posters, seasons and episodes, resume where you stopped
+• Search channels, movies and series as you type
 • Favorites in your own order, and recently watched channels
 • TV guide (XMLTV) with what's on now and next, and a full program grid
 • Zap with Up/Down or Channel +/−, or type the channel number

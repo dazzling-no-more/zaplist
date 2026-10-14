@@ -208,6 +208,22 @@ guide (`node scripts/make-test-guide.mjs`), raise `version` in
 in `store/screenshots/` and `store/lg-qa/images/` (1280×720) and check the callout positions in
 `ux-scenario.ps1`.
 
+### Next release: 1.1 with movies and series
+
+1.0 was submitted without movies and series. Before submitting 1.1:
+
+1. Deploy the updated `store/xtream-test-server.js` to the `zaplist-test` worker (*Edit code*, paste,
+   *Deploy*). It adds three Blender open movies and a two-season test series; its live channels stay
+   the same, so it can go live while 1.0 is still in review.
+2. Raise `version` to 1.1.0 in `appinfo.json` and `package.json`, build and package (step 4).
+3. Add pages to the UX scenario for Movies, Series, a movie's and a series' page and the movie
+   player, with screenshots (`ux-scenario.ps1`), and a document history row.
+4. Test on the TV (step 5), adding: Movies and Series from the Xtream test server; resume, seeking
+   with the arrows and the progress bar, Next episode, Continue watching; a locked movie category.
+5. Run `python store/lg-qa/self-checklist.py --tv-verified`: items 45, 46 and 49 now cover movies and
+   episodes (seeking, replay, resume).
+6. Update "What's new" in `store/listing.md`.
+
 ## What the code already does
 
 | LG requirement | How Zaplist meets it |

@@ -13,3 +13,9 @@ https://test-streams.mux.dev/x36xhzz/url_0/url_462/193039199_mp4_h264_aac_hd_7.t
 http://127.0.0.1:9/live/unreachable.m3u8
 #EXTINF:-1 tvg-chno="7" group-title="Errors",Not a stream
 https://test-streams.mux.dev/x36xhzz/missing-file.ts
+#EXTINF:-1 tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Sintel_poster.jpg/330px-Sintel_poster.jpg" group-title="Open movies",Sintel (trailer)
+https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4
+#EXTINF:-1 tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/ElephantsDreamPoster.jpg/330px-ElephantsDreamPoster.jpg" group-title="Test series",Test Shorts S01 E01 - Big Buck Bunny clip
+https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_5MB.mp4
+#EXTINF:-1 group-title="Test series",Test Shorts S01 E02 - Sintel trailer
+https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4

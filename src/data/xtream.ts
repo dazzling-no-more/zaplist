@@ -1,5 +1,5 @@
-import type { Category, Channel, Playlist, Programme, XtreamAccount, XtreamSource } from './models'
-import { assignNumbers, uniqueId } from './playlist'
+import type { Category, Channel, Episode, Movie, MovieDetails, Playlist, Programme, Series, XtreamAccount, XtreamSource } from './models'
+import { assignNumbers, byEpisode, uniqueId } from './playlist'
 
 // Xtream Codes player_api.php responses. Panels differ, so every field is optional and loosely typed.
 export interface XtreamLogin {
@@ -30,6 +30,53 @@ export interface XtreamLiveStream {
   category_id?: string | number | null
   tv_archive?: number | string
   tv_archive_duration?: number | string
+}
+
+export interface XtreamVodStream {
+  name?: string
+  stream_id?: number | string
+  stream_icon?: string
+  category_id?: string | number | null
+  container_extension?: string
+}
+
+export interface XtreamSeriesItem {
+  name?: string
+  series_id?: number | string
+  cover?: string
+  plot?: string
+  releaseDate?: string
+  release_date?: string
+  category_id?: string | number | null
+}
+
+export interface XtreamEpisode {
+  id?: number | string
+  episode_num?: number | string
+  title?: string
+  season?: number | string
+  container_extension?: string
+  info?: { duration_secs?: number | string; plot?: string; movie_image?: string } | unknown[]
+}
+
+export interface XtreamSeriesInfo {
+  info?: { plot?: string; cover?: string }
+  /** Episodes by season number. */
+  episodes?: Record<string, XtreamEpisode[]> | XtreamEpisode[][]
+}
+
+export interface XtreamVodInfo {
+  info?: {
+    plot?: string
+    description?: string
+    releasedate?: string
+    release_date?: string
+    duration_secs?: number | string
+    genre?: string
+    cast?: string
+    actors?: string
+    director?: string
+  }
 }
 
 export interface XtreamShortEpg {
@@ -72,6 +119,12 @@ export function liveUrls(source: Credentials, streamId: number, outputFormats: s
   if (allowed('m3u8')) urls.push(`${base}.m3u8`)
   if (allowed('ts') || !urls.length) urls.push(`${base}.ts`)
   return urls
+}
+
+/** A movie or an episode file: /movie/ or /series/ plus the server's container extension. */
+export function vodUrl(source: Credentials, path: 'movie' | 'series', id: number, extension: string | undefined): string {
+  const ext = (extension || 'mp4').replace(/^\./, '')
+  return `${normalizeHost(source.host)}/${path}/${enc(source.username)}/${enc(source.password)}/${id}.${ext}`
 }
 
 const toInt = (value: unknown): number | undefined => {
@@ -141,7 +194,117 @@ export function xtreamToPlaylist(
   const order = new Map(categoryList.map((c, i) => [`${source.id}:c:${c.category_id}`, i]))
   const sorted = Array.from(categories.values()).sort((a, b) => (order.get(a.id) ?? 1e9) - (order.get(b.id) ?? 1e9))
   assignNumbers(channels)
-  return { categories: sorted, channels, epgUrls: [xmltvUrl(source)] }
+  return { categories: sorted, channels, movies: [], series: [], epgUrls: [xmltvUrl(source)] }
+}
+
+/** Categories in the server's order, only those that have something in them. */
+function usedCategories(sourceId: string, prefix: string, kind: 'movie' | 'series', list: XtreamCategory[], used: Set<string>): Category[] {
+  const result: Category[] = []
+  for (const c of list) {
+    if (c.category_id == null || !used.has(String(c.category_id))) continue
+    result.push({ id: `${sourceId}:${prefix}:${c.category_id}`, sourceId, name: c.category_name || String(c.category_id), kind })
+    used.delete(String(c.category_id))
+  }
+  // Ids the category list doesn't name still group their items.
+  for (const key of Array.from(used)) result.push({ id: `${sourceId}:${prefix}:${key}`, sourceId, name: key, kind })
+  return result
+}
+
+const categoryKey = (value: string | number | null | undefined): string | undefined =>
+  value == null || value === '' ? undefined : String(value)
+
+/** Movies and series from get_vod_streams and get_series, with their categories. */
+export function xtreamVod(
+  source: XtreamSource,
+  vodCategories: XtreamCategory[],
+  vodStreams: XtreamVodStream[],
+  seriesCategories: XtreamCategory[],
+  seriesList: XtreamSeriesItem[],
+): Pick<Playlist, 'categories' | 'movies' | 'series'> {
+  const movieIds = new Set<string>()
+  const usedMovieCategories = new Set<string>()
+  const movies: Movie[] = []
+  for (const stream of vodStreams) {
+    const vodId = toInt(stream.stream_id)
+    if (vodId === undefined) continue
+    const key = categoryKey(stream.category_id)
+    if (key) usedMovieCategories.add(key)
+    movies.push({
+      id: uniqueId(movieIds, `${source.id}:m:${vodId}`),
+      sourceId: source.id,
+      categoryId: key && `${source.id}:mc:${key}`,
+      name: stream.name || String(vodId),
+      poster: stream.stream_icon || undefined,
+      urls: [vodUrl(source, 'movie', vodId, stream.container_extension)],
+      vodId,
+    })
+  }
+
+  const seriesIds = new Set<string>()
+  const usedSeriesCategories = new Set<string>()
+  const series: Series[] = []
+  for (const item of seriesList) {
+    const seriesId = toInt(item.series_id)
+    if (seriesId === undefined) continue
+    const key = categoryKey(item.category_id)
+    if (key) usedSeriesCategories.add(key)
+    series.push({
+      id: uniqueId(seriesIds, `${source.id}:s:${seriesId}`),
+      sourceId: source.id,
+      categoryId: key && `${source.id}:sc:${key}`,
+      name: item.name || String(seriesId),
+      poster: item.cover || undefined,
+      plot: item.plot || undefined,
+      released: item.releaseDate || item.release_date || undefined,
+      seriesId,
+    })
+  }
+
+  return {
+    categories: [
+      ...usedCategories(source.id, 'mc', 'movie', vodCategories, usedMovieCategories),
+      ...usedCategories(source.id, 'sc', 'series', seriesCategories, usedSeriesCategories),
+    ],
+    movies,
+    series,
+  }
+}
+
+/** A series' episodes from get_series_info, in season and episode order. */
+export function parseSeriesInfo(source: Credentials & { id: string }, response: XtreamSeriesInfo): Episode[] {
+  const groups = response.episodes ? Object.values(response.episodes) : []
+  const episodes: Episode[] = []
+  for (const group of groups) {
+    if (!Array.isArray(group)) continue
+    for (const item of group) {
+      const id = toInt(item.id)
+      if (id === undefined) continue
+      const info = item.info && !Array.isArray(item.info) ? item.info : {}
+      episodes.push({
+        id: `${source.id}:e:${id}`,
+        season: toInt(item.season) ?? 1,
+        episode: toInt(item.episode_num) ?? episodes.length + 1,
+        title: item.title || '',
+        urls: [vodUrl(source, 'series', id, item.container_extension)],
+        image: info.movie_image || undefined,
+        plot: info.plot || undefined,
+        duration: toInt(info.duration_secs) || undefined,
+      })
+    }
+  }
+  return episodes.sort(byEpisode)
+}
+
+export function parseVodInfo(response: XtreamVodInfo): MovieDetails {
+  const info = response.info ?? {}
+  return {
+    plot: info.plot || info.description || undefined,
+    released: info.releasedate || info.release_date || undefined,
+    duration: toInt(info.duration_secs) || undefined,
+    genre: info.genre || undefined,
+    cast: info.cast || info.actors || undefined,
+    director: info.director || undefined,
+  }
 }
 
 /** Base64 (UTF-8) as used by get_short_epg titles and descriptions. */

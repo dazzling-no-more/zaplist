@@ -1,13 +1,17 @@
 import { useSyncExternalStore } from 'react'
-import { clearCache, deleteSource, getChannelChunk, getPlaylistMeta, getSources } from './db'
-import type { Category, Channel, Source } from './models'
+import { clearCache, deleteSource, getChannelChunk, getPlaylistMeta, getSources, getVodChunk } from './db'
+import { fetchJson } from './http'
+import type { Category, Channel, Episode, Movie, MovieDetails, Series, Source } from './models'
 import { loadSecretPrefs } from './prefs'
 import { ingestSource } from './worker'
+import { apiUrl, parseSeriesInfo, parseVodInfo, type XtreamSeriesInfo, type XtreamVodInfo } from './xtream'
 import type { IngestProgress } from '../workers/protocol'
 
 interface SourceData {
   categories: Category[]
   channels: Channel[]
+  movies: Movie[]
+  series: Series[]
   epgUrls: string[]
 }
 
@@ -15,9 +19,11 @@ export interface LibraryState {
   /** False until the cached playlists have been read from IndexedDB. */
   ready: boolean
   sources: Source[]
-  /** Categories and channels of all sources, in source order. */
+  /** Categories (live, movie and series), channels, movies and series of all sources, in source order. */
   categories: Category[]
   channels: Channel[]
+  movies: Movie[]
+  series: Series[]
   /** Refreshes in progress, by source id. */
   progress: Record<string, IngestProgress>
   /** Set when the stored data couldn't be read at startup. */
@@ -27,9 +33,14 @@ export interface LibraryState {
 const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 class Library {
-  private state: LibraryState = { ready: false, sources: [], categories: [], channels: [], progress: {} }
+  private state: LibraryState = { ready: false, sources: [], categories: [], channels: [], movies: [], series: [], progress: {} }
   private readonly data = new Map<string, SourceData>()
   private byId = new Map<string, Channel>()
+  private moviesById = new Map<string, Movie>()
+  private seriesById = new Map<string, Series>()
+  /** Xtream episode lists and movie details, fetched when first opened. */
+  private readonly episodeLists = new Map<string, Promise<Episode[]>>()
+  private readonly details = new Map<string, Promise<MovieDetails>>()
   private readonly listeners = new Set<() => void>()
   private initializing: Promise<void> | undefined
   /** Per source, the end of its queue of saves and deletion. */
@@ -48,6 +59,43 @@ class Library {
 
   channel(id: string): Channel | undefined {
     return this.byId.get(id)
+  }
+
+  movie(id: string): Movie | undefined {
+    return this.moviesById.get(id)
+  }
+
+  series(id: string): Series | undefined {
+    return this.seriesById.get(id)
+  }
+
+  /** A series' episodes: from the playlist (M3U), or asked from the Xtream server the first time. */
+  episodes(series: Series): Promise<Episode[]> {
+    if (series.episodes) return Promise.resolve(series.episodes)
+    const source = this.state.sources.find((s) => s.id === series.sourceId)
+    if (!source || source.kind !== 'xtream' || series.seriesId === undefined) return Promise.resolve([])
+    let request = this.episodeLists.get(series.id)
+    if (!request) {
+      request = fetchJson<XtreamSeriesInfo>(apiUrl(source, { action: 'get_series_info', series_id: series.seriesId })).then((info) =>
+        parseSeriesInfo(source, info),
+      )
+      this.episodeLists.set(series.id, request)
+      request.catch(() => this.episodeLists.delete(series.id)) // try again next time
+    }
+    return request
+  }
+
+  /** Plot, year and so on for an Xtream movie; empty for M3U movies, whose playlists don't say. */
+  movieDetails(movie: Movie): Promise<MovieDetails> {
+    const source = this.state.sources.find((s) => s.id === movie.sourceId)
+    if (!source || source.kind !== 'xtream' || movie.vodId === undefined) return Promise.resolve({})
+    let request = this.details.get(movie.id)
+    if (!request) {
+      request = fetchJson<XtreamVodInfo>(apiUrl(source, { action: 'get_vod_info', vod_id: movie.vodId })).then(parseVodInfo)
+      this.details.set(movie.id, request)
+      request.catch(() => this.details.delete(movie.id))
+    }
+    return request
   }
 
   /** Guide URLs named by the playlists themselves. */
@@ -144,7 +192,7 @@ class Library {
     return result
   }
 
-  /** Reads a source's cached channels; false when none are cached. */
+  /** Reads a source's cached channels, movies and series; false when none are cached. */
   private async load(source: Source): Promise<boolean> {
     const meta = await getPlaylistMeta(source.id)
     const channels: Channel[] = []
@@ -153,21 +201,38 @@ class Library {
       for (const channel of chunk) channels.push(channel)
       await yieldToUi()
     }
-    this.data.set(source.id, { categories: meta?.categories ?? [], channels, epgUrls: meta?.epgUrls ?? [] })
+    const movies: Movie[] = []
+    const series: Series[] = []
+    for (let i = 0; i < (meta?.vodChunks ?? 0); i++) {
+      const chunk = await getVodChunk(source.id, i)
+      for (const movie of chunk.movies ?? []) movies.push(movie)
+      for (const show of chunk.series ?? []) series.push(show)
+      await yieldToUi()
+    }
+    this.data.set(source.id, { categories: meta?.categories ?? [], channels, movies, series, epgUrls: meta?.epgUrls ?? [] })
+    // A refresh can change a series' episodes or a movie's details.
+    for (const show of series) this.episodeLists.delete(show.id)
+    for (const movie of movies) this.details.delete(movie.id)
     return !!meta
   }
 
-  private combine(sources: Source[]): Pick<LibraryState, 'categories' | 'channels'> {
+  private combine(sources: Source[]): Pick<LibraryState, 'categories' | 'channels' | 'movies' | 'series'> {
     const categories: Category[] = []
     const channels: Channel[] = []
+    const movies: Movie[] = []
+    const series: Series[] = []
     for (const source of sources) {
       const data = this.data.get(source.id)
       if (!data) continue
       for (const c of data.categories) categories.push(c)
       for (const c of data.channels) channels.push(c)
+      for (const m of data.movies) movies.push(m)
+      for (const s of data.series) series.push(s)
     }
     this.byId = new Map(channels.map((c) => [c.id, c]))
-    return { categories, channels }
+    this.moviesById = new Map(movies.map((m) => [m.id, m]))
+    this.seriesById = new Map(series.map((s) => [s.id, s]))
+    return { categories, channels, movies, series }
   }
 
   private setProgress(sourceId: string, progress: IngestProgress | undefined): void {

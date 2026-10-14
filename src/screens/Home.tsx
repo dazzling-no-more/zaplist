@@ -6,6 +6,7 @@ import { ALL, buildGroups, channelsByCategory, channelsForGroup, FAVORITES, type
 import type { Channel } from '../data/models'
 import { unlock, useUnlocked } from '../data/parental'
 import { clearPrefs, moveFavorite, toggleFavorite, usePrefs } from '../data/prefs'
+import { clearWatch } from '../data/watch'
 import { t } from '../i18n'
 import { Button } from '../ui/Button'
 import { ChannelRow } from '../ui/ChannelRow'
@@ -22,6 +23,8 @@ import { VirtualList } from '../ui/VirtualList'
 
 const GROUP_ROW = 60
 const GROUP_LIST_HEIGHT = 600
+/** A sidebar button (Movies, Series), which the category list makes room for. */
+const NAV_BUTTON = 70
 const CHANNEL_ROW = 78
 const CHANNEL_LIST_HEIGHT = 858
 /** Moving through the sidebar shows a category after it stays focused this long. */
@@ -65,6 +68,7 @@ function StorageError({ entry, error }: ScreenProps<'home'> & { error: unknown }
   const reset = async () => {
     await deleteDatabase().catch(() => undefined)
     clearPrefs()
+    clearWatch()
     location.reload()
   }
   return (
@@ -98,7 +102,7 @@ function StorageError({ entry, error }: ScreenProps<'home'> & { error: unknown }
 }
 
 function Browse({ entry }: ScreenProps<'home'>) {
-  const { channels, categories, sources } = useLibrary()
+  const { channels, categories, sources, movies, series } = useLibrary()
   const prefs = usePrefs()
   const unlocked = useUnlocked()
   const memo = entry.memo as HomeMemo
@@ -185,6 +189,16 @@ function Browse({ entry }: ScreenProps<'home'>) {
         <Button focusKey="home-guide" className="nav" icon="guide" onPress={() => navigate({ name: 'guide', listId: groupId })}>
           {t('guide.title')}
         </Button>
+        {movies.length > 0 && (
+          <Button focusKey="home-movies" className="nav" icon="movie" onPress={() => navigate({ name: 'vod', kind: 'movie' })}>
+            {t('vod.movies')}
+          </Button>
+        )}
+        {series.length > 0 && (
+          <Button focusKey="home-series" className="nav" icon="series" onPress={() => navigate({ name: 'vod', kind: 'series' })}>
+            {t('vod.series')}
+          </Button>
+        )}
         <Button focusKey="home-settings" className="nav" icon="settings" onPress={() => navigate({ name: 'settings' })}>
           {t('settings.title')}
         </Button>
@@ -194,7 +208,7 @@ function Browse({ entry }: ScreenProps<'home'>) {
           items={groups}
           itemKey={(g) => g.id}
           rowHeight={GROUP_ROW}
-          height={GROUP_LIST_HEIGHT}
+          height={GROUP_LIST_HEIGHT - NAV_BUTTON * ((movies.length > 0 ? 1 : 0) + (series.length > 0 ? 1 : 0))}
           index={groupIndex}
           onIndexChange={setGroupIndex}
           onSelect={(g) => {

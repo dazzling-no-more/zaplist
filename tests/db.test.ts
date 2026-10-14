@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { CHUNK_SIZE, db, deleteSource, getChannelChunk, getPlaylistMeta, getSecretSettings, getSources, putSecretSettings, savePlaylist } from '../src/data/db'
-import type { Channel, M3uSource, Playlist, XtreamSource } from '../src/data/models'
+import { CHUNK_SIZE, db, deleteSource, getChannelChunk, getPlaylistMeta, getSecretSettings, getSources, getVodChunk, putSecretSettings, savePlaylist, vodChunks } from '../src/data/db'
+import type { Channel, M3uSource, Movie, Playlist, Series, XtreamSource } from '../src/data/models'
 
 const source = (id: string, addedAt: number): M3uSource => ({ id, kind: 'm3u', name: id, url: `http://example.com/${id}.m3u`, addedAt })
 
@@ -9,6 +9,8 @@ const playlist = (sourceId: string, count: number): Playlist => ({
   categories: [{ id: `${sourceId}:g:A`, sourceId, name: 'A' }],
   epgUrls: ['http://example.com/guide.xml'],
   channels: Array.from({ length: count }, (_, i): Channel => ({ id: `${sourceId}:${i}`, sourceId, name: `Ch ${i}`, number: i + 1, urls: [`http://example.com/${i}`] })),
+  movies: [],
+  series: [],
 })
 
 describe('IndexedDB storage', () => {
@@ -51,11 +53,19 @@ describe('IndexedDB storage', () => {
       options: { 'http-referrer': `http://tv.example.com/?auth=${secret}` },
     }
     const epgUrls = [`http://tv.example.com/epg.xml?token=${secret}`]
-    await savePlaylist(xtream, { categories: [], epgUrls, channels: [{ ...channel, id: 'x:1', sourceId: 'x' }] })
-    await savePlaylist(m3u, { categories: [], epgUrls, channels: [channel] })
+    const movie: Movie = { id: 't:m', sourceId: 't', name: 'Film', urls: [`http://tv.example.com/movie/alice77/${secret}/9.mkv`] }
+    const show: Series = {
+      id: 't:s',
+      sourceId: 't',
+      name: 'Show',
+      episodes: [{ id: 't:e', season: 1, episode: 1, title: 'Pilot', urls: [`http://tv.example.com/series/alice77/${secret}/7.mp4`] }],
+    }
+    await savePlaylist(xtream, { categories: [], epgUrls, channels: [{ ...channel, id: 'x:1', sourceId: 'x' }], movies: [], series: [] })
+    await savePlaylist(m3u, { categories: [], epgUrls, channels: [channel], movies: [movie], series: [show] })
 
     const database = await db()
-    const raw = JSON.stringify([await database.getAll('sources'), await database.getAll('playlists'), await database.getAll('channelChunks')])
+    const stores = ['sources', 'playlists', 'channelChunks', 'vodChunks'] as const
+    const raw = JSON.stringify(await Promise.all(stores.map((store) => database.getAll(store))))
     expect(raw).not.toContain(secret)
     expect(raw).not.toContain('alice77')
 
@@ -64,6 +74,18 @@ describe('IndexedDB storage', () => {
     expect(sources.find((s) => s.id === 't')).toEqual(m3u)
     expect((await getPlaylistMeta('t'))?.epgUrls).toEqual(epgUrls)
     expect(await getChannelChunk('t', 0)).toEqual([channel])
+    expect(await getVodChunk('t', 0)).toEqual({ movies: [movie] })
+    expect(await getVodChunk('t', 1)).toEqual({ series: [show] })
+  })
+
+  it('splits movies and series into chunks, counting every episode', () => {
+    const movies = Array.from({ length: CHUNK_SIZE + 1 }, (_, i): Movie => ({ id: `m${i}`, sourceId: 'a', name: `M${i}`, urls: [] }))
+    const episodes = Array.from({ length: CHUNK_SIZE }, (_, i) => ({ id: `e${i}`, season: 1, episode: i + 1, title: '', urls: [] }))
+    const series: Series[] = [
+      { id: 's1', sourceId: 'a', name: 'Long', episodes },
+      { id: 's2', sourceId: 'a', name: 'Short', episodes: episodes.slice(0, 2) },
+    ]
+    expect(vodChunks(movies, series).map((c) => (c.movies ? `m${c.movies.length}` : `s${c.series!.length}`))).toEqual(['m2000', 'm1', 's1', 's1'])
   })
 
   it('keeps the PIN and the extra guide URL encrypted', async () => {

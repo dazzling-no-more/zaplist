@@ -122,6 +122,7 @@ export function ParentalSection() {
                 </span>
                 <span className="group-detail">
                   {several ? sourceName(c.sourceId) + ' · ' : ''}
+                  {c.kind ? t(c.kind === 'movie' ? 'vod.movies' : 'vod.series') + ' · ' : ''}
                   {t(prefs.lockedCategories.includes(c.id) ? 'parental.locked' : 'parental.unlocked')}
                 </span>
               </div>

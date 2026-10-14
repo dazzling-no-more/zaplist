@@ -8,10 +8,13 @@ import {
   apiUrl,
   parseAccount,
   xtreamToPlaylist,
+  xtreamVod,
   XtreamAuthError,
   type XtreamCategory,
   type XtreamLiveStream,
   type XtreamLogin,
+  type XtreamSeriesItem,
+  type XtreamVodStream,
 } from './xtream'
 import type { IngestProgress, IngestResult } from '../workers/protocol'
 
@@ -34,19 +37,36 @@ export async function ingest(source: Source, progress: (p: IngestProgress) => vo
   } else {
     const account = parseAccount(await fetchJson<XtreamLogin>(apiUrl(source)))
     progress({ stage: 'download' })
-    const [categories, streams] = await Promise.all([
-      fetchJson<XtreamCategory[]>(apiUrl(source, { action: 'get_live_categories' })),
-      fetchJson<XtreamLiveStream[]>(apiUrl(source, { action: 'get_live_streams' })),
+    const list = <T>(action: string, required: boolean): Promise<T[]> => {
+      const request = fetchJson<T[]>(apiUrl(source, { action })).then((items) => (Array.isArray(items) ? items : []))
+      // Movies and series are extras: a server that can't list them still gives its live channels.
+      return required ? request : request.catch(() => [])
+    }
+    const [categories, streams, vodCategories, vodStreams, seriesCategories, seriesList] = await Promise.all([
+      list<XtreamCategory>('get_live_categories', true),
+      list<XtreamLiveStream>('get_live_streams', true),
+      list<XtreamCategory>('get_vod_categories', false),
+      list<XtreamVodStream>('get_vod_streams', false),
+      list<XtreamCategory>('get_series_categories', false),
+      list<XtreamSeriesItem>('get_series', false),
     ])
     progress({ stage: 'parse' })
-    playlist = xtreamToPlaylist(source, account, Array.isArray(categories) ? categories : [], Array.isArray(streams) ? streams : [])
-    if (!playlist.channels.length) throw new LoadError('empty')
+    const live = xtreamToPlaylist(source, account, categories, streams)
+    const vod = xtreamVod(source, vodCategories, vodStreams, seriesCategories, seriesList)
+    playlist = { ...live, categories: [...live.categories, ...vod.categories], movies: vod.movies, series: vod.series }
     saved = { ...source, refreshedAt: saved.refreshedAt, account }
   }
+  if (!playlist.channels.length && !playlist.movies.length && !playlist.series.length) throw new LoadError('empty')
 
-  progress({ stage: 'save', channels: playlist.channels.length })
+  progress({ stage: 'save', channels: playlist.channels.length + playlist.movies.length + playlist.series.length })
   await savePlaylist(saved, playlist)
-  return { source: saved, channels: playlist.channels.length, categories: playlist.categories.length }
+  return {
+    source: saved,
+    channels: playlist.channels.length,
+    movies: playlist.movies.length,
+    series: playlist.series.length,
+    categories: playlist.categories.length,
+  }
 }
 
 export function toLoadError(error: unknown): LoadError {

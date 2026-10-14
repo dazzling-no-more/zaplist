@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { XtreamSource } from '../src/data/models'
-import { apiUrl, liveUrls, parseAccount, xmltvUrl, xtreamToPlaylist, XtreamAuthError, type XtreamLogin } from '../src/data/xtream'
+import { apiUrl, liveUrls, parseAccount, parseSeriesInfo, xmltvUrl, xtreamToPlaylist, xtreamVod, XtreamAuthError, type XtreamLogin } from '../src/data/xtream'
 
 // The reviewers' test server (store/xtream-test-server.js, a Cloudflare Worker), checked against the
 // app's own Xtream client code. The import path is cast so TypeScript doesn't type the plain JS file.
@@ -38,5 +38,28 @@ describe('Xtream test server', () => {
     expect((await get(ts)).status).toBe(404) // an HLS-only stream: the app moves on to the next URL
     expect((await get(liveUrls(source, 105, ['ts'])[0])).headers.get('location')).toMatch(/\.ts$/)
     expect((await get(liveUrls({ ...source, password: 'nope' }, 101, ['m3u8'])[0])).status).toBe(403)
+  })
+
+  it('serves movies and a two-season series the app can play', async () => {
+    const vod = xtreamVod(
+      source,
+      await getJson<[]>(apiUrl(source, { action: 'get_vod_categories' })),
+      await getJson<[]>(apiUrl(source, { action: 'get_vod_streams' })),
+      await getJson<[]>(apiUrl(source, { action: 'get_series_categories' })),
+      await getJson<[]>(apiUrl(source, { action: 'get_series' })),
+    )
+    expect(vod.movies.map((m) => m.name)).toEqual(['Big Buck Bunny', 'Tears of Steel', 'Sintel (trailer)'])
+    expect(vod.categories.map((c) => [c.name, c.kind])).toEqual([
+      ['Open movies', 'movie'],
+      ['Test series', 'series'],
+    ])
+    const sintel = await get(vod.movies[2].urls[0])
+    expect(sintel.status).toBe(302)
+    expect(sintel.headers.get('location')).toBe('https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4')
+
+    const episodes = parseSeriesInfo(source, await getJson(apiUrl(source, { action: 'get_series_info', series_id: vod.series[0].seriesId! })))
+    expect(episodes.map((e) => `S${e.season}E${e.episode} ${e.title}`)).toEqual(['S1E1 Audio languages', 'S1E2 Subtitles', 'S2E1 MP4 file'])
+    expect((await get(episodes[2].urls[0])).headers.get('location')).toMatch(/sintel_trailer-480p\.mp4$/)
+    expect((await get(episodes[2].urls[0].replace('.mp4', '.mkv'))).status).toBe(404)
   })
 })

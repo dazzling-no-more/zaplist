@@ -30,6 +30,11 @@ describe('buildGroups', () => {
     expect(groups.every((g) => !g.locked && !g.detail)).toBe(true)
   })
 
+  it('leaves movie and series categories to their own screens', () => {
+    const withVod: Category[] = [...categories, { id: 'films', sourceId: 's', name: 'Films', kind: 'movie' }, { id: 'shows', sourceId: 's', name: 'Shows', kind: 'series' }]
+    expect(buildGroups(withVod, [], prefs, labels).map((g) => g.id)).toEqual([FAVORITES, RECENT, ALL, 'news', 'kids'])
+  })
+
   it('names the source only for category names that several sources use', () => {
     const sources = [{ id: 's', name: 'Src' }, { id: 't', name: 'Other' }] as Source[]
     const withDuplicate = [...categories, { id: 'news2', sourceId: 't', name: 'News' }]

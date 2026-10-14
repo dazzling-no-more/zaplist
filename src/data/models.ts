@@ -40,6 +40,8 @@ export interface Category {
   id: string
   sourceId: string
   name: string
+  /** Movie or series categories; absent for live TV. */
+  kind?: 'movie' | 'series'
 }
 
 export interface CatchupInfo {
@@ -83,10 +85,64 @@ export interface Programme {
   description?: string
 }
 
-/** One source's channels after parsing and mapping. */
+export interface Movie {
+  /** Stable across refreshes, like channel ids. */
+  id: string
+  sourceId: string
+  categoryId?: string
+  name: string
+  poster?: string
+  /** Stream URLs to try in order. */
+  urls: string[]
+  /** Xtream vod_id, for get_vod_info. */
+  vodId?: number
+}
+
+export interface Episode {
+  id: string
+  season: number
+  episode: number
+  title: string
+  urls: string[]
+  /** Still image of the episode, when the server has one. */
+  image?: string
+  plot?: string
+  /** Seconds, when the server says. */
+  duration?: number
+}
+
+export interface Series {
+  id: string
+  sourceId: string
+  categoryId?: string
+  name: string
+  poster?: string
+  plot?: string
+  /** Release year or date as the server gives it. */
+  released?: string
+  /** All episodes, for M3U series. Xtream servers list them per series on request (get_series_info). */
+  episodes?: Episode[]
+  /** Xtream series_id. */
+  seriesId?: number
+}
+
+/** Details servers can give about a movie (Xtream get_vod_info). */
+export interface MovieDetails {
+  plot?: string
+  released?: string
+  /** Seconds. */
+  duration?: number
+  genre?: string
+  cast?: string
+  director?: string
+}
+
+/** One source's channels, movies and series after parsing and mapping. */
 export interface Playlist {
   categories: Category[]
   channels: Channel[]
+  movies: Movie[]
+  series: Series[]
   /** XMLTV URLs named by the source itself (M3U header, Xtream xmltv.php). */
   epgUrls: string[]
 }

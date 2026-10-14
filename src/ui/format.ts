@@ -9,7 +9,16 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-export const formatDate = (ms: number): string => new Date(ms).toLocaleDateString()
+/** A playback position or length: 4:05, 1:02:03. */
+export function formatClock(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds))
+  const two = (n: number) => (n < 10 ? '0' : '') + n
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  return h ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`
+}
+
+export const formatDate =(ms: number): string => new Date(ms).toLocaleDateString()
 
 export function describeError(error: unknown): string {
   if (!(error instanceof LoadError)) return t('error.format')

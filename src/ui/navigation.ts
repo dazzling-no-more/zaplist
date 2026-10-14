@@ -11,6 +11,11 @@ export type Route =
   /** listId: the group the channel was picked from (Favorites, a category, ...), for zapping. */
   | { name: 'player'; channelId: string; listId: string }
   | { name: 'guide'; listId: string }
+  | { name: 'vod'; kind: 'movie' | 'series' }
+  | { name: 'movie'; movieId: string }
+  | { name: 'series'; seriesId: string }
+  /** A movie (no seriesId) or an episode of `seriesId`; `fromStart` ignores the saved position. */
+  | { name: 'vodPlayer'; itemId: string; seriesId?: string; fromStart?: boolean }
 
 export type ScreenName = Route['name']
 
