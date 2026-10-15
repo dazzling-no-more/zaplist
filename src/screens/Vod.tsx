@@ -1,5 +1,5 @@
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { library, useLibrary } from '../data/library'
 import type { ChannelGroup } from '../data/lists'
 import { unlock, useUnlocked } from '../data/parental'
@@ -72,6 +72,12 @@ export function VodScreen({ entry }: ScreenProps<'vod'>) {
   Object.assign(memo, { groupId, groupIndex, itemIndex: index })
 
   useScreenFocus(entry, list.length ? 'vod-grid' : 'vod-groups')
+  // Unlocked with the PIN: the Unlock button that had focus is gone, so focus what the group shows now.
+  const wasUnlocked = useRef(unlocked)
+  useEffect(() => {
+    if (!wasUnlocked.current && unlocked) setFocus(list.length ? 'vod-grid' : 'vod-groups')
+    wasUnlocked.current = unlocked
+  }, [unlocked])
 
   const showGroup = (id: string) => {
     if (id === groupId) return

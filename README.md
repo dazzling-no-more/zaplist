@@ -17,7 +17,8 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
   playlist categories, folded to a rail of icons while you browse the channels; a virtualized channel
   list (50,000+ channels) with logos, numbers and the programme on now. Home shows rows of the movies
   and series to continue and the favorite and recent channels.
-- **Search** across channel names (ignores case, accents and punctuation), updating as you type.
+- **Search** across channel, movie and series names in any script (ignores case, accents and
+  punctuation), updating as you type.
 - **Favorites** (the star on each channel: Right then OK, or click it; also the red button or hold OK) in
   your own order, and the last 20 channels watched.
 - **Player**: native playback first, then hls.js (HLS) or mpegts.js (MPEG-TS) when the TV's player

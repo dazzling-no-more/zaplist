@@ -318,6 +318,9 @@ async function cueAt(url: string, movie: Movie, seconds: number, job: Job): Prom
     const head = await reader.header()
     const body = head && head.id === ID.Cues && head.size !== UNKNOWN ? await reader.read(head.size) : undefined
     reader.destroy()
+    // Stopped while reading them (Play pressed while the movie's page had them read): not a movie
+    // without cues, so they are read again next time.
+    if (job.closed) throw new Error('Stopped')
     movie.cues = body ? parseCues(body, movie) : []
   }
   // Header read up to the tracks only: the first cue is the first cluster (no usable cues: read up to it).

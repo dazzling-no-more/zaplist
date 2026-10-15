@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
+import { useEffect, useRef, useState } from 'react'
 import { useLibrary } from '../../data/library'
 import { markUnlocked, unlock, useUnlocked } from '../../data/parental'
 import { saveParental, usePrefs } from '../../data/prefs'
@@ -22,6 +23,13 @@ export function ParentalSection() {
   const [failed, setFailed] = useState(false)
   const several = sources.length > 1
   const sourceName = (id: string) => sources.find((s) => s.id === id)?.name
+  // Setting, entering or turning off the PIN removes the button that had focus: focus its replacement.
+  const mode = !prefs.pin ? 'off' : unlocked ? 'on' : 'locked'
+  const lastMode = useRef(mode)
+  useEffect(() => {
+    if (lastMode.current !== mode) setFocus(`parental-${mode}`)
+    lastMode.current = mode
+  }, [mode])
 
   const save = (patch: Parameters<typeof saveParental>[0]) => {
     setFailed(false)
@@ -87,21 +95,23 @@ export function ParentalSection() {
       {!prefs.pin ? (
         <>
           <p className="dim">{t('parental.off')}</p>
-          <Button className="inline" onPress={() => setStep('new')}>
+          <Button focusKey="parental-off" className="inline" onPress={() => setStep('new')}>
             {t('parental.setPin')}
           </Button>
         </>
       ) : !unlocked ? (
         <>
           <p className="dim">{t('parental.unlockToEdit')}</p>
-          <Button className="inline" onPress={() => setStep('unlock')}>
+          <Button focusKey="parental-locked" className="inline" onPress={() => setStep('unlock')}>
             {t('home.unlock')}
           </Button>
         </>
       ) : (
         <>
           <div className="button-row">
-            <Button onPress={() => setStep('new')}>{t('parental.changePin')}</Button>
+            <Button focusKey="parental-on" onPress={() => setStep('new')}>
+              {t('parental.changePin')}
+            </Button>
             <Button onPress={() => void save({ pin: undefined, lockedCategories: [] })}>{t('parental.turnOff')}</Button>
           </div>
           <h3>{t('parental.categories')}</h3>

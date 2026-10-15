@@ -47,7 +47,9 @@ function request(url: string, from: number, redirects: number, onFinal?: (url: s
       if (onFinal) onFinal(url)
       return response
     }
-    response.resume()
+    // Not drained: a server that ignores Range would send the whole file, holding the provider's
+    // connection (often its only one) for as long.
+    response.destroy()
     throw new Error(`HTTP ${status}`)
   })
 }

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { library, useLibrary } from '../data/library'
 import type { Episode } from '../data/models'
 import { ASPECTS, updatePrefs, usePrefs, type Aspect } from '../data/prefs'
-import { getWatch, lastTracks, recordWatch, resumePosition } from '../data/watch'
+import { getWatch, isFinished, lastTracks, recordWatch, resumePosition } from '../data/watch'
 import { t } from '../i18n'
 import { onRemoteKey } from '../platform/keys'
 import { onNetworkChange } from '../platform/network'
@@ -160,9 +160,19 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
     setItemId(next.id)
     showOsd(false)
   }
+  /** Where the stream last ended short of its length, -1 if it didn't. */
+  const endedEarly = useRef(-1)
   // At the end: mark it watched, then the next episode, or back to where it was started from.
   const ended = () => {
     const length = duration()
+    // Ended well before its length: the connection broke and the player played out what it had. Go
+    // on from there; ending at the same point again is where the file really ends (a wrong length).
+    if (length && !isFinished({ position: position.current, duration: length, at: 0 }) && Math.abs(position.current - endedEarly.current) > 5) {
+      endedEarly.current = position.current
+      setAttempt((n) => n + 1)
+      return
+    }
+    endedEarly.current = -1
     recordWatch(itemId, { position: length, duration: length, seriesId: series?.id, tracks: playback?.chosenLabels() })
     position.current = 0
     if (next) playNext()

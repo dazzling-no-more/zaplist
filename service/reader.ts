@@ -19,6 +19,8 @@ export class Reader {
   private ended = false
   private error?: Error
   private wake?: () => void
+  /** Closed here (destroy), not by the server. */
+  private destroyed = false
 
   constructor(
     private readonly stream: IncomingMessage,
@@ -37,7 +39,12 @@ export class Reader {
     }
     stream.on('end', end)
     stream.on('close', end) // destroyed: a waiting read returns undefined
-    stream.on('aborted', end)
+    // The connection broke before the end: an error, or the player would take it for the end of the
+    // movie. Destroying the response here aborts it too.
+    stream.on('aborted', () => {
+      if (!this.destroyed) this.error = new Error('The connection to the server was lost')
+      this.notify()
+    })
     stream.on('error', (error: Error) => {
       this.error = error
       this.notify()
@@ -103,6 +110,7 @@ export class Reader {
   }
 
   destroy(): void {
+    this.destroyed = true
     this.stream.destroy()
   }
 }

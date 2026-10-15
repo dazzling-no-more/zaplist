@@ -1,10 +1,12 @@
+import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
-import { createServer, type Server } from 'node:http'
+import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { PassThrough } from 'node:stream'
 import { deflateSync } from 'node:zlib'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { child, children, element, encodeId, floatElement, ID, readVint, uint, uintElement } from '../service/ebml'
+import { Reader } from '../service/reader'
 import { contentDecoder, info, Job, remux, unlace } from '../service/remux'
 
 // A small Matroska movie: video (track 1), Opus audio (2, default), AC-3 audio (3), subtitles (4);
@@ -87,6 +89,11 @@ let open = 0
 let mostOpen = 0
 /** Paths asked for, in order. */
 let asked: string[] = []
+/**
+ * How the stream server misbehaves: ignores Range (sends the whole file and never ends), breaks the
+ * connection halfway through the file, or stops after a few bytes of any request past byte 0.
+ */
+let misbehave: 'ignoreRange' | 'drop' | 'stall' | undefined
 
 beforeAll(async () => {
   // Like an IPTV server: movie links redirect to a stream server, which sends the file with byte
@@ -102,7 +109,20 @@ beforeAll(async () => {
     mostOpen = Math.max(mostOpen, open)
     res.on('close', () => open--)
     const from = Number(/bytes=(\d+)-/.exec(req.headers.range ?? '')?.[1] ?? 0)
+    if (misbehave === 'ignoreRange') {
+      res.writeHead(200, { 'Content-Type': 'video/x-matroska' })
+      res.write(FILE)
+      return
+    }
     res.writeHead(from ? 206 : 200, { 'Content-Type': 'video/x-matroska' })
+    if (misbehave === 'drop') {
+      res.write(FILE.subarray(from, FILE.length / 2), () => res.destroy())
+      return
+    }
+    if (misbehave === 'stall' && from) {
+      res.write(FILE.subarray(from, from + 12))
+      return
+    }
     res.end(FILE.subarray(from))
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -226,6 +246,38 @@ describe('remux', () => {
     expect(clusters.map((c) => uint(child(c, ID.Timecode)))).toEqual(CLUSTER_TIMES)
   })
 
+  it('lets go of a server that ignores Range at once, rather than download the whole file', async () => {
+    misbehave = 'ignoreRange'
+    try {
+      await expect(info(newUrl(), 15, new Job())).rejects.toThrow('HTTP 200')
+      await vi.waitFor(() => expect(open).toBe(0))
+    } finally {
+      misbehave = undefined
+    }
+  })
+
+  it('fails when the connection breaks, so the player does not take it for the end of the movie', async () => {
+    misbehave = 'drop'
+    try {
+      await expect(run(newUrl(), 0)).rejects.toThrow()
+    } finally {
+      misbehave = undefined
+    }
+  })
+
+  it('reads the cue index again after a read of it was stopped', async () => {
+    const url = newUrl()
+    misbehave = 'stall'
+    const job = new Job()
+    asked = []
+    const first = info(url, 15, job)
+    await vi.waitFor(() => expect(asked.length).toBe(3)) // the header, then the cues, which stall
+    job.stop()
+    await expect(first).rejects.toThrow()
+    misbehave = undefined
+    expect((await info(url, 15, new Job())).start).toBe(10)
+  })
+
   it('passes another audio track through untouched when it is chosen', async () => {
     const { tracks, clusters } = await run(newUrl(), 0, 3)
     expect(tracks.map((t) => child(t, ID.CodecID)!.toString())).toEqual(['V_TEST', 'A_AC3'])
@@ -233,6 +285,33 @@ describe('remux', () => {
       [1, videoFrame(0)],
       [3, Buffer.from('ac3 frame')],
     ])
+  })
+})
+
+describe('Reader', () => {
+  /** A response as Node 8 ends it when the connection breaks: 'aborted' and 'close', no 'error'. */
+  function response() {
+    const stream = Object.assign(new EventEmitter(), { pause() {}, resume() {}, destroy: () => stream.emit('aborted') })
+    return stream
+  }
+
+  it('fails a read when the connection breaks', async () => {
+    const stream = response()
+    const reader = new Reader(stream as unknown as IncomingMessage, 0)
+    stream.emit('data', Buffer.from('ab'))
+    const read = reader.read(4)
+    stream.emit('aborted')
+    stream.emit('close')
+    await expect(read).rejects.toThrow('lost')
+  })
+
+  it('ends a read without an error when it was stopped here', async () => {
+    const stream = response()
+    const reader = new Reader(stream as unknown as IncomingMessage, 0)
+    const read = reader.read(4)
+    reader.destroy()
+    stream.emit('close')
+    expect(await read).toBeUndefined()
   })
 })
 

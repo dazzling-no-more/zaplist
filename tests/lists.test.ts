@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ALL, buildGroups, channelsByCategory, channelsForGroup, FAVORITES, RECENT, searchChannels } from '../src/data/lists'
+import { normalizeName } from '../src/data/text'
 import type { Category, Channel, Source } from '../src/data/models'
 import type { Prefs } from '../src/data/prefs'
 
@@ -86,5 +87,24 @@ describe('searchChannels', () => {
     expect(names('movie 24')).toEqual(['Movie+ 24/7'])
     expect(names('  ')).toEqual([])
     expect(names('zzz')).toEqual([])
+  })
+})
+
+describe('normalizeName', () => {
+  it('keeps the letters of non-Latin scripts', () => {
+    expect(normalizeName('Россия 1')).toBe('россия1')
+    expect(normalizeName('Беларусь 1')).toBe('беларусь1')
+    expect(normalizeName('الجزيرة')).toBe('الجزيرة')
+    expect(normalizeName('ΕΡΤ 1')).toBe('ερτ1')
+    expect(normalizeName('CCTV-1 综合')).toBe('cctv1综合')
+    expect(normalizeName('Straße')).toBe('straße')
+    expect(normalizeName('KBS 1TV 서울')).not.toBe(normalizeName('KBS 1TV 부산'))
+    expect(normalizeName('한국')).toBe('한국'.normalize('NFD'))
+  })
+
+  it('drops symbols, emoji and decorations around Latin names', () => {
+    expect(normalizeName('🇬🇧 BBC One ᴴᴰ ★')).toBe('bbcone')
+    expect(normalizeName('BBC One – HD')).toBe('bbconehd')
+    expect(normalizeName('Télé Matin')).toBe('telematin')
   })
 })

@@ -1,5 +1,5 @@
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { deleteDatabase } from '../data/db'
 import { library, useLibrary } from '../data/library'
 import { ALL, buildGroups, channelsByCategory, channelsForGroup, FAVORITES, OVERVIEW, type ChannelGroup } from '../data/lists'
@@ -193,6 +193,12 @@ function Browse({ entry }: ScreenProps<'home'>) {
   useEffect(() => {
     if (contentFocus && hasContent) setFocus(contentKey)
   }, [contentFocus])
+  // Unlocked with the PIN: the Unlock button that had focus is gone, so focus what the group shows now.
+  const wasUnlocked = useRef(unlocked)
+  useEffect(() => {
+    if (!wasUnlocked.current && unlocked) setFocus(hasContent ? contentKey : 'home-groups')
+    wasUnlocked.current = unlocked
+  }, [unlocked])
 
   const showGroup = (id: string) => {
     if (id === groupId) return
