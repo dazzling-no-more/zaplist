@@ -59,6 +59,16 @@ describe('watch progress', () => {
     expect(resumePosition({ position: 600, duration: 0, at: 0 })).toBe(600)
   })
 
+  it('moves progress to the new ids of a movie, an episode and its series', async () => {
+    const watch = await load()
+    watch.recordWatch('m1', { position: 100, duration: 1000 })
+    watch.recordWatch('e1', { position: 50, duration: 1000, seriesId: 's1' })
+    watch.renameWatch(new Map([['m1', 'M1'], ['e1', 'E1'], ['s1', 'S1']]))
+    expect(watch.getWatch('m1')).toBeUndefined()
+    expect(watch.getWatch('M1')).toMatchObject({ position: 100 })
+    expect(watch.getWatch('E1')).toMatchObject({ position: 50, seriesId: 'S1' })
+  })
+
   it('keeps progress across restarts and lists what to continue, newest first', async () => {
     const watch = await load()
     vi.spyOn(Date, 'now').mockReturnValueOnce(1).mockReturnValueOnce(2).mockReturnValueOnce(3).mockReturnValueOnce(4)

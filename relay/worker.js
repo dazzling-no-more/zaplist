@@ -7,7 +7,36 @@
 
 const TTL_MS = 15 * 60 * 1000
 const MAX_BYTES = 8192
+/** Messages a session takes before it expires: a person sends one, or a few after a typo. */
+const MAX_POSTS = 20
 const SESSION_PATH = /^\/s\/([A-Za-z0-9_-]{22})(\/status)?$/
+
+const tooLarge = () => new Response('Too large', { status: 413 })
+
+/** The request's body as text, read no further than `max` bytes; undefined if it is longer. */
+async function readText(request, max) {
+  if (!request.body) return ''
+  const reader = request.body.getReader()
+  const chunks = []
+  let length = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    length += value.length
+    if (length > max) {
+      await reader.cancel()
+      return undefined
+    }
+    chunks.push(value)
+  }
+  const bytes = new Uint8Array(length)
+  let at = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, at)
+    at += chunk.length
+  }
+  return new TextDecoder().decode(bytes)
+}
 
 /** One session: the latest message from the phone, until the TV fetches it. */
 export class Session {
@@ -18,9 +47,11 @@ export class Session {
   async fetch(request) {
     const status = new URL(request.url).pathname.endsWith('/status')
     if (request.method === 'POST' && !status) {
-      const body = await request.text()
-      if (body.length > MAX_BYTES) return new Response('Too large', { status: 413 })
-      await this.storage.put({ message: body, delivered: false })
+      const posts = ((await this.storage.get('posts')) || 0) + 1
+      if (posts > MAX_POSTS) return new Response('Too many messages', { status: 429 })
+      const body = await readText(request, MAX_BYTES)
+      if (body === undefined) return tooLarge()
+      await this.storage.put({ message: body, delivered: false, posts })
       await this.storage.setAlarm(Date.now() + TTL_MS)
       return new Response(null, { status: 204 })
     }
@@ -44,6 +75,11 @@ export default {
     const url = new URL(request.url)
     const session = SESSION_PATH.exec(url.pathname)
     if (session) {
+      if (Number(request.headers.get('content-length')) > MAX_BYTES) return tooLarge()
+      // Per client address, when the binding is configured (wrangler.toml): a TV polls every 3 s.
+      if (env.LIMITER && !(await env.LIMITER.limit({ key: request.headers.get('cf-connecting-ip') || '' })).success) {
+        return new Response('Too many requests', { status: 429, headers: { 'access-control-allow-origin': '*' } })
+      }
       const response = await env.SESSIONS.get(env.SESSIONS.idFromName(session[1])).fetch(request)
       const headers = new Headers(response.headers)
       headers.set('access-control-allow-origin', '*') // the TV app's own origin is file://

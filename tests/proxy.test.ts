@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { rewritePlaylist } from '../service/proxy'
-import { startServer } from '../service/server'
+import { startServer, TOKEN } from '../service/server'
 
 // An HLS server that, like some public streams, refuses requests without its Referer: the channel
 // redirects to a CDN whose playlists name the variant, the segments and the key relatively.
@@ -10,6 +10,8 @@ const REFERER = 'https://site.example/'
 const HEADERS = `Referer=${encodeURIComponent(REFERER)}&User-Agent=Test%2F1.0`
 let upstream: Server
 let origin = ''
+/** The service: its address, and with its token. */
+let root = ''
 let proxy = ''
 let agents: string[] = []
 
@@ -41,7 +43,8 @@ beforeAll(async () => {
   })
   await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`
-  proxy = `http://127.0.0.1:${await startServer()}`
+  root = `http://127.0.0.1:${await startServer()}`
+  proxy = `${root}/${TOKEN}`
 })
 afterAll(() => upstream.close())
 
@@ -55,14 +58,14 @@ describe('proxy', () => {
     const answer = await fetch(through(`${origin}/live/channel.m3u8`), { headers: { Range: 'bytes=0-' } })
     expect(answer.status).toBe(200)
     const [variant] = addresses(await answer.text())
-    expect(variant).toBe(`/proxy?u=${encodeURIComponent(`${origin}/cdn/variant/index.m3u8`)}&h=${encodeURIComponent(HEADERS)}`)
+    expect(variant).toBe(`/${TOKEN}/proxy?u=${encodeURIComponent(`${origin}/cdn/variant/index.m3u8`)}&h=${encodeURIComponent(HEADERS)}`)
 
-    const media = await fetch(proxy + variant)
+    const media = await fetch(root + variant)
     expect(media.headers.get('content-type')).toBe('application/vnd.apple.mpegurl')
     const [key, segment] = addresses(await media.text())
     expect(decodeURIComponent(key)).toContain(`${origin}/cdn/variant/key.bin`)
 
-    const data = await fetch(proxy + segment)
+    const data = await fetch(root + segment)
     expect([data.status, data.headers.get('content-type'), await data.text()]).toEqual([200, 'video/mp2t', 'segment one'])
     expect(new Set(agents)).toEqual(new Set(['Test/1.0']))
   })

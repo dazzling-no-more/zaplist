@@ -5,6 +5,8 @@ import { playbackAttempts, PlaybackError, summarizeFailures, type Engine, type F
 
 /** Waits before each retry of a failed stream; after the last one playback gives up. */
 export const RETRY_DELAYS_MS = [1000, 2000, 4000]
+/** A stream that has played this long works again: a later failure gets all the retries again. */
+export const RECOVERED_MS = 30_000
 
 export type PlaybackStatus =
   | { state: 'idle' }
@@ -30,6 +32,7 @@ export class Playback {
   /** Bumped by every play/stop so late results of an earlier load are ignored. */
   private token = 0
   private timer: ReturnType<typeof setTimeout> | undefined
+  private recovered: ReturnType<typeof setTimeout> | undefined
   private readonly listeners = new Set<() => void>()
 
   /** `live`: the stream has no end, so one that ends (the server closed it) is retried like a failure. */
@@ -109,6 +112,7 @@ export class Playback {
 
   private reset(): number {
     clearTimeout(this.timer)
+    clearTimeout(this.recovered)
     this.starting?.destroy()
     this.starting = undefined
     this.engine?.destroy()
@@ -137,7 +141,8 @@ export class Playback {
       this.engine = engine
       engine.onFatal = (error) => this.fail(token, error)
       diagnostics.engine = engine.name
-      this.retries = 0
+      // Not at the first frame: a stream that breaks right after it starts would be retried forever.
+      this.recovered = setTimeout(() => (this.retries = 0), RECOVERED_MS)
       this.set({ state: 'playing' })
       return
     }

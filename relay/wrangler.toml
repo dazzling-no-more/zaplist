@@ -14,3 +14,9 @@ class_name = "Session"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Session"]
+
+# Requests per client address and minute: a TV polls every 3 s, the phone page every 2 s.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+simple = { limit = 120, period = 60 }

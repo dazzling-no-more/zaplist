@@ -46,7 +46,7 @@ vi.mock('../src/player/engines', () => ({
   },
 }))
 
-const { Playback, RETRY_DELAYS_MS } = await import('../src/player/playback')
+const { Playback, RECOVERED_MS, RETRY_DELAYS_MS } = await import('../src/player/playback')
 const { diagnostics } = await import('../src/player/diagnostics')
 
 const ok = () => Promise.resolve()
@@ -228,10 +228,26 @@ describe('Playback', () => {
     await flush()
     expect(playback.getStatus()).toEqual({ state: 'playing' })
 
-    // A fatal error later starts a fresh round of retries.
+    // A fatal error once it has played a while starts a fresh round of retries.
+    vi.advanceTimersByTime(RECOVERED_MS)
     playback.current()!.onFatal!(new PlaybackError('timeout', 'stalled'))
     expect(playback.getStatus()).toMatchObject({ state: 'retrying', retry: 1 })
     expect(created[1].engine.destroyed).toBe(true)
+  })
+
+  it('gives up on a stream that breaks each time right after it starts', async () => {
+    outcomes.native = [ok, ok, ok, ok, ok]
+    const playback = new Playback(video)
+    playback.play(['s.mp4'])
+    for (let retry = 1; retry <= RETRY_DELAYS_MS.length; retry++) {
+      await flush()
+      playback.current()!.onFatal!(new PlaybackError('network'))
+      expect(playback.getStatus()).toMatchObject({ state: 'retrying', retry })
+      vi.advanceTimersByTime(RETRY_DELAYS_MS[retry - 1])
+    }
+    await flush()
+    playback.current()!.onFatal!(new PlaybackError('network'))
+    expect(playback.getStatus().state).toBe('failed')
   })
 
   it('retries a live stream that ends', async () => {

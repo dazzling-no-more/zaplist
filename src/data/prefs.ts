@@ -144,6 +144,18 @@ export function moveFavorite(channelId: string, delta: number, shown: readonly s
   return to
 }
 
+/** Channels whose ids changed (old id → new id): their favorites, recents and the last channel follow. */
+export function renameIds(renamed: ReadonlyMap<string, string>): void {
+  const rename = (id: string) => renamed.get(id) ?? id
+  const changed = (ids: string[]) => ids.some((id) => renamed.has(id))
+  if (!changed(prefs.favorites) && !changed(prefs.recents) && !(prefs.lastChannelId && renamed.has(prefs.lastChannelId))) return
+  updatePrefs({
+    favorites: prefs.favorites.map(rename),
+    recents: prefs.recents.map(rename),
+    lastChannelId: prefs.lastChannelId && rename(prefs.lastChannelId),
+  })
+}
+
 export function addRecent(channelId: string): void {
   updatePrefs({ recents: [channelId, ...prefs.recents.filter((id) => id !== channelId)].slice(0, MAX_RECENTS) })
 }

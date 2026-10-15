@@ -54,13 +54,17 @@ export class DtsToPcm {
   private decoder = 0
   /** The channels are settled: by the first frame decoded, or by fix. */
   private known = false
+  /** free was called, maybe before the module loaded (it took too long): the decoder isn't needed. */
+  private freed = false
 
   constructor(channels: number, sampleRate: number) {
     this.channels = channels
     this.sampleRate = sampleRate
     this.ready = load().then((bridge) => {
-      this.decoder = bridge.dts_open()
-      if (!this.decoder) throw new Error('The DTS decoder did not open')
+      const decoder = bridge.dts_open()
+      if (!decoder) throw new Error('The DTS decoder did not open')
+      if (this.freed) return bridge.dts_close(decoder)
+      this.decoder = decoder
       this.bridge = bridge
     })
   }
@@ -93,6 +97,7 @@ export class DtsToPcm {
   }
 
   free(): void {
+    this.freed = true
     if (this.bridge && this.decoder) this.bridge.dts_close(this.decoder)
     this.decoder = 0
   }

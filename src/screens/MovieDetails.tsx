@@ -23,7 +23,7 @@ export function MovieScreen({ entry }: ScreenProps<'movie'>) {
   useWatch()
   const prefs = usePrefs()
   const unlocked = useUnlocked()
-  const movie = library.movie(entry.movieId)
+  const movie = library.movie(library.currentId(entry.movieId))
   /** Undefined until the server answered, so the background doesn't start with the poster and switch. */
   const [details, setDetails] = useState<MovieDetails>()
   const [askPin, setAskPin] = useState(false)

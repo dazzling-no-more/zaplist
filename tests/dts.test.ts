@@ -36,4 +36,11 @@ describe('DtsToPcm', () => {
     expect(dts.decode([Buffer.from('not a DTS frame')]).length).toBe(0)
     dts.free()
   })
+
+  it('closes a decoder freed before the module had loaded (the remux gave up waiting)', async () => {
+    const dts = new DtsToPcm(6, 48000)
+    dts.free()
+    await dts.ready
+    expect(dts.decode(frames).length).toBe(0)
+  })
 })

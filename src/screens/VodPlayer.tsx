@@ -34,7 +34,7 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
   const [itemId, setItemId] = useState(memo.itemId ?? entry.itemId)
   Object.assign(memo, { itemId })
 
-  const series = entry.seriesId ? library.series(entry.seriesId) : undefined
+  const series = entry.seriesId ? library.series(library.currentId(entry.seriesId)) : undefined
   const [episodes, setEpisodes] = useState<Episode[]>()
   useEffect(() => {
     if (series) library.episodes(series).then(setEpisodes, () => setEpisodes([]))
@@ -67,6 +67,12 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
   /** Where playback is: the stream starts here, and restarts here (retry, network, app hidden). */
   const position = useRef(0)
   const startedItem = useRef<string>()
+  // A refresh gave the movie or episode a new id (renamedIds): follow it, at the same place.
+  const renamedTo = library.currentId(itemId)
+  if (renamedTo !== itemId) {
+    if (startedItem.current === itemId) startedItem.current = renamedTo
+    setItemId(renamedTo)
+  }
   /** The video's length, kept while a seek restarts the stream (see the remux engine). */
   const knownLength = useRef(0)
 

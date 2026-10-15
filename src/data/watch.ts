@@ -72,6 +72,22 @@ export function recordWatch(id: string, entry: Omit<WatchEntry, 'at'>): void {
   listeners.forEach((listener) => listener())
 }
 
+/** Movies, episodes and series whose ids changed (old id → new id): their progress follows. */
+export function renameWatch(renamed: ReadonlyMap<string, string>): void {
+  let changed = false
+  const next: Record<string, WatchEntry> = {}
+  for (const id of Object.keys(entries)) {
+    const entry = entries[id]
+    const seriesId = entry.seriesId && renamed.get(entry.seriesId)
+    if (renamed.has(id) || seriesId) changed = true
+    next[renamed.get(id) ?? id] = seriesId ? { ...entry, seriesId } : entry
+  }
+  if (!changed) return
+  entries = next
+  save()
+  listeners.forEach((listener) => listener())
+}
+
 /** Forgets all progress (Reset app data). */
 export function clearWatch(): void {
   entries = {}

@@ -10,9 +10,10 @@ const PASSED = ['content-type', 'content-length', 'content-range', 'accept-range
 /**
  * Fetches a stream that needs request headers web code can't set (User-Agent, Referer: `headers`,
  * as `Name=value&…`) and passes it on. HLS playlists come back with every address in them pointing
- * here too, so the variant playlists, segments and keys are fetched with the headers as well.
+ * here too (`base`: the server's path before /proxy), so the variant playlists, segments and keys are
+ * fetched with the headers as well.
  */
-export function proxy(url: string, headers: string, req: http.IncomingMessage, res: http.ServerResponse): void {
+export function proxy(base: string, url: string, headers: string, req: http.IncomingMessage, res: http.ServerResponse): void {
   const sent: Record<string, string> = {}
   new URLSearchParams(headers).forEach((value, name) => (sent[name] = value))
   if (req.headers.range) sent.Range = String(req.headers.range)
@@ -40,7 +41,7 @@ export function proxy(url: string, headers: string, req: http.IncomingMessage, r
       response.once('data', (first: Buffer) => {
         response.removeListener('end', empty)
         response.pause()
-        if ((status === 200 || status === 206) && /^\uFEFF?\s*#EXTM3U/.test(first.slice(0, 64).toString('utf8'))) return playlist(response, first, final, headers, res)
+        if ((status === 200 || status === 206) && /^\uFEFF?\s*#EXTM3U/.test(first.slice(0, 64).toString('utf8'))) return playlist(response, first, final, base, headers, res)
         res.writeHead(status, answer)
         res.write(first)
         response.pipe(res)
@@ -54,7 +55,7 @@ export function proxy(url: string, headers: string, req: http.IncomingMessage, r
   )
 }
 
-function playlist(response: http.IncomingMessage, first: Buffer, url: string, headers: string, res: http.ServerResponse): void {
+function playlist(response: http.IncomingMessage, first: Buffer, url: string, base: string, headers: string, res: http.ServerResponse): void {
   const parts = [first]
   let length = first.length
   response.on('data', (chunk: Buffer) => {
@@ -65,7 +66,7 @@ function playlist(response: http.IncomingMessage, first: Buffer, url: string, he
     res.destroy()
   })
   response.on('end', () => {
-    const link = (address: string) => `/proxy?u=${encodeURIComponent(address)}&h=${encodeURIComponent(headers)}`
+    const link = (address: string) => `${base}/proxy?u=${encodeURIComponent(address)}&h=${encodeURIComponent(headers)}`
     res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-cache' })
     res.end(rewritePlaylist(Buffer.concat(parts).toString('utf8'), url, link))
   })

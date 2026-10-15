@@ -25,6 +25,14 @@ describe('m3uToPlaylist', () => {
     expect(m3uToPlaylist('s1', load('messy.m3u')).channels.map((c) => c.id)).toEqual(ids)
   })
 
+  it('keeps the id of a channel with a tvg-id when a token in its URL changes', () => {
+    const list = (token: string) =>
+      m3uToPlaylist('s1', parseM3u(`#EXTM3U\n#EXTINF:-1 tvg-id="news.uk",News\nhttp://cdn.example/news.m3u8?token=${token}\n#EXTINF:-1,Plain\nhttp://cdn.example/plain.m3u8?token=${token}\n`))
+    const [first, second] = [list('aaa'), list('bbb')]
+    expect(second.channels[0].id).toBe(first.channels[0].id)
+    expect(second.channels[1].id).not.toBe(first.channels[1].id) // no tvg-id: the address is all there is
+  })
+
   it('names channels from the title, then tvg-name, then the URL', () => {
     expect(channel('/news.m3u8').name).toBe('News 24')
     expect(channel('/no-extinf.m3u8').name).toBe('http://example.com/no-extinf.m3u8')

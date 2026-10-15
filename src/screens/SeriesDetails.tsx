@@ -49,7 +49,7 @@ export function SeriesScreen({ entry }: ScreenProps<'series'>) {
   const prefs = usePrefs()
   const unlocked = useUnlocked()
   const memo = entry.memo as SeriesMemo
-  const series = library.series(entry.seriesId)
+  const series = library.series(library.currentId(entry.seriesId))
   const [episodes, setEpisodes] = useState<Episode[] | 'loading' | 'failed'>('loading')
   const [attempt, setAttempt] = useState(0)
   const [details, setDetails] = useState<SeriesDetails>()

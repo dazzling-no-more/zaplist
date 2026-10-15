@@ -77,7 +77,7 @@ export function Logo({ url, name }: { url?: string; name: string }) {
   const [shown, setShown] = useState(false)
   return (
     <div className="logo">
-      <LazyImage url={url} onState={setShown} />
+      <LazyImage key={url} url={url} onState={setShown} />
       {!shown && <span>{initials(name)}</span>}
     </div>
   )
@@ -97,7 +97,7 @@ export function Poster({ url, name, className }: { url?: string; name: string; c
   return (
     <div className={`poster${className ? ' ' + className : ''}`}>
       {!shown && <span>{name}</span>}
-      <LazyImage url={url} onState={setShown} />
+      <LazyImage key={url} url={url} onState={setShown} />
     </div>
   )
 }

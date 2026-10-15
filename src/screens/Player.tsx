@@ -45,6 +45,9 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   const [channelId, setChannelId] = useState(memo.channelId ?? entry.channelId)
   // The group zapping moves through; picking a channel from another group in the list switches it.
   const [listId, setListId] = useState(memo.listId ?? entry.listId)
+  // A refresh gave the channel a new id (renamedIds): follow it.
+  const renamedTo = library.currentId(channelId)
+  if (renamedTo !== channelId) setChannelId(renamedTo)
   Object.assign(memo, { channelId, listId })
 
   const byCategory = useMemo(() => channelsByCategory(channels), [channels])
@@ -57,10 +60,12 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   const list = useMemo(() => {
     const fromList =
       listId === RECENT
-        ? channelsForGroup(RECENT, channels, (id) => library.channel(id), byCategory, { ...prefs, recents: zapRecents }, unlocked)
+        ? channelsForGroup(RECENT, channels, (id) => library.channel(library.currentId(id)), byCategory, { ...prefs, recents: zapRecents }, unlocked)
         : visible(listId)
     return fromList.some((c) => c.id === channelId) ? fromList : visible(ALL)
   }, [...listDeps, listId, channelId, zapRecents])
+  /** Digits a channel number can have: number entry keeps that many. */
+  const numberDigits = useMemo(() => String(channels.reduce((most, c) => Math.max(most, c.number), 0)).length, [channels])
   const groups = useMemo(() => buildGroups(categories, sources, prefs, groupLabels()), [categories, sources, prefs.pin, prefs.lockedCategories])
   const channel = library.channel(channelId)
   const index = list.findIndex((c) => c.id === channelId)
@@ -226,8 +231,8 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
     return () => clearTimeout(timer)
   }, [digits])
 
-  const latest = useRef({ zap, openList, showOsd, hideOsd, favorite, cycleAspect, osd, modal: false })
-  latest.current = { zap, openList, showOsd, hideOsd, favorite, cycleAspect, osd, modal: miniList || !!picker }
+  const latest = useRef({ zap, openList, showOsd, hideOsd, favorite, cycleAspect, osd, numberDigits, modal: false })
+  latest.current = { zap, openList, showOsd, hideOsd, favorite, cycleAspect, osd, numberDigits, modal: miniList || !!picker }
 
   const { ref: surface } = useFocusable<object, HTMLDivElement>({
     focusKey: 'player-surface',
@@ -245,7 +250,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
     return onRemoteKey((key, event) => {
       const s = latest.current
       if (s.modal) return
-      if (key.length === 1) setDigits((d) => (d + key).slice(-4))
+      if (key.length === 1) setDigits((d) => (d + key).slice(-Math.max(4, s.numberDigits)))
       else if (key === 'channelUp') s.zap(1)
       else if (key === 'channelDown') s.zap(-1)
       else if (key === 'info') s.osd ? s.hideOsd() : s.showOsd(true)

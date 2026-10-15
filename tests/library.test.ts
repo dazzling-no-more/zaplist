@@ -98,3 +98,100 @@ describe('deleting a source', () => {
     expect(library.getState()).toMatchObject({ sources: [source], channels: [channel] })
   })
 })
+
+describe('saves, refreshes and clearing the cache', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    db.getSecretSettings.mockResolvedValue(undefined)
+    db.getSources.mockResolvedValue([source])
+    db.getPlaylistMeta.mockResolvedValue({ sourceId: 's', categories: [], epgUrls: [], chunks: 1 })
+    db.getChannelChunk.mockResolvedValue([channel])
+    db.deleteSource.mockResolvedValue(undefined)
+    db.rebuildDatabase.mockResolvedValue(undefined)
+    ingestSource.mockImplementation(async (saved: M3uSource) => ({ source: saved, channels: 1, categories: 0 }))
+  })
+
+  it('refreshes a source as it is after an edit queued before the refresh', async () => {
+    const library = await load()
+    await library.init()
+    const edited = { ...source, url: 'http://example.com/new.m3u' }
+    const edit = library.save(edited)
+    const refresh = library.refresh('s')
+    await Promise.all([edit, refresh])
+    expect(ingestSource.mock.calls.map(([s]) => (s as M3uSource).url)).toEqual([edited.url, edited.url])
+    expect(library.getState().sources).toEqual([edited])
+  })
+
+  it('lets screens follow channels a refresh gave new ids', async () => {
+    const library = await load()
+    await library.init()
+    db.getChannelChunk.mockResolvedValue([{ ...channel, id: 's:new' }]) // same stream and name
+    await library.refresh('s')
+    expect(library.currentId('s:1')).toBe('s:new')
+    expect(library.currentId('s:other')).toBe('s:other')
+  })
+
+  it('doesn’t bring back a source deleted while a refresh loads it', async () => {
+    const library = await load()
+    await library.init()
+    let loaded = () => {}
+    db.getChannelChunk.mockReturnValueOnce(new Promise((resolve) => (loaded = () => resolve([channel]))))
+    const refresh = library.refresh('s')
+    await vi.waitFor(() => expect(db.getChannelChunk).toHaveBeenCalledTimes(2))
+    const removal = library.remove('s')
+    loaded()
+    await expect(refresh).rejects.toThrow('Source deleted')
+    await removal
+    expect(library.getState()).toMatchObject({ sources: [], channels: [] })
+  })
+
+  it('clears the cache only once the saves running have stored their sources, and saves after it', async () => {
+    const library = await load()
+    await library.init()
+    let finish = () => {}
+    ingestSource.mockReturnValueOnce(new Promise((resolve) => (finish = () => resolve({ source, channels: 1, categories: 0 }))))
+    const refresh = library.refresh('s')
+    await vi.waitFor(() => expect(ingestSource).toHaveBeenCalledOnce())
+    const clear = library.clearCache()
+    const later = library.refresh('s')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(db.rebuildDatabase).not.toHaveBeenCalled()
+    finish()
+    await Promise.all([refresh, clear, later])
+    const rebuilt = db.rebuildDatabase.mock.invocationCallOrder[0]
+    expect(ingestSource.mock.invocationCallOrder.filter((order) => order > rebuilt)).toHaveLength(2) // clear cache's and the later refresh
+  })
+})
+
+describe('renamedIds', () => {
+  it('finds the new id of each stream that is still there, by address and name', async () => {
+    const { renamedIds } = await import('../src/data/library')
+    const stream = (id: string, url: string, name: string) => ({ id, sourceId: 's', name, number: 1, urls: [url] })
+    const before = {
+      channels: [stream('s:old1', 'http://x/1', 'One'), stream('s:same', 'http://x/2', 'Two'), stream('s:gone', 'http://x/3', 'Three')],
+      movies: [{ id: 's:m-old', sourceId: 's', name: 'Film', urls: ['http://x/film.mkv'] }],
+      series: [{ id: 's:s:old', sourceId: 's', categoryId: 'c', name: 'Шоу', episodes: [{ id: 's:e-old', season: 1, episode: 2, title: '', urls: ['http://x/e.mkv'] }] }],
+    }
+    const after = {
+      channels: [stream('s:new1', 'http://x/1', 'One'), stream('s:same', 'http://x/2', 'Two')],
+      movies: [{ id: 's:m-new', sourceId: 's', name: 'Film', urls: ['http://x/film.mkv'] }],
+      series: [{ id: 's:s:new', sourceId: 's', categoryId: 'c', name: 'Шоу', episodes: [{ id: 's:e-new', season: 1, episode: 2, title: '', urls: ['http://x/e.mkv'] }] }],
+    }
+    expect(renamedIds(before, after)).toEqual(
+      new Map([
+        ['s:old1', 's:new1'],
+        ['s:m-old', 's:m-new'],
+        ['s:s:old', 's:s:new'],
+        ['s:e-old', 's:e-new'],
+      ]),
+    )
+  })
+
+  it('matches a stream listed twice under one name in order', async () => {
+    const { renamedIds } = await import('../src/data/library')
+    const stream = (id: string) => ({ id, sourceId: 's', name: 'News', number: 1, urls: ['http://x/news'] })
+    const renamed = renamedIds({ channels: [stream('a'), stream('a~2')], movies: [], series: [] }, { channels: [stream('b'), stream('b~2')], movies: [], series: [] })
+    expect(renamed).toEqual(new Map([['a', 'b'], ['a~2', 'b~2']]))
+  })
+})

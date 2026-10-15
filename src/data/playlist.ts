@@ -73,7 +73,9 @@ export function m3uToPlaylist(sourceId: string, playlist: M3uPlaylist): Playlist
     const name = entry.title || attrs['tvg-name'] || entry.url
     const kind = entryKind(entry.url, name)
     const categoryId = category(entry, kind)
-    const id = uniqueId(ids, `${sourceId}:${hash(entry.url + '\n' + name)}`)
+    // By tvg-id where there is one: some providers put tokens in their URLs that change every refresh,
+    // which would lose favorites, recents and resume points.
+    const id = uniqueId(ids, `${sourceId}:${hash((attrs['tvg-id'] ? 'tvg-id:' + attrs['tvg-id'] : entry.url) + '\n' + name)}`)
     const options = Object.keys(entry.options).length ? entry.options : undefined
     if (kind === 'movie') {
       movies.push({ id, sourceId, categoryId, name, poster: attrs['tvg-logo'] || undefined, urls: [entry.url], options })

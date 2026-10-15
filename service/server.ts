@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto'
 import * as http from 'http'
 import type { AddressInfo } from 'net'
 import { URL, URLSearchParams } from 'url' // not globals in Node 8
@@ -12,6 +13,13 @@ import { info, Job, remux } from './remux'
 //   /subs                                          JSON { cues }: subtitle cues of /remux read since the last call
 //   /proxy?u=<stream URL>&h=<headers, Name=value&…> the stream fetched with those headers
 // /info and /remux stop the stream before them (a seek or another movie): one connection to the IPTV server.
+// Every path starts with /<TOKEN>.
+
+/**
+ * In every address the server answers: only the app learns it (from `start`, over the Luna bus), not
+ * a web page open in the TV's browser, which can reach the loopback address too.
+ */
+export const TOKEN = randomBytes(16).toString('hex')
 
 let listening: Promise<number> | undefined
 let current: Job | undefined
@@ -34,11 +42,27 @@ export function stopPlayback(): void {
   current = undefined
 }
 
+/**
+ * Asked by the app (a file:// page: Origin "null", no Referer) or the TV's player, not by a web page:
+ * a second check besides the token, for pages that send their origin.
+ */
+function fromApp(req: http.IncomingMessage): boolean {
+  const origin = req.headers.origin
+  const referer = String(req.headers.referer || '')
+  return (!origin || origin === 'null' || origin === 'file://') && (!referer || referer.indexOf('file:') === 0)
+}
+
 function handle(req: http.IncomingMessage, res: http.ServerResponse): void {
-  const { pathname, searchParams: query } = new URL(req.url || '', 'http://127.0.0.1')
+  const { pathname: path, searchParams: query } = new URL(req.url || '', 'http://127.0.0.1')
+  if (path.indexOf(`/${TOKEN}/`) !== 0 || !fromApp(req)) {
+    res.writeHead(403)
+    res.end()
+    return
+  }
+  const pathname = path.slice(TOKEN.length + 1)
   if (pathname === '/subs') return send(res, 200, { cues: current ? current.takeCues() : [] })
   const url = query.get('u')
-  if (pathname === '/proxy' && url) return proxy(url, query.get('h') || '', req, res)
+  if (pathname === '/proxy' && url) return proxy(`/${TOKEN}`, url, query.get('h') || '', req, res)
   if ((pathname !== '/info' && pathname !== '/remux') || !url) {
     res.writeHead(404)
     res.end()

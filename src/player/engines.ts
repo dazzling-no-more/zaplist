@@ -83,15 +83,18 @@ function watchVideo(video: HTMLVideoElement, engine: Engine): () => void {
     clearTimeout(stall)
     stall = setTimeout(() => engine.onFatal?.(new PlaybackError('timeout', 'stalled')), STALL_TIMEOUT_MS)
   }
+  // Paused by the user: not a stall (playing again waits anew if the data still isn't there).
   const onPlaying = () => clearTimeout(stall)
   video.addEventListener('error', onError)
   video.addEventListener('waiting', onWaiting)
   video.addEventListener('playing', onPlaying)
+  video.addEventListener('pause', onPlaying)
   return () => {
     clearTimeout(stall)
     video.removeEventListener('error', onError)
     video.removeEventListener('waiting', onWaiting)
     video.removeEventListener('playing', onPlaying)
+    video.removeEventListener('pause', onPlaying)
   }
 }
 
@@ -389,6 +392,16 @@ export function remuxSupport(): boolean {
   return isWebOS() && !(chromium && Number(chromium[1]) < 68)
 }
 
+/** The service's answer to `start` (service/main.ts). */
+interface ServiceStart {
+  port?: number
+  /** The first segment of every path the service answers (service/server.ts TOKEN). */
+  token?: string
+  errorText?: string
+}
+
+const serviceBase = ({ port, token }: ServiceStart) => `http://127.0.0.1:${port}${token ? '/' + token : ''}`
+
 /** A warm-up of the service still going (warmService). */
 let warming: { cancel(): void } | undefined
 
@@ -407,13 +420,13 @@ export function warmService(full: string, position: number): void {
     if (!done) request.cancel()
     done = true
   }
-  const request = webOS.service.request<{ port?: number }>(SERVICE, {
+  const request = webOS.service.request<ServiceStart>(SERVICE, {
     method: 'start',
     subscribe: true,
     onSuccess: (response) => {
       if (done || !response.port) return finish()
       // Let go of the service once it has the header: cancelling first would stop the read.
-      fetch(`http://127.0.0.1:${response.port}/info?${serviceSource(url, headers)}&t=${position}`, { signal: controller.signal })
+      fetch(`${serviceBase(response)}/info?${serviceSource(url, headers)}&t=${position}`, { signal: controller.signal })
         .catch(() => undefined)
         .then(finish)
     },
@@ -515,22 +528,22 @@ class ServiceEngine extends NativeEngine {
 
   /** Starts the service once; it stays up (an open subscription) until destroy. */
   protected async connect(): Promise<void> {
-    if (!this.base) this.base = `http://127.0.0.1:${await Promise.race([this.startService(), this.cancellation.promise])}`
+    if (!this.base) this.base = await Promise.race([this.startService(), this.cancellation.promise])
   }
 
-  /** Resolves with the service's port. */
-  private startService(): Promise<number> {
+  /** Resolves with the service's address. */
+  private startService(): Promise<string> {
     return new Promise((resolve, reject) => {
       const fail = (why: string) => reject(new PlaybackError('format', `The app's service didn't start: ${why}`))
       const webOS = window.webOS
       if (!webOS) return fail('not on a TV')
       const timer = setTimeout(() => fail('no answer'), SERVICE_TIMEOUT_MS)
-      this.request = webOS.service.request<{ port?: number; errorText?: string }>(SERVICE, {
+      this.request = webOS.service.request<ServiceStart>(SERVICE, {
         method: 'start',
         subscribe: true,
         onSuccess: (response) => {
           clearTimeout(timer)
-          if (response.port) resolve(response.port)
+          if (response.port) resolve(serviceBase(response))
           else fail(response.errorText ?? 'no port')
         },
         onFailure: (error) => {

@@ -72,3 +72,11 @@ describe('moveFavorite', () => {
     expect(prefs.moveFavorite('a', 1, ['b', 'c', 'a'])).toBe(2)
   })
 })
+
+describe('renameIds', () => {
+  it('moves favorites, recents and the last channel to the new ids', async () => {
+    const prefs = await load({ favorites: ['a', 'b'], recents: ['b', 'c'], lastChannelId: 'b' })
+    prefs.renameIds(new Map([['b', 'B']]))
+    expect(prefs.getPrefs()).toMatchObject({ favorites: ['a', 'B'], recents: ['B', 'c'], lastChannelId: 'B' })
+  })
+})

@@ -2,7 +2,8 @@ import { useSyncExternalStore } from 'react'
 import { deleteSource, getChannelChunk, getPlaylistMeta, getSources, getVodChunk, rebuildDatabase } from './db'
 import { fetchJson } from './http'
 import type { Category, Channel, Episode, Movie, MovieDetails, Series, SeriesDetails, Source } from './models'
-import { loadSecretPrefs } from './prefs'
+import { loadSecretPrefs, renameIds } from './prefs'
+import { renameWatch } from './watch'
 import { ingestSource } from './worker'
 import { apiUrl, parseSeriesDetails, parseSeriesInfo, parseVodInfo, type XtreamSeriesInfo, type XtreamVodInfo } from './xtream'
 import type { IngestProgress } from '../workers/protocol'
@@ -47,6 +48,10 @@ class Library {
   private readonly tasks = new Map<string, Promise<unknown>>()
   /** Sources deleted in this session: saves still queued or downloading for them must not bring them back. */
   private readonly removed = new Set<string>()
+  /** A clear cache running: saves and deletions queued meanwhile wait for it. */
+  private clearing: Promise<void> = Promise.resolve()
+  /** Ids refreshes in this session changed (renamedIds): a screen still holding an old one follows it. */
+  private readonly renames = new Map<string, string>()
 
   getState = (): LibraryState => this.state
 
@@ -109,6 +114,12 @@ class Library {
     return request
   }
 
+  /** The id of what had `id` before refreshes in this session changed it; `id` itself if none did. */
+  currentId(id: string): string {
+    for (let i = 0; i < 10 && this.renames.has(id); i++) id = this.renames.get(id)!
+    return id
+  }
+
   /** Guide URLs named by a source's playlist itself. */
   epgUrls(sourceId: string): string[] {
     return this.data.get(sourceId)?.epgUrls ?? []
@@ -134,16 +145,41 @@ class Library {
   }
 
   /** Validates and stores a new or edited source by downloading it. Rejects with a LoadError. */
-  async save(source: Source): Promise<Source> {
+  save(source: Source): Promise<Source> {
+    return this.ingest(source.id, () => source)
+  }
+
+  /**
+   * Downloads a source again as it is when its turn in the queue comes: an edit queued before stays,
+   * where the source as it was when Refresh was pressed would undo it.
+   */
+  refresh(sourceId: string): Promise<Source> {
+    if (!this.state.sources.some((s) => s.id === sourceId)) return Promise.reject(new Error(`Unknown source ${sourceId}`))
+    return this.ingest(sourceId, () => this.state.sources.find((s) => s.id === sourceId))
+  }
+
+  private async ingest(sourceId: string, current: () => Source | undefined): Promise<Source> {
     await this.init() // the startup load would otherwise overwrite this change
-    return this.queue(source.id, async () => {
-      if (this.removed.has(source.id)) throw new Error('Source deleted')
+    return this.queue(sourceId, async () => {
+      const source = current()
+      if (!source || this.removed.has(sourceId)) throw new Error('Source deleted')
       this.setProgress(source.id, { stage: 'download' })
       try {
         const result = await ingestSource(source, (progress) => this.setProgress(source.id, progress))
-        // Deleted while downloading: the deletion queued behind this save removes what it stored.
+        // Deleted while downloading or loading: the deletion queued behind this save removes what it stored.
         if (this.removed.has(source.id)) throw new Error('Source deleted')
+        const before = this.data.get(source.id)
         await this.load(result.source)
+        if (this.removed.has(source.id)) {
+          this.data.delete(source.id)
+          throw new Error('Source deleted')
+        }
+        const renamed = before ? renamedIds(before, this.data.get(source.id)!) : new Map<string, string>()
+        if (renamed.size) {
+          renamed.forEach((to, from) => this.renames.set(from, to))
+          renameIds(renamed)
+          renameWatch(renamed)
+        }
         const others = this.state.sources.filter((s) => s.id !== source.id)
         const sources = [...others, result.source].sort((a, b) => a.addedAt - b.addedAt)
         this.set({ sources, ...this.combine(sources) })
@@ -152,12 +188,6 @@ class Library {
         this.setProgress(source.id, undefined)
       }
     })
-  }
-
-  refresh(sourceId: string): Promise<Source> {
-    const source = this.state.sources.find((s) => s.id === sourceId)
-    if (!source) return Promise.reject(new Error(`Unknown source ${sourceId}`))
-    return this.save(source)
   }
 
   /** Removes a source and its stored data, also what a save still running for it stores afterwards. */
@@ -171,6 +201,7 @@ class Library {
     const remaining = this.state.sources.filter((s) => s !== source)
     this.set({ sources: remaining, ...this.combine(remaining) })
     try {
+      await this.clearing // its rebuild would put the source back
       await deleteSource(sourceId)
       // A save still downloading stores the source again when it finishes: delete it once more after that.
       await this.queue(sourceId, () => deleteSource(sourceId))
@@ -190,7 +221,17 @@ class Library {
    */
   async clearCache(): Promise<number> {
     await this.init()
-    await rebuildDatabase()
+    // A save running now seals what it stores with the vault key the rebuild replaces, and would store
+    // it in the new database, which then can't read it: wait for those, and have later ones wait.
+    const running = Array.from(this.tasks.values())
+    let cleared = () => {}
+    this.clearing = new Promise<void>((resolve) => (cleared = resolve))
+    try {
+      await Promise.all(running)
+      await rebuildDatabase()
+    } finally {
+      cleared()
+    }
     this.data.clear()
     const { sources } = this.state
     this.set(this.combine(sources))
@@ -199,9 +240,12 @@ class Library {
     return failed
   }
 
-  /** Runs `job` once the source's earlier saves and deletion have finished, whether or not they failed. */
+  /**
+   * Runs `job` once the source's earlier saves and deletion, and a clear cache, have finished, whether
+   * or not they failed.
+   */
   private queue<T>(sourceId: string, job: () => Promise<T>): Promise<T> {
-    const result = (this.tasks.get(sourceId) ?? Promise.resolve()).then(job)
+    const result = Promise.all([this.tasks.get(sourceId), this.clearing]).then(job)
     this.tasks.set(sourceId, result.catch(() => undefined))
     return result
   }
@@ -260,6 +304,35 @@ class Library {
     this.state = { ...this.state, ...patch }
     this.listeners.forEach((listener) => listener())
   }
+}
+
+/**
+ * Ids that changed for the same stream between two downloads of a source (old id → new id), found by
+ * address and name: after an update that names entries differently (by tvg-id; series by names
+ * normalized anew), favorites, recents and progress follow them.
+ */
+export function renamedIds(before: Pick<SourceData, 'channels' | 'movies' | 'series'>, after: Pick<SourceData, 'channels' | 'movies' | 'series'>): Map<string, string> {
+  const renamed = new Map<string, string>()
+  // Entries that share an address and name (listed twice) are matched in order.
+  const match = <T extends { id: string }>(old: readonly T[], next: readonly T[], key: (item: T) => string) => {
+    const ids = new Map<string, string[]>()
+    for (const item of next) {
+      const list = ids.get(key(item))
+      if (list) list.push(item.id)
+      else ids.set(key(item), [item.id])
+    }
+    for (const item of old) {
+      const id = ids.get(key(item))?.shift()
+      if (id !== undefined && id !== item.id) renamed.set(item.id, id)
+    }
+  }
+  const stream = (item: { urls: string[]; name: string }) => `${item.urls[0]}\n${item.name}`
+  match(before.channels, after.channels, stream)
+  match(before.movies, after.movies, stream)
+  match(before.series, after.series, (s) => `${s.categoryId}\n${s.name}`)
+  const episodes = (series: readonly Series[]) => series.flatMap((s) => (s.episodes ?? []).map((e) => ({ id: e.id, key: `${e.urls[0]}\n${e.season}x${e.episode}` })))
+  match(episodes(before.series), episodes(after.series), (e) => e.key)
+  return renamed
 }
 
 export const library = new Library()

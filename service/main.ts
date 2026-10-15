@@ -1,7 +1,7 @@
 // The app's JS service (webOS 5 and newer: Node.js 8 or later). The TV's player can't decode Opus
 // audio, so movies with it stream through a local server here that turns the audio into PCM
 // (remux.ts). Built by scripts/build-service.mjs; the app calls it from src/player/engines.ts.
-import { startServer, stopPlayback } from './server'
+import { startServer, stopPlayback, TOKEN } from './server'
 
 /** `<app ID>.service`, set by the build. */
 declare const SERVICE_ID: string
@@ -33,7 +33,7 @@ start.on('request', (message: Message) => {
     if (!keepAlive) service.activityManager.create('keepAlive', (activity: unknown) => (keepAlive = activity))
   }
   startServer().then(
-    (port) => message.respond({ returnValue: true, port }),
+    (port) => message.respond({ returnValue: true, port, token: TOKEN }),
     (error: Error) => message.respond({ returnValue: false, errorText: error.message }),
   )
 })

@@ -24,7 +24,16 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
+/**
+ * The time to show. No timer runs while no clock is on screen, and a screen's first render reads it
+ * before it subscribes: a time older than a tick is renewed then (the guide would open in the past).
+ */
+function getNow(): number {
+  if (!timer && Date.now() - now >= TICK_MS) now = Date.now()
+  return now
+}
+
 /** The current time, updated every 30 seconds. */
-export const useNow = (): number => useSyncExternalStore(subscribe, () => now)
+export const useNow = (): number => useSyncExternalStore(subscribe, getNow)
 
 export const formatTime = (ms: number): string => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })

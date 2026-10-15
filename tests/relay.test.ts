@@ -82,6 +82,29 @@ describe('relay', () => {
     expect((await call('/anything')).status).toBe(404)
   })
 
+  it('stops reading a body without a length once it is too large', async () => {
+    let pulled = 0
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++
+        controller.enqueue(new Uint8Array(4096))
+      },
+    })
+    const response = await call(`/s/${ID}`, { method: 'POST', body, duplex: 'half' } as RequestInit)
+    expect(response.status).toBe(413)
+    expect(pulled).toBeLessThan(10)
+  })
+
+  it('limits the messages per session, and the requests per address when the binding is set', async () => {
+    for (let i = 0; i < 20; i++) expect((await call(`/s/${ID}`, { method: 'POST', body: 'x' })).status).toBe(204)
+    expect((await call(`/s/${ID}`, { method: 'POST', body: 'x' })).status).toBe(429)
+
+    const limited = { ...env, LIMITER: { limit: async () => ({ success: false }) } }
+    const response = await relay.default.fetch(new Request(`https://add.example.workers.dev/s/${ID}`), limited)
+    expect(response.status).toBe(429)
+    expect(response.headers.get('access-control-allow-origin')).toBe('*')
+  })
+
   it('serves the phone page without letting it leak the link', async () => {
     const page = await call('/')
     expect(page.headers.get('content-type')).toContain('text/html')
