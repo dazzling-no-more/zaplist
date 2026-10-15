@@ -16,14 +16,15 @@ function run(command) {
   if (status !== 0) process.exit(status ?? 1)
 }
 
+// Each package carries the app (dist/) and its JS service (dist-service/, see service/main.ts).
 function packageBoth() {
-  run('ares-package dist -o out')
+  run('ares-package dist dist-service -o out')
   rmSync(HD.dir, { recursive: true, force: true })
   cpSync('dist', HD.dir, { recursive: true })
   const appinfo = JSON.parse(readFileSync(`${HD.dir}/appinfo.json`, 'utf8'))
   writeFileSync(`${HD.dir}/appinfo.json`, JSON.stringify({ ...appinfo, resolution: '1280x720' }, null, 2))
   copyFileSync(HD.splash, `${HD.dir}/splash.png`)
-  run(`ares-package ${HD.dir} -o ${HD.dir}-ipk`)
+  run(`ares-package ${HD.dir} dist-service -o ${HD.dir}-ipk`)
   renameSync(`${HD.dir}-ipk/${IPK}`, HD.ipk)
   rmSync(HD.dir, { recursive: true })
   rmSync(`${HD.dir}-ipk`, { recursive: true })

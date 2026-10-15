@@ -99,7 +99,7 @@ e-mail (nomoredazzling@gmail.com), the test playlist address and the Xtream test
 ```sh
 npm ci
 npm test
-npm run build      # also checks the bundle for webOS 4 (Chromium 53)
+npm run build      # also checks the bundle for webOS 4 (Chromium 53) and builds the JS service
 npm run package    # → out/zaplist.player_1.0.0_all.ipk and out/zaplist.player_1.0.0_all_1280x720.ipk
 ```
 
@@ -240,9 +240,9 @@ in `store/screenshots/` and `store/lg-qa/images/` (1280×720) and check the call
 | Title not too generic | "Zaplist" |
 
 LG's scanner flags the words "password", "credential" and "token". In this package they come from the
-Xtream Codes API parameters, the login form field, the core-js URL polyfill (`URL.password`) and the
-`withCredentials` options of hls.js and mpegts.js; nothing is hard-coded. The UX scenario's appendix
-says so for the reviewers.
+Xtream Codes API parameters, the login form field, the core-js URL polyfill (`URL.password`), the
+`withCredentials` options of hls.js and mpegts.js, and `uniqueToken` (webOS's ID of a subscription) in
+the JS service; nothing is hard-coded. The UX scenario's appendix says so for the reviewers.
 
 ## Sources
 

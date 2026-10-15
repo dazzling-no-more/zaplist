@@ -1,9 +1,10 @@
 import type { ErrorData } from 'hls.js'
 import type Mpegts from 'mpegts.js'
+import { id as appId } from '../../appinfo.json'
 import { proxied } from '../data/http'
 import { isWebOS } from '../platform/webos'
 import { playWithSound } from './autoplay'
-import { PlaybackError, type Attempt, type Engine, type Track } from './streams'
+import { PlaybackError, type Attempt, type Engine, type EngineName, type Track } from './streams'
 import { loadHls, loadMpegts, type Hls } from './vendor'
 
 // Native playback can stall without an error; after this long the next engine gets a turn.
@@ -97,24 +98,39 @@ interface MediaTrackList {
 }
 
 class NativeEngine implements Engine {
-  readonly name = 'native'
+  name: EngineName = 'native'
   onFatal?: (error: PlaybackError) => void
-  private destroyed = false
-  private readonly cancellation = cancellation()
+  protected destroyed = false
+  protected readonly cancellation = cancellation()
   private unwatch = () => {}
 
   constructor(
-    private readonly video: HTMLVideoElement,
-    private readonly url: string,
+    protected readonly video: HTMLVideoElement,
+    protected readonly url: string,
   ) {}
 
-  async start(): Promise<void> {
-    this.video.src = this.url
+  async start(position = 0): Promise<void> {
+    await this.load(this.url)
+    if (position > 0) this.seek(position)
+  }
+
+  /** Plays `src` until the first frames show, then watches it for errors and stalls. */
+  protected async load(src: string): Promise<void> {
+    this.video.src = src
     const started = waitForPlaying(this.video, this.cancellation.promise)
     void playWithSound(this.video)
     await started
     if (this.destroyed) throw cancelled()
+    this.unwatch()
     this.unwatch = watchVideo(this.video, this)
+  }
+
+  currentTime(): number {
+    return this.video.currentTime
+  }
+
+  seek(seconds: number): void {
+    this.video.currentTime = seconds
   }
 
   private audioList(): MediaTrackList | undefined {
@@ -183,7 +199,7 @@ class HlsEngine implements Engine {
     private readonly url: string,
   ) {}
 
-  async start(): Promise<void> {
+  async start(position = 0): Promise<void> {
     const Hls = await loadHls().catch((error: Error) => Promise.reject(new PlaybackError('format', error.message)))
     if (this.destroyed) throw cancelled()
     const hls = (this.hls = new Hls({
@@ -213,6 +229,15 @@ class HlsEngine implements Engine {
     if (this.destroyed) throw cancelled()
     this.started = true
     this.unwatch = watchVideo(this.video, this)
+    if (position > 0) this.seek(position)
+  }
+
+  currentTime(): number {
+    return this.video.currentTime
+  }
+
+  seek(seconds: number): void {
+    this.video.currentTime = seconds
   }
 
   audioTracks(): Track[] {
@@ -265,7 +290,7 @@ class MpegtsEngine implements Engine {
     private readonly url: string,
   ) {}
 
-  async start(): Promise<void> {
+  async start(position = 0): Promise<void> {
     const mpegts = await loadMpegts().catch((error: Error) => Promise.reject(new PlaybackError('format', error.message)))
     if (this.destroyed) throw cancelled()
     const player = (this.player = mpegts.createPlayer(
@@ -290,6 +315,15 @@ class MpegtsEngine implements Engine {
     if (this.destroyed) throw cancelled()
     this.started = true
     this.unwatch = watchVideo(this.video, this)
+    if (position > 0) this.seek(position)
+  }
+
+  currentTime(): number {
+    return this.video.currentTime
+  }
+
+  seek(seconds: number): void {
+    this.video.currentTime = seconds
   }
 
   // mpegts.js plays the stream's default tracks and has no track switching.
@@ -315,8 +349,188 @@ class MpegtsEngine implements Engine {
   }
 }
 
+// The app's JS service (service/main.ts); webOS names it after the app.
+const SERVICE = `luna://${appId}.service`
+const SERVICE_TIMEOUT_MS = 15_000
+/** Bytes read from the start of a movie to find its codecs: Matroska lists its tracks first. */
+const PROBE_BYTES = 64 * 1024
+const PROBE_TIMEOUT_MS = 10_000
+/** "A_OPUS", Matroska's codec ID for Opus audio. */
+const OPUS_CODEC_ID = [0x41, 0x5f, 0x4f, 0x50, 0x55, 0x53]
+/** A seek waits this long for the next one: a run of Left/Right presses restarts the stream once. */
+const SEEK_DELAY_MS = 700
+
+/** The remux engine needs the app's service, which only exists on the TV. */
+export const remuxSupport = (): boolean => isWebOS()
+
+/** Whether the start of the Matroska file at `url` names an Opus track. False if it can't be read. */
+async function hasOpus(url: string): Promise<boolean> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
+  try {
+    const response = await fetch(url, { headers: { Range: `bytes=0-${PROBE_BYTES - 1}` }, signal: controller.signal })
+    if (!response.ok || !response.body) return false
+    // A server that ignores the range sends the whole file: read only its start.
+    const reader = response.body.getReader()
+    const head = new Uint8Array(PROBE_BYTES)
+    let length = 0
+    while (length < PROBE_BYTES) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const take = Math.min(value.length, PROBE_BYTES - length)
+      head.set(value.subarray(0, take), length)
+      length += take
+    }
+    reader.cancel().catch(() => undefined)
+    search: for (let i = 0; i + OPUS_CODEC_ID.length <= length; i++) {
+      for (let j = 0; j < OPUS_CODEC_ID.length; j++) if (head[i + j] !== OPUS_CODEC_ID[j]) continue search
+      return true
+    }
+    return false
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** The service's /info answer (service/server.ts). */
+interface MovieInfo {
+  /** Seconds into the movie where a stream asked for a position starts (the cue before it). */
+  start: number
+  audio: { number: number; label: string; default: boolean }[]
+}
+
+/**
+ * Matroska movies on the TV. Its player can't decode Opus audio and stalls on files that carry it,
+ * so those stream through the app's service, which turns the audio into PCM; anything else plays as
+ * with NativeEngine. The TV's player counts each stream's time from zero, and a seek or another audio
+ * track starts a new stream: positions add the movie time where the stream starts.
+ */
+class RemuxEngine extends NativeEngine {
+  private request?: { cancel(): void }
+  private base = ''
+  private offset = 0
+  /** The position asked for while a new stream starts. */
+  private target?: number
+  private seekTimer?: ReturnType<typeof setTimeout>
+  /** Bumped by every restart, so an earlier one that finishes late changes nothing. */
+  private generation = 0
+  private tracks: MovieInfo['audio'] = []
+  /** Track number of the audio playing. */
+  private audio?: number
+
+  async start(position = 0): Promise<void> {
+    const opus = await Promise.race([hasOpus(this.url), this.cancellation.promise])
+    if (!opus) return super.start(position)
+    this.name = 'remux'
+    this.base = `http://127.0.0.1:${await Promise.race([this.startService(), this.cancellation.promise])}`
+    await this.open(position)
+  }
+
+  /** Starts the service and holds it up (an open subscription) until destroy; resolves with its port. */
+  private startService(): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const fail = (why: string) => reject(new PlaybackError('format', `Opus audio needs the app's service: ${why}`))
+      const webOS = window.webOS
+      if (!webOS) return fail('not on a TV')
+      const timer = setTimeout(() => fail('no answer'), SERVICE_TIMEOUT_MS)
+      this.request = webOS.service.request<{ port?: number; errorText?: string }>(SERVICE, {
+        method: 'start',
+        subscribe: true,
+        onSuccess: (response) => {
+          clearTimeout(timer)
+          if (response.port) resolve(response.port)
+          else fail(response.errorText ?? 'no port')
+        },
+        onFailure: (error) => {
+          clearTimeout(timer)
+          fail(error.errorText ?? `error ${error.errorCode}`)
+        },
+      })
+    })
+  }
+
+  /** Plays a new stream from the cue at or before `position`. */
+  private async open(position: number): Promise<void> {
+    const query = `u=${encodeURIComponent(this.url)}&t=${position}`
+    let response: Response
+    let info: MovieInfo & { error?: string }
+    try {
+      response = await Promise.race([fetch(`${this.base}/info?${query}`), this.cancellation.promise])
+      info = await response.json()
+    } catch (error) {
+      if (this.destroyed) throw cancelled()
+      throw new PlaybackError('format', `The app's service didn't answer: ${String(error)}`)
+    }
+    // The service couldn't read the movie: the IPTV server refused or failed.
+    if (!response.ok) throw new PlaybackError('network', info.error)
+    this.tracks = info.audio
+    if (this.audio === undefined) this.audio = (info.audio.find((t) => t.default) ?? info.audio[0])?.number
+    this.offset = info.start
+    await this.load(`${this.base}/remux?u=${encodeURIComponent(this.url)}&t=${info.start}&a=${this.audio ?? 0}`)
+  }
+
+  currentTime(): number {
+    if (this.name !== 'remux') return super.currentTime()
+    return this.target ?? this.offset + this.video.currentTime
+  }
+
+  seek(seconds: number): void {
+    if (this.name !== 'remux') return super.seek(seconds)
+    this.target = seconds
+    clearTimeout(this.seekTimer)
+    this.seekTimer = setTimeout(() => this.restart(), SEEK_DELAY_MS)
+  }
+
+  /** Starts a new stream at the target position, and pauses again if the movie was paused. */
+  private restart(): void {
+    const generation = ++this.generation
+    const paused = this.video.paused
+    this.open(this.currentTime()).then(
+      () => {
+        if (generation !== this.generation) return
+        this.target = undefined
+        if (paused) this.video.pause()
+      },
+      (error: unknown) => {
+        if (generation !== this.generation || this.destroyed) return
+        this.onFatal?.(error instanceof PlaybackError ? error : new PlaybackError('format', String(error)))
+      },
+    )
+  }
+
+  audioTracks(): Track[] {
+    if (this.name !== 'remux') return super.audioTracks()
+    return this.tracks.map((t, i) => ({ id: i, label: t.label || `${i + 1}` }))
+  }
+
+  selectedAudio(): number {
+    if (this.name !== 'remux') return super.selectedAudio()
+    return this.tracks.findIndex((t) => t.number === this.audio)
+  }
+
+  setAudioTrack(id: number): void {
+    if (this.name !== 'remux') return super.setAudioTrack(id)
+    const track = this.tracks[id]
+    if (!track || track.number === this.audio) return
+    this.audio = track.number
+    this.target = this.currentTime()
+    clearTimeout(this.seekTimer)
+    this.restart()
+  }
+
+  destroy(): void {
+    clearTimeout(this.seekTimer)
+    this.request?.cancel()
+    super.destroy()
+  }
+}
+
 export function createEngine(attempt: Attempt, video: HTMLVideoElement): Engine {
   switch (attempt.engine) {
+    case 'remux':
+      return new RemuxEngine(video, attempt.url)
     case 'native':
       return new NativeEngine(video, attempt.url)
     case 'hls.js':

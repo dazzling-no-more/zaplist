@@ -1,6 +1,7 @@
 // Stream types, attempt order and the engine contract. No engine code here, so tests can import it.
 
-export type EngineName = 'native' | 'hls.js' | 'mpegts.js'
+/** `remux`: the native player fed by the app's service, for movies with audio the TV can't decode. */
+export type EngineName = 'native' | 'hls.js' | 'mpegts.js' | 'remux'
 export type PlaybackErrorCode = 'network' | 'format' | 'timeout'
 
 export class PlaybackError extends Error {
@@ -19,8 +20,14 @@ export interface Track {
 
 export interface Engine {
   readonly name: EngineName
-  /** Resolves once video plays; rejects with a PlaybackError when this engine can't play the stream. */
-  start(): Promise<void>
+  /**
+   * Resolves once video plays, `position` seconds in (movies; live streams start where they are);
+   * rejects with a PlaybackError when this engine can't play the stream.
+   */
+  start(position?: number): Promise<void>
+  /** Seconds into the stream. */
+  currentTime(): number
+  seek(seconds: number): void
   /** Set by the owner: a fatal error after playback started. */
   onFatal?: (error: PlaybackError) => void
   audioTracks(): Track[]
@@ -44,6 +51,11 @@ export function streamKind(url: string): StreamKind {
   return /\.[a-z0-9]{2,5}$/.test(file) ? 'other' : 'unknown'
 }
 
+/** Matroska and WebM files (movies), which can carry Opus audio. */
+export function isMatroska(url: string): boolean {
+  return /\.(mkv|webm)$/.test(url.split(/[?#]/)[0].toLowerCase())
+}
+
 export interface Attempt {
   url: string
   engine: EngineName
@@ -53,11 +65,16 @@ export interface Attempt {
  * The order to try for each URL: the native player first, since webOS plays HLS and MPEG-TS itself;
  * then the MSE engine that fits the stream type. URLs without an extension (typical IPTV live links)
  * are usually raw MPEG-TS, so mpegts.js goes before hls.js for them. Where the native player can't
- * play MPEG-TS (desktop browsers, which take seconds to fail), it goes last for those URLs.
+ * play MPEG-TS (desktop browsers, which take seconds to fail), it goes last for those URLs. With
+ * `remux` (the TV), Matroska files play through the remux engine, which uses the native player too.
  */
-export function playbackAttempts(urls: string[], mse: { hls: boolean; mpegts: boolean }, nativeMpegTs = true): Attempt[] {
+export function playbackAttempts(urls: string[], mse: { hls: boolean; mpegts: boolean }, nativeMpegTs = true, remux = false): Attempt[] {
   const attempts: Attempt[] = []
   for (const url of urls) {
+    if (remux && isMatroska(url)) {
+      attempts.push({ url, engine: 'remux' })
+      continue
+    }
     const kind = streamKind(url)
     const tsLike = kind === 'ts' || kind === 'unknown'
     const nativeLast = tsLike && !nativeMpegTs && mse.mpegts

@@ -4,6 +4,8 @@
 interface LunaRequestOptions<T> {
   method: string
   parameters?: Record<string, unknown>
+  /** Keeps the request open (more responses may come) until it is cancelled. */
+  subscribe?: boolean
   onSuccess?: (response: T) => void
   onFailure?: (error: { errorCode?: number; errorText?: string }) => void
 }

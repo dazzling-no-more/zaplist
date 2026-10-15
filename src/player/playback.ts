@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { diagnostics, recordError } from './diagnostics'
-import { createEngine, mseSupport, nativePlaysMpegTs, releaseVideo } from './engines'
+import { createEngine, mseSupport, nativePlaysMpegTs, releaseVideo, remuxSupport } from './engines'
 import { playbackAttempts, PlaybackError, summarizeFailures, type Engine, type Failure } from './streams'
 
 /** Waits before each retry of a failed stream; after the last one playback gives up. */
@@ -24,6 +24,7 @@ export class Playback {
   /** The engine still trying to start, so a channel change can stop it too. */
   private starting?: Engine
   private urls: string[] = []
+  private position = () => 0
   private retries = 0
   /** Bumped by every play/stop so late results of an earlier load are ignored. */
   private token = 0
@@ -41,8 +42,10 @@ export class Playback {
     }
   }
 
-  play(urls: string[]): void {
+  /** `position`: seconds into the stream to start at, asked again on every retry (movies). */
+  play(urls: string[], position: () => number = () => 0): void {
     this.urls = urls
+    this.position = position
     this.retries = 0
     void this.load(this.reset())
   }
@@ -58,6 +61,15 @@ export class Playback {
     return this.engine
   }
 
+  /** Seconds into the stream; 0 while nothing plays. */
+  currentTime(): number {
+    return this.engine ? this.engine.currentTime() : 0
+  }
+
+  seek(seconds: number): void {
+    this.engine?.seek(seconds)
+  }
+
   private reset(): number {
     clearTimeout(this.timer)
     this.starting?.destroy()
@@ -71,12 +83,12 @@ export class Playback {
   private async load(token: number): Promise<void> {
     this.set({ state: 'loading' })
     const failures: Failure[] = []
-    for (const attempt of playbackAttempts(this.urls, mseSupport(), nativePlaysMpegTs())) {
+    for (const attempt of playbackAttempts(this.urls, mseSupport(), nativePlaysMpegTs(), remuxSupport())) {
       if (token !== this.token) return
       const engine = createEngine(attempt, this.video)
       this.starting = engine
       try {
-        await engine.start()
+        await engine.start(this.position())
       } catch (error) {
         engine.destroy()
         failures.push({ engine: attempt.engine, error: error instanceof PlaybackError ? error : new PlaybackError('format', String(error)) })

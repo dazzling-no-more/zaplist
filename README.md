@@ -29,7 +29,9 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
   request) and from M3U playlists (`/movie/` and `/series/` links, video files, `S01E02` names grouped
   into series). Poster grids by category, details, seasons and episodes; the player seeks, resumes where
   you stopped and goes on to the next episode; Continue watching lists what you started. Movie and
-  series categories can be locked with the parental PIN like channel categories.
+  series categories can be locked with the parental PIN like channel categories. MKV and WebM movies
+  with Opus audio, which the TV's player can't decode, stream through the app's service (`service/`),
+  which turns the audio into PCM on the TV (webOS 5 and newer).
 - **TV guide**: XMLTV (plain or gzipped) from the playlist, the Xtream server or a URL you enter; the
   Xtream short EPG as a fallback. Grid guide, time offset, automatic refresh every 6/12/24 hours.
 - **Parental control**: a 4-digit PIN locks the categories you choose until it is entered.
@@ -112,7 +114,9 @@ webOS TV 4.x runs Chromium 53 and loads the app from `file://`, so the build:
 - runs playlist and guide parsing in a Web Worker loaded from its own file, falling back to the main
   thread where workers can't load (desktop browsers refuse `file://` workers);
 - fails if `dist/` contains syntax newer than ES2016, ES2018+ regular expressions, module scripts,
-  `crossorigin`, or absolute URLs (`scripts/check-bundle.mjs`).
+  `crossorigin`, or absolute URLs (`scripts/check-bundle.mjs`);
+- bundles the JS service (`service/`) for the Node.js 8 of webOS 5 and 6 into `dist-service/`
+  (`scripts/build-service.mjs`), which `npm run package` puts in the package next to `dist/`.
 
 CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Animate only
 `transform` and `opacity`; no `backdrop-filter` or blurred shadows.
@@ -130,6 +134,10 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
   action doesn't run twice. This follows LG's own Enact framework; verify on a real TV.
 - Audio track switching for HLS played by the TV's own player may not work on every webOS version
   (reported on LG's forum). Streams played by hls.js switch reliably.
+- Movies with Opus audio need webOS 5 or newer: the service decodes it with WebAssembly, which the
+  Node.js of webOS 4 lacks. There they end with a format error. The service runs only while such a
+  movie plays; LG advises against services that run for long, which a review may question.
+- Subtitles inside MKV files aren't shown: the TV's player doesn't pass them to apps.
 - Catch-up/timeshift, VOD and series (Xtream) are not implemented yet.
 - Sources, cached channel lists, guide addresses, the PIN and the extra guide URL are encrypted with a
   key kept on the TV (AES-GCM, non-extractable, in IndexedDB). That protects a copied database, not a
@@ -144,7 +152,8 @@ scripts/               bundle checker, webOS CLI wrapper, large-playlist generat
 src/platform/          remote keys, back stack, webOS wrappers, lifecycle, network status
 src/data/              models, M3U/Xtream/XMLTV parsers, IndexedDB, library, guide, preferences
 src/workers/           parse worker and its message protocol
-src/player/            engines (native, hls.js, mpegts.js), retries, vendor script loading
+src/player/            engines (native, hls.js, mpegts.js, remux), retries, vendor script loading
+service/               JS service: streams movies with Opus audio to the TV's player as PCM (Matroska remux)
 src/ui/                focus, navigation, virtual list, dialogs, PIN pad, channel rows, formatting
 src/screens/           Home, Search, Player, Guide, Settings (sources, guide, parental, about), source form
 src/i18n.ts            every user-facing string
@@ -159,4 +168,5 @@ docs/PUBLISHING.md     how to submit the app to the LG Content Store
 ## License
 
 Free and open source under the [MIT License](LICENSE). Bundled libraries are under free licenses
-(MIT, ISC or Apache-2.0); hls.js and mpegts.js are shipped with their license files.
+(MIT, ISC, Apache-2.0 or BSD-3-Clause); hls.js and mpegts.js are shipped with their license files, the
+service with those of opus-decoder and libopus (`service/THIRD-PARTY-LICENSES.txt`).

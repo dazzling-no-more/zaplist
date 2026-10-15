@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-service/
 out/
 *.log
 tests/fixtures/large.m3u

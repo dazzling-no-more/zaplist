@@ -3,18 +3,25 @@ import { playbackAttempts, PlaybackError, streamKind, summarizeFailures, type At
 
 // Fake engines: each attempt's outcome comes from `outcomes` (keyed by engine name), in order.
 const outcomes: Record<string, (() => Promise<void>)[]> = {}
-const created: { attempt: Attempt; engine: Engine & { destroyed: boolean } }[] = []
+const created: { attempt: Attempt; engine: Engine & { destroyed: boolean; position?: number } }[] = []
 
 vi.mock('../src/player/engines', () => ({
   mseSupport: () => ({ hls: true, mpegts: true }),
   nativePlaysMpegTs: () => true,
+  remuxSupport: () => false,
   releaseVideo: vi.fn(),
   createEngine: (attempt: Attempt) => {
     const next = outcomes[attempt.engine]?.shift() ?? (() => Promise.reject(new PlaybackError('format')))
     const engine = {
       name: attempt.engine,
       destroyed: false,
-      start: next,
+      position: undefined as number | undefined,
+      start(position?: number) {
+        this.position = position
+        return next()
+      },
+      currentTime: () => 0,
+      seek: () => {},
       audioTracks: () => [],
       selectedAudio: () => -1,
       setAudioTrack: () => {},
@@ -78,6 +85,15 @@ describe('playbackAttempts', () => {
       'native', 'hls.js',
     ])
     expect(playbackAttempts(['a.ts'], { hls: true, mpegts: false }, false).map((a) => a.engine)).toEqual(['native'])
+  })
+
+  it('plays Matroska files through the remux engine on the TV, and natively elsewhere', () => {
+    expect(playbackAttempts(['m.mkv', 'w.WEBM?token=1', 'm.mp4'], all, true, true)).toEqual([
+      { url: 'm.mkv', engine: 'remux' },
+      { url: 'w.WEBM?token=1', engine: 'remux' },
+      { url: 'm.mp4', engine: 'native' },
+    ])
+    expect(playbackAttempts(['m.mkv'], all, true, false).map((a) => a.engine)).toEqual(['native'])
   })
 })
 
@@ -168,6 +184,23 @@ describe('Playback', () => {
     await flush()
     expect(created[0].engine.destroyed).toBe(true)
     expect(playback.current()).toBe(created[1].engine)
+  })
+
+  it('starts a movie at its position and asks for it again on each retry', async () => {
+    outcomes.native = [fail(), ok]
+    let position = 42
+    const playback = new Playback(video)
+    playback.play(['s.mp4'], () => position)
+    await flush()
+    expect(created[0].engine.position).toBe(42)
+    position = 50 // where the movie had got to when the stream broke
+    vi.advanceTimersByTime(RETRY_DELAYS_MS[0])
+    await flush()
+    expect(created[1].engine.position).toBe(50)
+
+    playback.play(['channel.m3u8']) // live streams start where they are
+    await flush()
+    expect(created[2].engine.position).toBe(0)
   })
 
   it('stop releases the engine and cancels a pending retry', async () => {

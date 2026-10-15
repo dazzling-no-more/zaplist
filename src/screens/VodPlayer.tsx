@@ -59,15 +59,16 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
   const soundBlocked = useSoundBlocked()
   const aspect: Aspect = prefs.aspect
 
-  /** Where playback is, kept while the stream restarts (retry, network, app hidden). */
+  /** Where playback is: the stream starts here, and restarts here (retry, network, app hidden). */
   const position = useRef(0)
-  /** Applied when the stream starts playing. */
-  const seekOnStart = useRef<number>()
   const startedItem = useRef<string>()
+  /** The video's length, kept while a seek restarts the stream (see the remux engine). */
+  const knownLength = useRef(0)
 
   const duration = () => {
     const d = video.current?.duration
-    return d && isFinite(d) ? d : (episode?.duration ?? 0)
+    if (d && isFinite(d)) knownLength.current = d
+    return knownLength.current || (episode?.duration ?? 0)
   }
   const save = () => {
     if (position.current > 0) recordWatch(itemId, { position: position.current, duration: duration(), seriesId: series?.id })
@@ -91,34 +92,33 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
       if (startedItem.current !== itemId) {
         startedItem.current = itemId
         const fromStart = entry.fromStart && itemId === entry.itemId
-        position.current = 0
-        seekOnStart.current = fromStart ? undefined : resumePosition(getWatch(itemId))
-      } else seekOnStart.current = position.current
-      playback.play(urls)
+        position.current = (fromStart ? undefined : resumePosition(getWatch(itemId))) ?? 0
+        knownLength.current = 0
+      }
+      playback.play(urls, () => position.current)
     } else {
       latestSave.current()
       playback.stop()
     }
   }, [playback, itemId, !!urls, attempt, online, shown])
 
-  // A retry starts the stream over: go back to where it was.
-  useEffect(() => {
-    if (status.state === 'retrying') seekOnStart.current = position.current
-    if (status.state === 'playing' && seekOnStart.current && video.current) {
-      video.current.currentTime = seekOnStart.current
-      seekOnStart.current = undefined
-    }
-  }, [status.state])
+  /** Puts `seconds` and the length on the progress bar. */
+  const showTime = (seconds: number) => {
+    const current = Math.floor(seconds)
+    const length = Math.floor(duration())
+    setTime((old) => (old.current === current && old.duration === length ? old : { current, duration: length }))
+  }
+  const latestShowTime = useRef(showTime)
+  latestShowTime.current = showTime
 
   useEffect(() => {
+    if (!playback) return
     const element = video.current!
     const onTime = () => {
-      if (element.currentTime > 0 && !seekOnStart.current) position.current = element.currentTime
-      setTime((old) => {
-        const current = Math.floor(element.currentTime)
-        const length = Math.floor(isFinite(element.duration) ? element.duration : 0)
-        return old.current === current && old.duration === length ? old : { current, duration: length }
-      })
+      const current = playback.currentTime()
+      // A stream that is (re)starting counts from 0 until it reaches its start position.
+      if (current > 0 && playback.getStatus().state === 'playing') position.current = current
+      latestShowTime.current(current)
     }
     const onPlayState = () => {
       setPaused(element.paused)
@@ -137,7 +137,7 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
       element.removeEventListener('ended', onEnded)
       clearInterval(timer)
     }
-  }, [])
+  }, [playback])
 
   const close = () => backStack.close(entry.id)
   const playNext = () => {
@@ -195,22 +195,23 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
     return () => clearTimeout(timer)
   }, [toast])
 
+  const seekTo = (seconds: number) => {
+    playback?.seek(seconds)
+    position.current = seconds
+    showTime(seconds)
+  }
   const seekBy = (seconds: number) => {
-    const element = video.current
     const length = duration()
-    if (!element || !length || status.state !== 'playing') return
-    element.currentTime = Math.max(0, Math.min(length - 1, element.currentTime + seconds))
-    position.current = element.currentTime
+    if (!playback || !length || status.state !== 'playing') return
+    seekTo(Math.max(0, Math.min(length - 1, playback.currentTime() + seconds)))
     setOsd(true)
     armOsd()
   }
   const seekToFraction = (event: MouseEvent<HTMLDivElement>) => {
-    const element = video.current
     const length = duration()
-    if (!element || !length || status.state !== 'playing') return
+    if (!playback || !length || status.state !== 'playing') return
     const box = event.currentTarget.getBoundingClientRect()
-    element.currentTime = Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)) * length
-    position.current = element.currentTime
+    seekTo(Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)) * length)
   }
   const togglePause = () => {
     const element = video.current
