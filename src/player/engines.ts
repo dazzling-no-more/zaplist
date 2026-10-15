@@ -2,12 +2,12 @@ import type { ErrorData } from 'hls.js'
 import type Mpegts from 'mpegts.js'
 import { id as appId } from '../../appinfo.json'
 import { proxied } from '../data/http'
-import { isWebOS } from '../platform/webos'
+import { deviceInfo, isWebOS } from '../platform/webos'
 import { playWithSound } from './autoplay'
 import { subtitleKind, TRACK_AUDIO, TRACK_SUBTITLE } from './ebml'
 import { readTracks, trackLabel } from './matroska'
-import { PlaybackError, type Attempt, type Engine, type EngineName, type Track, type TrackChoices } from './streams'
-import { CueList, PgsDecoder, subtitleText, type Subtitle } from './subtitles'
+import { chosenTrack, isMatroska, PlaybackError, splitHeaders, type Attempt, type Engine, type EngineName, type Track, type TrackChoices } from './streams'
+import { CueList, PgsDecoder, subtitleText, VobSubDecoder, type Subtitle } from './subtitles'
 import { loadHls, loadMpegts, type Hls } from './vendor'
 
 // Native playback can stall without an error; after this long the next engine gets a turn.
@@ -101,10 +101,12 @@ interface MediaTrackList {
 }
 
 /** Once the stream plays: back to `position`, with the tracks chosen before it restarted. */
-function resume(engine: Engine, position: number, { audio, subtitle }: TrackChoices): void {
+function resume(engine: Engine, position: number, { audio, subtitle, labels = {} }: TrackChoices): void {
   if (position > 0) engine.seek(position)
-  if (audio !== undefined && audio !== engine.selectedAudio()) engine.setAudioTrack(audio)
-  if (subtitle !== undefined && subtitle !== engine.selectedSubtitle()) engine.setSubtitleTrack(subtitle)
+  const audioId = chosenTrack(engine.audioTracks(), audio, labels.audio)
+  const subtitleId = chosenTrack(engine.subtitleTracks(), subtitle, labels.subtitle)
+  if (audioId !== undefined && audioId !== engine.selectedAudio()) engine.setAudioTrack(audioId)
+  if (subtitleId !== undefined && subtitleId !== engine.selectedSubtitle()) engine.setSubtitleTrack(subtitleId)
 }
 
 class NativeEngine implements Engine {
@@ -365,15 +367,67 @@ const SERVICE_TIMEOUT_MS = 15_000
 /** Bytes read from the start of a movie to find its tracks: Matroska lists them first. */
 const PROBE_BYTES = 64 * 1024
 const PROBE_TIMEOUT_MS = 10_000
-/** "A_OPUS", Matroska's codec ID for Opus audio: still found when the track list is cut off. */
-const OPUS_CODEC_ID = [0x41, 0x5f, 0x4f, 0x50, 0x55, 0x53]
+/**
+ * Matroska codec IDs of the audio the service turns into PCM (service/remux.ts): Opus and DTS. Also
+ * looked for as bytes when the track list is cut off.
+ */
+const CONVERTED = ['A_OPUS', 'A_DTS']
 /** A seek waits this long for the next one: a run of Left/Right presses restarts the stream once. */
 const SEEK_DELAY_MS = 700
 /** How often the engine fetches the subtitle cues the service has read. */
 const SUBTITLE_POLL_MS = 1000
 
-/** The remux engine needs the app's service, which only exists on the TV. */
-export const remuxSupport = (): boolean => isWebOS()
+/**
+ * The remux and proxy engines need the app's service: on a TV with webOS 5 or newer, whose Node.js
+ * runs it (webOS 4 has Node.js 0.12). There Matroska files go to the TV's player as they are.
+ */
+export function remuxSupport(): boolean {
+  const major = parseInt(deviceInfo()?.platformVersion ?? '', 10)
+  return isWebOS() && !(major < 5)
+}
+
+/** A warm-up of the service still going (warmService). */
+let warming: { cancel(): void } | undefined
+
+/**
+ * Starts the service while a Matroska movie's page shows and has it read the movie's header and cue
+ * index, so Play doesn't wait for either. It stays up a minute after (service/main.ts).
+ */
+export function warmService(url: string, position: number): void {
+  const webOS = window.webOS
+  if (!remuxSupport() || !isMatroska(url) || !webOS) return
+  stopWarming()
+  const controller = new AbortController()
+  let done = false
+  const finish = () => {
+    if (!done) request.cancel()
+    done = true
+  }
+  const request = webOS.service.request<{ port?: number }>(SERVICE, {
+    method: 'start',
+    subscribe: true,
+    onSuccess: (response) => {
+      if (done || !response.port) return finish()
+      // Let go of the service once it has the header: cancelling first would stop the read.
+      fetch(`http://127.0.0.1:${response.port}/info?u=${encodeURIComponent(url)}&t=${position}`, { signal: controller.signal })
+        .catch(() => undefined)
+        .then(finish)
+    },
+    onFailure: () => (done = true),
+  })
+  warming = {
+    cancel: () => {
+      controller.abort()
+      finish()
+    },
+  }
+}
+
+/** Ends a warm-up, closing its connection to the IPTV server: the movie starting now opens its own. */
+function stopWarming(): void {
+  warming?.cancel()
+  warming = undefined
+}
 
 /** The first PROBE_BYTES of the file at `url`; undefined if they can't be read. */
 async function readHead(url: string): Promise<Uint8Array | undefined> {
@@ -402,9 +456,10 @@ async function readHead(url: string): Promise<Uint8Array | undefined> {
   }
 }
 
-function contains(data: Uint8Array, bytes: number[]): boolean {
-  search: for (let i = 0; i + bytes.length <= data.length; i++) {
-    for (let j = 0; j < bytes.length; j++) if (data[i + j] !== bytes[j]) continue search
+/** Whether `data` holds the ASCII `text` (a codec ID). */
+function contains(data: Uint8Array, text: string): boolean {
+  search: for (let i = 0; i + text.length <= data.length; i++) {
+    for (let j = 0; j < text.length; j++) if (data[i + j] !== text.charCodeAt(j)) continue search
     return true
   }
   return false
@@ -424,6 +479,8 @@ interface TrackInfo {
   language: string
   codec: string
   default: boolean
+  /** DVD subtitles: the track's .idx header (frame size, palette). */
+  private?: string
 }
 
 /** The service's /info answer (service/server.ts). */
@@ -443,70 +500,21 @@ interface CueData {
   data?: string
 }
 
-const sameSubtitle = (a: Subtitle | undefined, b: Subtitle | undefined) =>
-  a === b || (!!a && !!b && ('text' in a && 'text' in b ? a.text === b.text : 'picture' in a && 'picture' in b && a.picture === b.picture))
-
-/**
- * Matroska movies on the TV. Its player can't decode Opus audio and stalls on files that carry it,
- * so those stream through the app's service, which turns the audio into PCM; anything else plays as
- * with NativeEngine. The TV's player counts each stream's time from zero, and a seek or another audio
- * track starts a new stream: positions add the movie time where the stream starts.
- *
- * The TV's player doesn't pass a file's subtitles on either: the service collects their cues while
- * it streams, and the app draws them (subtitleAt). Turning subtitles on for a movie the TV plays
- * itself moves it to the service's stream.
- */
-class RemuxEngine extends NativeEngine {
+/** The native player fed through the app's service (service/server.ts). */
+class ServiceEngine extends NativeEngine {
   private request?: { cancel(): void }
-  private base = ''
-  private offset = 0
-  /** The position asked for while a new stream starts. */
-  private target?: number
-  private seekTimer?: ReturnType<typeof setTimeout>
-  /** Bumped by every restart, so an earlier one that finishes late changes nothing. */
-  private generation = 0
-  private audios: TrackInfo[] = []
-  /** Track number of the audio playing. */
-  private audio?: number
-  /** The subtitle tracks the app can draw. */
-  private subtitles: TrackInfo[] = []
-  /** Track number of the subtitles shown; undefined when they are off. */
-  private subtitle?: number
-  /** Subtitle tracks whose cues the current stream collects. */
-  private collecting: number[] = []
-  private cues: { [track: number]: CueList } = {}
-  private pgs: { [track: number]: PgsDecoder } = {}
-  private pollTimer?: ReturnType<typeof setInterval>
-  private shown?: Subtitle
-
-  async start(position = 0, choices: TrackChoices = {}): Promise<void> {
-    const head = await Promise.race([readHead(this.url), this.cancellation.promise])
-    const tracks = head && readTracks(head)
-    if (tracks) {
-      this.audios = tracks.filter((t) => t.type === TRACK_AUDIO)
-      this.subtitles = tracks.filter((t) => t.type === TRACK_SUBTITLE && subtitleKind(t.codec))
-    }
-    const opus = tracks ? tracks.some((t) => t.type === TRACK_AUDIO && t.codec === 'A_OPUS') : !!head && contains(head, OPUS_CODEC_ID)
-    // Subtitles chosen before a restart need the service's stream too: go there straight away.
-    const subtitle = choices.subtitle !== undefined ? this.subtitles[choices.subtitle] : undefined
-    if (!opus && !subtitle) return super.start(position, { audio: choices.audio })
-    const audio = choices.audio !== undefined ? this.audios[choices.audio] : undefined
-    if (audio) this.audio = audio.number
-    if (subtitle) this.subtitle = subtitle.number
-    this.name = 'remux'
-    await this.connect()
-    await this.open(position)
-  }
+  /** The service's address, once it runs. */
+  protected base = ''
 
   /** Starts the service once; it stays up (an open subscription) until destroy. */
-  private async connect(): Promise<void> {
+  protected async connect(): Promise<void> {
     if (!this.base) this.base = `http://127.0.0.1:${await Promise.race([this.startService(), this.cancellation.promise])}`
   }
 
   /** Resolves with the service's port. */
   private startService(): Promise<number> {
     return new Promise((resolve, reject) => {
-      const fail = (why: string) => reject(new PlaybackError('format', `This movie needs the app's service: ${why}`))
+      const fail = (why: string) => reject(new PlaybackError('format', `The app's service didn't start: ${why}`))
       const webOS = window.webOS
       if (!webOS) return fail('not on a TV')
       const timer = setTimeout(() => fail('no answer'), SERVICE_TIMEOUT_MS)
@@ -524,6 +532,70 @@ class RemuxEngine extends NativeEngine {
         },
       })
     })
+  }
+
+  destroy(): void {
+    this.request?.cancel()
+    super.destroy()
+  }
+}
+
+const sameSubtitle = (a: Subtitle | undefined, b: Subtitle | undefined) =>
+  a === b || (!!a && !!b && ('text' in a && 'text' in b ? a.text === b.text : 'picture' in a && 'picture' in b && a.picture === b.picture))
+
+/**
+ * Matroska movies on the TV. Its player can't decode Opus audio and stalls on files that carry it,
+ * and LG's TVs of 2020 and 2021 have no DTS decoder, so those stream through the app's service,
+ * which turns the audio into PCM; anything else plays as with NativeEngine. The TV's player counts
+ * each stream's time from zero, and a seek or another audio track starts a new stream: positions add
+ * the movie time where the stream starts.
+ *
+ * The TV's player doesn't pass a file's subtitles on either: the service collects their cues while
+ * it streams, and the app draws them (subtitleAt). Turning subtitles on for a movie the TV plays
+ * itself moves it to the service's stream.
+ */
+class RemuxEngine extends ServiceEngine {
+  private offset = 0
+  /** The position asked for while a new stream starts. */
+  private target?: number
+  private seekTimer?: ReturnType<typeof setTimeout>
+  /** Bumped by every restart, so an earlier one that finishes late changes nothing. */
+  private generation = 0
+  private audios: TrackInfo[] = []
+  /** Track number of the audio playing. */
+  private audio?: number
+  /** The subtitle tracks the app can draw. */
+  private subtitles: TrackInfo[] = []
+  /** Track number of the subtitles shown; undefined when they are off. */
+  private subtitle?: number
+  /** Subtitle tracks whose cues the current stream collects. */
+  private collecting: number[] = []
+  private cues: { [track: number]: CueList } = {}
+  private pictures: { [track: number]: PgsDecoder | VobSubDecoder } = {}
+  private pollTimer?: ReturnType<typeof setInterval>
+  private shown?: Subtitle
+
+  async start(position = 0, choices: TrackChoices = {}): Promise<void> {
+    stopWarming()
+    const head = await Promise.race([readHead(this.url), this.cancellation.promise])
+    const tracks = head && readTracks(head)
+    if (tracks) {
+      this.audios = tracks.filter((t) => t.type === TRACK_AUDIO)
+      this.subtitles = tracks.filter((t) => t.type === TRACK_SUBTITLE && subtitleKind(t.codec))
+    }
+    const convert = tracks ? tracks.some((t) => t.type === TRACK_AUDIO && CONVERTED.indexOf(t.codec) >= 0) : !!head && CONVERTED.some((codec) => contains(head, codec))
+    const labels = choices.labels || {}
+    // Subtitles chosen before a restart need the service's stream too: go there straight away.
+    const subtitleId = chosenTrack(this.subtitleTracks(), choices.subtitle, labels.subtitle)
+    const subtitle = subtitleId !== undefined ? this.subtitles[subtitleId] : undefined
+    if (!convert && !subtitle) return super.start(position, { audio: choices.audio, labels: { audio: labels.audio } })
+    const audioId = chosenTrack(this.serviceAudioTracks(), choices.audio, labels.audio)
+    const audio = audioId !== undefined ? this.audios[audioId] : undefined
+    if (audio) this.audio = audio.number
+    if (subtitle) this.subtitle = subtitle.number
+    this.name = 'remux'
+    await this.connect()
+    await this.open(position)
   }
 
   /** Plays a new stream from the cue at or before `position`. */
@@ -544,9 +616,12 @@ class RemuxEngine extends NativeEngine {
     if (this.audio === undefined) this.audio = (info.audio.find((t) => t.default) ?? info.audio[0])?.number
     this.offset = info.start
     // Text cues are small: every text track is collected, so switching between them is instant.
-    // Pictures (PGS) only for the track shown; a new stream starts their decoders afresh.
+    // Pictures (PGS, DVD) only for the track shown; a new stream starts their decoders afresh.
     this.collecting = this.subtitles.filter((t) => subtitleKind(t.codec) === 'text' || t.number === this.subtitle).map((t) => t.number)
-    for (const t of this.subtitles) if (subtitleKind(t.codec) === 'pgs' && this.collecting.indexOf(t.number) >= 0) this.pgs[t.number] = new PgsDecoder()
+    for (const t of this.subtitles) {
+      const kind = subtitleKind(t.codec)
+      if (kind !== 'text' && this.collecting.indexOf(t.number) >= 0) this.pictures[t.number] = kind === 'pgs' ? new PgsDecoder() : new VobSubDecoder(t.private ?? '')
+    }
     const query = `u=${encodeURIComponent(this.url)}&t=${info.start}&a=${this.audio ?? 0}&s=${this.collecting.join(',')}`
     await this.load(`${this.base}/remux?${query}`)
     if (this.subtitles.length && this.pollTimer === undefined) this.pollTimer = setInterval(() => void this.fetchCues(), SUBTITLE_POLL_MS)
@@ -567,8 +642,15 @@ class RemuxEngine extends NativeEngine {
         const text = subtitleText(track.codec, cue.text)
         if (text) list.add({ start: cue.start, end: cue.end, text })
       } else if (cue.data !== undefined) {
-        const picture = this.pgs[cue.track]?.decode(fromBase64(cue.data))
-        if (picture) list.add({ start: cue.start, end: cue.end, picture })
+        const decoder = this.pictures[cue.track]
+        if (decoder instanceof VobSubDecoder) {
+          // A DVD subpicture says itself when it shows and goes.
+          const unit = decoder.decode(fromBase64(cue.data))
+          if (unit) list.add({ start: cue.start + unit.start, end: unit.end !== undefined ? cue.start + unit.end : cue.end, picture: unit.picture })
+        } else {
+          const picture = decoder?.decode(fromBase64(cue.data))
+          if (picture) list.add({ start: cue.start, end: cue.end, picture })
+        }
       }
     }
   }
@@ -623,6 +705,11 @@ class RemuxEngine extends NativeEngine {
 
   audioTracks(): Track[] {
     if (this.name !== 'remux') return super.audioTracks()
+    return this.serviceAudioTracks()
+  }
+
+  /** The audio tracks as the service's stream offers them. */
+  private serviceAudioTracks(): Track[] {
     return this.audios.map((t, i) => ({ id: i, label: trackLabel(t, i) }))
   }
 
@@ -669,8 +756,22 @@ class RemuxEngine extends NativeEngine {
   destroy(): void {
     clearTimeout(this.seekTimer)
     clearInterval(this.pollTimer)
-    this.request?.cancel()
     super.destroy()
+  }
+}
+
+/**
+ * Streams that need request headers web code can't set (a playlist's User-Agent or Referer, after
+ * the URL's `|`): the native player fetches them through the app's service, which sends them.
+ */
+class ProxyEngine extends ServiceEngine {
+  name: EngineName = 'proxy'
+
+  async start(position = 0, choices: TrackChoices = {}): Promise<void> {
+    const { url, headers } = splitHeaders(this.url)
+    await this.connect()
+    await this.load(`${this.base}/proxy?u=${encodeURIComponent(url)}&h=${encodeURIComponent(headers)}`)
+    resume(this, position, choices)
   }
 }
 
@@ -678,6 +779,8 @@ export function createEngine(attempt: Attempt, video: HTMLVideoElement): Engine 
   switch (attempt.engine) {
     case 'remux':
       return new RemuxEngine(video, attempt.url)
+    case 'proxy':
+      return new ProxyEngine(video, attempt.url)
     case 'native':
       return new NativeEngine(video, attempt.url)
     case 'hls.js':

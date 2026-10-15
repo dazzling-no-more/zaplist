@@ -248,12 +248,14 @@ the JS service; nothing is hard-coded. The UX scenario's appendix says so for th
 
 The package includes a JS service, `zaplist.player.service` (`service/`). LG advises against services
 that run for long, and this one runs for as long as a movie plays through it, so explain it to the
-reviewers too (in the appendix, or the submission's notes): the TV's player can't decode Opus audio or
-show the subtitles inside MKV files, so for those movies the service streams the file to the player
-with the audio turned into PCM and reads the subtitles for the app to draw. It runs only while such a
-movie plays and for a minute after, listens on the TV's loopback address (127.0.0.1) only, and opens
-no connection but the one to the movie's own server. The test playlist has no such movie, so the
-reviewers won't see it run.
+reviewers too (in the appendix, or the submission's notes): the TV's player can't decode Opus audio
+(nor DTS, on LG's TVs of 2020 and 2021) or show the subtitles inside MKV files, so for those movies
+the service streams the file to the player with the audio turned into PCM and reads the subtitles for
+the app to draw. It also fetches the live streams whose playlist asks for a User-Agent or Referer,
+which web apps can't send. It starts when an MKV movie's page opens (to read the movie's header before
+Play) or when such a movie or stream plays, runs while it plays and for a minute after, listens on the
+TV's loopback address (127.0.0.1) only, and opens no connection but those to the stream's own server.
+The test playlist has no such movie or stream, so the reviewers won't see it run.
 
 ## Sources
 

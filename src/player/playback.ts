@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { diagnostics, recordError } from './diagnostics'
 import { createEngine, mseSupport, nativePlaysMpegTs, releaseVideo, remuxSupport } from './engines'
-import { playbackAttempts, PlaybackError, summarizeFailures, type Engine, type Failure, type TrackChoices } from './streams'
+import { playbackAttempts, PlaybackError, summarizeFailures, type Engine, type Failure, type TrackChoices, type TrackLabels } from './streams'
 
 /** Waits before each retry of a failed stream; after the last one playback gives up. */
 export const RETRY_DELAYS_MS = [1000, 2000, 4000]
@@ -45,10 +45,11 @@ export class Playback {
 
   /**
    * `position`: seconds into the stream to start at, asked again on every retry (movies). Playing the
-   * same stream again (app back from the background, network back) keeps the tracks chosen for it.
+   * same stream again (app back from the background, network back) keeps the tracks chosen for it;
+   * another stream starts with the tracks labelled `labels` (those chosen for the episode before).
    */
-  play(urls: string[], position: () => number = () => 0): void {
-    if (urls.join('\n') !== this.urls.join('\n')) this.choices = {}
+  play(urls: string[], position: () => number = () => 0, labels: TrackLabels = {}): void {
+    if (urls.join('\n') !== this.urls.join('\n')) this.choices = { labels: { ...labels } }
     this.urls = urls
     this.position = position
     this.retries = 0
@@ -78,13 +79,26 @@ export class Playback {
   /** Chooses an audio track (id from current().audioTracks()); kept when the stream restarts. */
   setAudioTrack(id: number): void {
     this.choices.audio = id
+    const track = this.engine?.audioTracks().filter((t) => t.id === id)[0]
+    if (track) this.labels().audio = track.label
     this.engine?.setAudioTrack(id)
   }
 
   /** Chooses subtitles (id from current().subtitleTracks(), -1: off); kept when the stream restarts. */
   setSubtitleTrack(id: number): void {
     this.choices.subtitle = id
+    const track = this.engine?.subtitleTracks().filter((t) => t.id === id)[0]
+    if (track || id < 0) this.labels().subtitle = track ? track.label : ''
     this.engine?.setSubtitleTrack(id)
+  }
+
+  /** Labels of the tracks chosen for this stream, or carried over from the one before: for the next episode. */
+  chosenLabels(): TrackLabels {
+    return { ...this.labels() }
+  }
+
+  private labels(): TrackLabels {
+    return (this.choices.labels ??= {})
   }
 
   private reset(): number {

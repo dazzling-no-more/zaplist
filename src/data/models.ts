@@ -69,8 +69,8 @@ export interface Channel {
   urls: string[]
   catchup?: CatchupInfo
   /**
-   * #EXTVLCOPT / #KODIPROP options. Stored for reference only: web code can't set headers such as
-   * User-Agent or Referer, and DRM properties don't apply.
+   * #EXTVLCOPT / #KODIPROP options. Those naming request headers (User-Agent, Referer) apply on the
+   * TV, through the app's service (streams.ts withHeaders); DRM properties don't.
    */
   options?: Record<string, string>
   /** Xtream stream_id, used for the short EPG. */

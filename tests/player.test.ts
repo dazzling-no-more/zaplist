@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { playbackAttempts, PlaybackError, streamKind, summarizeFailures, type Attempt, type Engine, type TrackChoices } from '../src/player/streams'
+import { chosenTrack, playbackAttempts, PlaybackError, splitHeaders, streamKind, summarizeFailures, withHeaders, type Attempt, type Engine, type TrackChoices } from '../src/player/streams'
 
 // Fake engines: each attempt's outcome comes from `outcomes` (keyed by engine name), in order.
 const outcomes: Record<string, (() => Promise<void>)[]> = {}
@@ -24,10 +24,17 @@ vi.mock('../src/player/engines', () => ({
       },
       currentTime: () => 0,
       seek: () => {},
-      audioTracks: () => [],
+      audioTracks: () => [
+        { id: 0, label: 'eng' },
+        { id: 1, label: 'deu' },
+      ],
       selectedAudio: () => -1,
       setAudioTrack: () => {},
-      subtitleTracks: () => [],
+      subtitleTracks: () => [
+        { id: 0, label: 'en' },
+        { id: 1, label: 'fr' },
+        { id: 2, label: 'de' },
+      ],
       selectedSubtitle: () => -1,
       setSubtitleTrack: () => {},
       destroy() {
@@ -96,6 +103,50 @@ describe('playbackAttempts', () => {
       { url: 'm.mp4', engine: 'native' },
     ])
     expect(playbackAttempts(['m.mkv'], all, true, false).map((a) => a.engine)).toEqual(['native'])
+  })
+
+  it('tries streams that need headers through the service first on the TV, then without them', () => {
+    expect(playbackAttempts(['a.m3u8|Referer=https%3A%2F%2Fsite%2F'], all, true, true)).toEqual([
+      { url: 'a.m3u8|Referer=https%3A%2F%2Fsite%2F', engine: 'proxy' },
+      { url: 'a.m3u8', engine: 'native' },
+      { url: 'a.m3u8', engine: 'hls.js' },
+    ])
+    expect(playbackAttempts(['a.m3u8|Referer=x'], all, true, false)).toEqual([
+      { url: 'a.m3u8', engine: 'native' },
+      { url: 'a.m3u8', engine: 'hls.js' },
+    ])
+  })
+})
+
+describe('withHeaders', () => {
+  it('adds the headers a channel’s playlist options name, as Kodi writes them', () => {
+    expect(withHeaders(['http://h/a.m3u8', 'http://h/b.ts'], { 'http-user-agent': 'VLC/3.0', 'http-referrer': 'https://site.example/live?x=1' })).toEqual([
+      'http://h/a.m3u8|User-Agent=VLC%2F3.0&Referer=https%3A%2F%2Fsite.example%2Flive%3Fx%3D1',
+      'http://h/b.ts|User-Agent=VLC%2F3.0&Referer=https%3A%2F%2Fsite.example%2Flive%3Fx%3D1',
+    ])
+    expect(withHeaders(['http://h/a.m3u8'], { 'inputstream.adaptive.stream_headers': 'Referer=https%3A%2F%2Fsite%2F' })).toEqual(['http://h/a.m3u8|Referer=https%3A%2F%2Fsite%2F'])
+  })
+
+  it('keeps headers already in the URL, and URLs without options as they are', () => {
+    expect(withHeaders(['http://h/a.m3u8|Origin=o'], { 'http-referrer': 'r' })).toEqual(['http://h/a.m3u8|Origin=o'])
+    expect(withHeaders(['http://h/a.m3u8'], { 'inputstream.adaptive.license_type': 'widevine' })).toEqual(['http://h/a.m3u8'])
+    expect(withHeaders(['http://h/a.m3u8'])).toEqual(['http://h/a.m3u8'])
+    expect(splitHeaders('http://h/a.m3u8|Origin=o')).toEqual({ url: 'http://h/a.m3u8', headers: 'Origin=o' })
+  })
+})
+
+describe('chosenTrack', () => {
+  const tracks = [
+    { id: 0, label: 'en' },
+    { id: 1, label: 'fr' },
+  ]
+
+  it('takes the id chosen for the stream, else the track with the label', () => {
+    expect(chosenTrack(tracks, 0, 'fr')).toBe(0)
+    expect(chosenTrack(tracks, undefined, 'fr')).toBe(1)
+    expect(chosenTrack(tracks, undefined, '')).toBe(-1) // subtitles off
+    expect(chosenTrack(tracks, undefined, 'de')).toBeUndefined()
+    expect(chosenTrack(tracks, undefined, undefined)).toBeUndefined()
   })
 })
 
@@ -205,8 +256,8 @@ describe('Playback', () => {
     expect(created[2].engine.position).toBe(0)
   })
 
-  it('keeps the chosen tracks when the same stream restarts, and forgets them for another one', async () => {
-    outcomes.native = [ok, ok, ok, ok]
+  it('keeps the chosen tracks when the same stream restarts, and only their labels for another one', async () => {
+    outcomes.native = [ok, ok, ok, ok, ok, ok]
     const playback = new Playback(video)
     playback.play(['movie.mp4'])
     await flush()
@@ -215,14 +266,23 @@ describe('Playback', () => {
     playback.current()!.onFatal!(new PlaybackError('timeout', 'stalled'))
     vi.advanceTimersByTime(RETRY_DELAYS_MS[0])
     await flush()
-    expect(created[1].engine.choices).toEqual({ audio: 1, subtitle: 2 })
+    const chosen = { audio: 1, subtitle: 2, labels: { audio: 'deu', subtitle: 'de' } }
+    expect(created[1].engine.choices).toEqual(chosen)
 
-    playback.play(['movie.mp4']) // back from the background
+    playback.play(['movie.mp4'], () => 0, { subtitle: 'fr' }) // back from the background
     await flush()
-    expect(created[2].engine.choices).toEqual({ audio: 1, subtitle: 2 })
-    playback.play(['next-episode.mp4'])
+    expect(created[2].engine.choices).toEqual(chosen)
+    expect(playback.chosenLabels()).toEqual({ audio: 'deu', subtitle: 'de' })
+
+    playback.play(['next-episode.mp4'], () => 0, playback.chosenLabels())
     await flush()
-    expect(created[3].engine.choices).toEqual({})
+    expect(created[3].engine.choices).toEqual({ labels: { audio: 'deu', subtitle: 'de' } })
+    playback.setSubtitleTrack(-1)
+    expect(playback.chosenLabels()).toEqual({ audio: 'deu', subtitle: '' })
+
+    playback.play(['channel.m3u8'])
+    await flush()
+    expect(created[4].engine.choices).toEqual({ labels: {} })
   })
 
   it('stop releases the engine and cancels a pending retry', async () => {

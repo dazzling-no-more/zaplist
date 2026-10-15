@@ -73,6 +73,22 @@ describe('watch progress', () => {
     expect(reloaded.continueIds(JSON.parse(store['iptv-player.watch']))).toEqual({ movies: ['m1'], series: ['s1'] })
   })
 
+  it('starts an episode with the tracks chosen for the series’ latest one, a movie with its own', async () => {
+    const watch = await load()
+    let now = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => ++now)
+    watch.recordWatch('e1', { position: 50, duration: 1000, seriesId: 's1', tracks: { subtitle: 'en' } })
+    watch.recordWatch('e2', { position: 70, duration: 1000, seriesId: 's1', tracks: { subtitle: '' } })
+    watch.recordWatch('x1', { position: 70, duration: 1000, seriesId: 's2', tracks: { audio: 'fre' } })
+    watch.recordWatch('m1', { position: 100, duration: 1000, tracks: { audio: 'deu' } })
+    vi.restoreAllMocks()
+    expect(watch.lastTracks('e3', 's1')).toEqual({ subtitle: '' })
+    expect(watch.lastTracks('e1', 's1')).toEqual({ subtitle: '' })
+    expect(watch.lastTracks('m1')).toEqual({ audio: 'deu' })
+    expect(watch.lastTracks('m2')).toBeUndefined()
+    expect(watch.lastTracks('y1', 's3')).toBeUndefined()
+  })
+
   it('forgets the oldest entries beyond its limit', async () => {
     const watch = await load()
     let now = 0

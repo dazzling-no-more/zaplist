@@ -55,9 +55,10 @@ export function trackLanguage<T extends Uint8Array>(entry: T, text: (data: T | u
   return text(child(entry, ID.LanguageIETF)) || text(child(entry, ID.Language)) || 'eng'
 }
 
-/** How the app shows a Matroska subtitle codec (as text, or as Blu-ray PGS pictures); undefined if it can't. */
-export function subtitleKind(codec: string): 'text' | 'pgs' | undefined {
+/** How the app shows a Matroska subtitle codec (as text, Blu-ray PGS or DVD pictures); undefined if it can't. */
+export function subtitleKind(codec: string): 'text' | 'pgs' | 'vobsub' | undefined {
   if (codec === 'S_HDMV/PGS') return 'pgs'
+  if (codec === 'S_VOBSUB') return 'vobsub'
   return /^S_TEXT\/(UTF8|ASS|SSA|WEBVTT)$/.test(codec) ? 'text' : undefined
 }
 

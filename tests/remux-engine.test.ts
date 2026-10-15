@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { element, ID, uintElement } from '../service/ebml'
+import { SPU, VOBSUB_IDX } from './fixtures/vobsub'
 
 // The remux engine against a fake <video>, a fake webOS service bridge and a fake fetch that plays
 // both the IPTV server (the movie's first bytes) and the app's service (/info, /subs).
-vi.mock('../src/platform/webos', () => ({ isWebOS: () => true }))
+const device = vi.hoisted(() => ({ platformVersion: undefined as string | undefined }))
+vi.mock('../src/platform/webos', () => ({ isWebOS: () => true, deviceInfo: () => device }))
 vi.mock('../src/data/http', () => ({ proxied: (url: string) => url }))
 
-const { createEngine } = await import('../src/player/engines')
+const { createEngine, remuxSupport, warmService } = await import('../src/player/engines')
 
 const MOVIE = 'http://iptv.example/movie/u/p/1.mkv'
 const SERVICE = 'http://127.0.0.1:4321'
@@ -45,18 +47,26 @@ function movieHead(audioCodec: string): Uint8Array<ArrayBuffer> {
 
 let head: Uint8Array<ArrayBuffer>
 let requests: string[]
+/** /info answers only once aborted. */
+let slowInfo = false
 let cues: unknown[]
-const info = { audio: [{ number: 2, name: '', language: 'eng', codec: 'A_OPUS', default: true }], subtitles: [{ number: 3, name: 'SDH', language: 'eng', codec: 'S_TEXT/UTF8', default: false }] }
+type TrackInfo = { number: number; name: string; language: string; codec: string; default: boolean; private?: string }
+const info: { audio: TrackInfo[]; subtitles: TrackInfo[] } = {
+  audio: [{ number: 2, name: '', language: 'eng', codec: 'A_OPUS', default: true }],
+  subtitles: [{ number: 3, name: 'SDH', language: 'eng', codec: 'S_TEXT/UTF8', default: false }],
+}
 
 beforeEach(() => {
   requests = []
   cues = []
+  slowInfo = false
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
       requests.push(url.replace(SERVICE, '').replace(encodeURIComponent(MOVIE), 'MOVIE'))
       if (url === MOVIE) return new Response(head)
       if (url.startsWith(`${SERVICE}/info`)) {
+        if (slowInfo) await new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))))
         const t = Number(new URL(url).searchParams.get('t'))
         return Response.json({ ...info, start: Math.floor(t / 10) * 10 }) // cues every 10 s
       }
@@ -112,6 +122,13 @@ describe('remux engine', () => {
     engine.destroy()
   })
 
+  it('streams a DTS movie through the service too', async () => {
+    head = movieHead('A_DTS')
+    const engine = await start(new FakeVideo())
+    expect(engine.name).toBe('remux')
+    engine.destroy()
+  })
+
   it('restarts the stream once for a run of seeks', async () => {
     head = movieHead('A_OPUS')
     const video = new FakeVideo()
@@ -144,6 +161,25 @@ describe('remux engine', () => {
     engine.destroy()
   })
 
+  it('draws DVD subtitles from the subpictures the service passes on, while they show', async () => {
+    head = movieHead('A_OPUS')
+    info.subtitles.push({ number: 4, name: '', language: 'fre', codec: 'S_VOBSUB', default: false, private: VOBSUB_IDX })
+    try {
+      const video = new FakeVideo()
+      const engine = await start(video)
+      engine.setSubtitleTrack(1) // pictures are collected only for the track shown: a new stream
+      await playing(video, '&s=3,4')
+      cues.push({ track: 4, start: 30, data: Buffer.from(SPU).toString('base64') })
+      await until(() => cues.length === 0)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(engine.subtitleAt!(30.5)).toMatchObject({ picture: { width: 720, height: 576, objects: [{ x: 10, y: 20 }] } })
+      expect(engine.subtitleAt!(31.1)).toBeUndefined() // 88 ticks: just over a second
+      engine.destroy()
+    } finally {
+      info.subtitles.pop()
+    }
+  })
+
   it('goes straight to the service for subtitles chosen before a restart', async () => {
     head = movieHead('A_AC3')
     const video = new FakeVideo()
@@ -152,5 +188,63 @@ describe('remux engine', () => {
     expect(video.src).toContain('&t=20&a=2&s=3')
     expect(engine.selectedSubtitle()).toBe(0)
     engine.destroy()
+  })
+
+  it('chooses the subtitles labelled as those of the episode before', async () => {
+    head = movieHead('A_AC3')
+    const video = new FakeVideo()
+    const engine = await start(video, 0, { labels: { subtitle: 'eng' } }) // as the file's header lists it
+    expect(engine.name).toBe('remux')
+    expect(engine.selectedSubtitle()).toBe(0)
+    engine.destroy()
+
+    const other = await start(new FakeVideo(), 0, { labels: { subtitle: 'fre' } }) // not in this movie
+    expect(other.name).toBe('native')
+  })
+})
+
+describe('remuxSupport', () => {
+  it('leaves the service out on webOS 4, whose Node.js can’t run it', () => {
+    device.platformVersion = '4.9.0'
+    expect(remuxSupport()).toBe(false)
+    device.platformVersion = '5.4.0'
+    expect(remuxSupport()).toBe(true)
+    device.platformVersion = undefined // not said: tried
+    expect(remuxSupport()).toBe(true)
+  })
+})
+
+describe('service warm-up', () => {
+  /** Answers each `start` with the port; returns the cancel of each request. */
+  function fakeService(): ReturnType<typeof vi.fn>[] {
+    const cancels: ReturnType<typeof vi.fn>[] = []
+    const service = (window as unknown as { webOS: { service: { request: unknown } } }).webOS.service
+    service.request = (_uri: string, options: { onSuccess: (r: unknown) => void }) => {
+      setTimeout(() => options.onSuccess({ port: 4321 }))
+      const cancel = vi.fn()
+      cancels.push(cancel)
+      return { cancel }
+    }
+    return cancels
+  }
+
+  it('has the service read a Matroska movie’s header, then lets it go', async () => {
+    const cancels = fakeService()
+    warmService(MOVIE, 95)
+    await until(() => cancels[0]?.mock.calls.length === 1)
+    expect(requests).toEqual(['/info?u=MOVIE&t=95'])
+    warmService('http://iptv.example/movie/u/p/2.mp4', 0) // the TV plays MP4 itself
+    expect(cancels).toHaveLength(1)
+  })
+
+  it('ends a warm-up still reading once the movie starts, before it reads the movie itself', async () => {
+    const cancels = fakeService()
+    slowInfo = true
+    warmService(MOVIE, 0)
+    await until(() => requests.length === 1)
+    head = movieHead('A_AC3')
+    await start(new FakeVideo())
+    expect(cancels[0]).toHaveBeenCalledTimes(1)
+    expect(requests).toEqual(['/info?u=MOVIE&t=0', MOVIE])
   })
 })

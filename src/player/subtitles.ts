@@ -1,8 +1,9 @@
-// Subtitles the TV's player can't show (inside MKV files), drawn by the app instead: text tracks and
-// Blu-ray PGS pictures. The app's service collects their cues from the file (service/remux.ts).
+// Subtitles the TV's player can't show (inside MKV files), drawn by the app instead: text tracks,
+// Blu-ray PGS and DVD (VobSub) pictures. The app's service collects their cues from the file
+// (service/remux.ts).
 
-/** What the screen shows now: text lines, or a picture made of PGS objects. */
-export type Subtitle = { text: string } | { picture: PgsPicture }
+/** What the screen shows now: text lines, or a picture. */
+export type Subtitle = { text: string } | { picture: SubtitlePicture }
 
 export interface PgsObject {
   /** Position and size in the picture's frame. */
@@ -16,12 +17,25 @@ export interface PgsObject {
   palette: Uint8Array
 }
 
-/** A PGS picture in a frame of `width` × `height` (the video's size); no objects clears the screen. */
-export interface PgsPicture {
+/** A decoded part of a picture (DVD subtitles). */
+export interface BitmapObject {
+  x: number
+  y: number
   width: number
   height: number
-  objects: PgsObject[]
+  /** RGBA. */
+  pixels: Uint8ClampedArray<ArrayBuffer>
 }
+
+/** A picture in a frame of `width` × `height` (the video's size); no objects clears the screen. */
+export interface SubtitlePicture {
+  width: number
+  height: number
+  objects: Array<PgsObject | BitmapObject>
+}
+
+/** An object's RGBA pixels. */
+export const objectPixels = (object: PgsObject | BitmapObject): Uint8ClampedArray<ArrayBuffer> => ('pixels' in object ? object.pixels : pgsPixels(object))
 
 /**
  * The words of a text subtitle. ASS and SSA events lose their other fields and their styling, SRT
@@ -65,7 +79,7 @@ export class PgsDecoder {
   private hd = true
 
   /** The picture a display set shows; undefined if it refers to objects or palettes never received. */
-  decode(set: Uint8Array): PgsPicture | undefined {
+  decode(set: Uint8Array): SubtitlePicture | undefined {
     let composition: Composition | undefined
     for (let pos = 0; pos + 3 <= set.length; ) {
       const type = set[pos]
@@ -178,13 +192,131 @@ export function pgsPixels(object: PgsObject): Uint8ClampedArray<ArrayBuffer> {
   return out
 }
 
+/** DVD subpicture times count in units of 1024 ticks of a 90 kHz clock. */
+const SPU_TICK_S = 1024 / 90000
+
+/**
+ * DVD (VobSub) subtitles. A track's CodecPrivate is an .idx header (frame size, 16-colour palette);
+ * each block is a subpicture unit: a 2-bit run-length encoded bitmap in two fields (even and odd
+ * lines), and control sequences with its place, four colours from the palette with their opacity,
+ * and when it shows and goes.
+ */
+export class VobSubDecoder {
+  private readonly width: number
+  private readonly height: number
+  /** RGB. */
+  private readonly palette: number[]
+
+  constructor(idx: string) {
+    const size = /size:\s*(\d+)\s*x\s*(\d+)/.exec(idx)
+    this.width = size ? Number(size[1]) : 720
+    this.height = size ? Number(size[2]) : 576
+    const palette = /palette:([^\n]*)/.exec(idx)
+    this.palette = palette ? palette[1].split(',').map((c) => parseInt(c.trim(), 16) || 0) : []
+    // Without a palette: greys, so the text still shows.
+    for (let i = this.palette.length; i < 16; i++) this.palette.push(i === 0 ? 0 : 0xffffff - (i % 4) * 0x333333)
+  }
+
+  /** The picture and its times (seconds after the block's start); undefined for a broken unit. */
+  decode(unit: Uint8Array): { picture: SubtitlePicture; start: number; end?: number } | undefined {
+    // Units over 64 kB (HD) start with 0 and use 4-byte offsets.
+    const wide = u16(unit, 0) === 0
+    const offset = (at: number) => (wide ? u16(unit, at) * 65536 + u16(unit, at + 2) : u16(unit, at))
+    const size = wide ? 4 : 2
+    let control = offset(size)
+    let start = 0
+    let end: number | undefined
+    const colors = [0, 0, 0, 0]
+    const alpha = [0, 0, 0, 0]
+    let area: number[] | undefined
+    let fields: number[] | undefined
+    for (let guard = 0; control > 0 && control + 2 + size < unit.length && guard < 64; guard++) {
+      const time = u16(unit, control) * SPU_TICK_S
+      const next = offset(control + 2)
+      let p = control + 2 + size
+      commands: while (p < unit.length) {
+        switch (unit[p++]) {
+          case 0x01:
+            start = time
+            break
+          case 0x02:
+            end = time
+            break
+          case 0x03: // colour of each of the 4 pixel values, from the last
+            colors.splice(0, 4, unit[p + 1] & 15, unit[p + 1] >> 4, unit[p] & 15, unit[p] >> 4)
+            p += 2
+            break
+          case 0x04: // their opacity, 0 to 15
+            alpha.splice(0, 4, unit[p + 1] & 15, unit[p + 1] >> 4, unit[p] & 15, unit[p] >> 4)
+            p += 2
+            break
+          case 0x05: // x1, x2, y1, y2: 12 bits each
+            area = [(unit[p] << 4) | (unit[p + 1] >> 4), ((unit[p + 1] & 15) << 8) | unit[p + 2], (unit[p + 3] << 4) | (unit[p + 4] >> 4), ((unit[p + 4] & 15) << 8) | unit[p + 5]]
+            p += 6
+            break
+          case 0x06: // where each field's lines start
+            fields = [u16(unit, p), u16(unit, p + 2)]
+            p += 4
+            break
+          case 0x00: // forced (menu) subpicture
+            break
+          default: // 0xff ends the sequence; anything else can't be read past
+            break commands
+        }
+      }
+      if (next <= control) break
+      control = next
+    }
+    if (!area || !fields) return undefined
+    const [x1, x2, y1, y2] = area
+    const width = x2 - x1 + 1
+    const height = y2 - y1 + 1
+    if (width <= 0 || height <= 0 || width * height > this.width * this.height) return undefined
+    const rgba = colors.map((c, i) => {
+      const rgb = this.palette[c]
+      return [rgb >> 16, (rgb >> 8) & 255, rgb & 255, alpha[i] * 17]
+    })
+    const pixels = new Uint8ClampedArray(width * height * 4)
+    for (let field = 0; field < 2; field++) spuField(unit, fields[field], width, height, field, rgba, pixels)
+    return { picture: { width: this.width, height: this.height, objects: [{ x: x1, y: y1, width, height, pixels }] }, start, end }
+  }
+}
+
+/** Decodes one field (every other line, from `first`) of a subpicture's run-length data into `out`. */
+function spuField(unit: Uint8Array, from: number, width: number, height: number, first: number, rgba: number[][], out: Uint8ClampedArray): void {
+  let nibble = from * 2
+  const read = () => {
+    const byte = unit[nibble >> 1]
+    const value = nibble & 1 ? byte & 15 : byte >> 4
+    nibble++
+    return value
+  }
+  for (let y = first; y < height && nibble >> 1 < unit.length; y += 2) {
+    for (let x = 0; x < width; ) {
+      // A run is 1 to 4 nibbles: the more leading zero bits, the longer; its last 2 bits are the colour.
+      let code = read()
+      for (let limit = 4; code < limit && limit <= 0x40; limit <<= 2) code = (code << 4) | read()
+      const count = code < 4 ? width - x : Math.min(code >> 2, width - x) // < 4: to the end of the line
+      const [r, g, b, a] = rgba[code & 3]
+      for (let end = x + count; x < end; x++) {
+        const at = (y * width + x) * 4
+        out[at] = r
+        out[at + 1] = g
+        out[at + 2] = b
+        out[at + 3] = a
+      }
+    }
+    nibble = (nibble + 1) & ~1 // each line starts on a byte
+  }
+}
+
 export interface Cue {
   /** Seconds into the movie. */
   start: number
-  /** Absent: until the next cue of the track (PGS), or a few seconds (text). */
+  /** Absent: until the next cue of the track (pictures), or a few seconds (text). */
   end?: number
   text?: string
-  picture?: PgsPicture
+  picture?: SubtitlePicture
 }
 
 const TEXT_WITHOUT_END_S = 5
@@ -205,7 +337,7 @@ export class CueList {
     const last = this.after(seconds) - 1
     if (last < 0) return []
     const latest = this.cues[last]
-    if (latest.picture) return latest.picture.objects.length ? [latest] : []
+    if (latest.picture) return latest.picture.objects.length && (latest.end === undefined || latest.end > seconds) ? [latest] : []
     const shown: Cue[] = []
     // Text cues can overlap (a sign during dialogue): look back a few.
     for (let i = last; i >= 0 && i > last - 10; i--) {

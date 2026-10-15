@@ -24,17 +24,22 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
   can't play a stream. Zapping, number entry, a mini channel list, now/next, play/pause, audio and subtitle tracks,
   picture shape (fit, zoom, fill, 16:9, 4:3), automatic retries and a readable error otherwise. Playback
   stops when the app is hidden or the network drops and resumes on its own. The last channel reopens
-  when the app starts.
+  when the app starts. Streams whose playlist asks for a User-Agent or Referer (`#EXTVLCOPT`, Kodi's
+  `url|User-Agent=…` and `#KODIPROP` stream headers), which web apps can't send, are fetched through
+  the app's service with them on the TV.
 - **Movies and series**: from Xtream Codes servers (VOD and series lists, episodes and details on
   request) and from M3U playlists (`/movie/` and `/series/` links, video files, `S01E02` names grouped
   into series). Poster grids by category, details, seasons and episodes; the player seeks, resumes where
   you stopped and goes on to the next episode; Continue watching lists what you started. Movie and
   series categories can be locked with the parental PIN like channel categories. MKV and WebM movies
-  with Opus audio, which the TV's player can't decode, stream through the app's service (`service/`),
-  which turns the audio into PCM on the TV (webOS 5 and newer). The TV's player doesn't show the
-  subtitles inside MKV files either: the service reads them while it streams and the app draws them,
-  text (SRT, ASS/SSA, WebVTT) and Blu-ray pictures (PGS). Choosing subtitles for an MKV the TV plays
-  itself moves it to the service's stream.
+  with Opus audio, which the TV's player can't decode, or DTS audio (LG's TVs of 2020 and 2021 have no
+  DTS decoder) stream through the app's service (`service/`), which turns the audio into PCM on the TV
+  (webOS 5 and newer). The TV's player doesn't show the subtitles inside MKV files either: the service
+  reads them while it streams and the app draws them, text (SRT, ASS/SSA, WebVTT) and pictures
+  (Blu-ray PGS, DVD VobSub). Choosing subtitles for an MKV the TV plays itself moves it to the
+  service's stream. A movie's page starts the service and has it read the movie's header, so Play
+  starts sooner. An episode starts with the audio and subtitles chosen for the one before (the tracks
+  with the same label), a movie with those it had.
 - **TV guide**: XMLTV (plain or gzipped) from the playlist, the Xtream server or a URL you enter; the
   Xtream short EPG as a fallback. Grid guide, time offset, automatic refresh every 6/12/24 hours.
 - **Parental control**: a 4-digit PIN locks the categories you choose until it is entered.
@@ -119,7 +124,9 @@ webOS TV 4.x runs Chromium 53 and loads the app from `file://`, so the build:
 - fails if `dist/` contains syntax newer than ES2016, ES2018+ regular expressions, module scripts,
   `crossorigin`, or absolute URLs (`scripts/check-bundle.mjs`);
 - bundles the JS service (`service/`) for the Node.js 8 of webOS 5 and 6 into `dist-service/`
-  (`scripts/build-service.mjs`), which `npm run package` puts in the package next to `dist/`.
+  (`scripts/build-service.mjs`), which `npm run package` puts in the package next to `dist/`. Its DTS
+  decoder, `service/dts/dts.wasm` (FFmpeg's, as WebAssembly 1.0, which Node.js 8 compiles), is in the
+  repository; `service/dts/build.sh` rebuilds it with Docker.
 
 CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Animate only
 `transform` and `opacity`; no `backdrop-filter` or blurred shadows.
@@ -127,26 +134,34 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
 ## Known limits
 
 - **Tested on one TV only.** Playback (4K HLS channels, MP4 and MKV movies, Opus audio through the
-  service, MKV subtitles, seeking and resuming) was tested on an LG OLED65GX (2020, webOS 5). The rest
-  was checked in desktop Chrome (dev server and the `file://` build) with keyboard and simulated
-  remote events. webOS 4.x and webOS 6 or newer haven't been tried.
-- `#EXTVLCOPT` and `#KODIPROP` options are read and stored but not applied. Web apps can't set
-  headers such as `User-Agent` or `Referer`, and DRM (Widevine/PlayReady) is out of scope, so streams
-  that need them won't play.
+  service, MKV subtitles, seeking and resuming) was tested on an LG OLED65GX (2020, webOS 5). DTS
+  audio, DVD subtitles, request headers, the early service start and the tracks kept for the next
+  episode were tested on the service's Node.js version (8.12) and against FFmpeg's output, not yet on
+  a TV. The rest was checked in desktop Chrome (dev server and the `file://` build) with keyboard and
+  simulated remote events. webOS 4.x and webOS 6 or newer haven't been tried.
+- Request headers (`User-Agent`, `Referer`) from `#EXTVLCOPT`, `#KODIPROP` and `url|…` apply on the TV
+  only (webOS 5 and newer, through the service): web apps can't set them, so in a desktop browser the
+  streams are tried without. Other options are stored but not applied, and DRM (Widevine/PlayReady)
+  is out of scope.
 - Some TVs don't pass Channel +/− to apps; Up/Down zap in the player as well.
 - With the Magic Remote pointer visible, OK is taken as a click and the Enter key is ignored, so an
   action doesn't run twice. This follows LG's own Enact framework; verify on a real TV.
 - Audio track switching for HLS played by the TV's own player may not work on every webOS version
   (reported on LG's forum). Streams played by hls.js switch reliably.
-- Movies with Opus audio need webOS 5 or newer: the service decodes it with WebAssembly, which the
-  Node.js of webOS 4 lacks. There they end with a format error. The service runs only while such a
-  movie plays; LG advises against services that run for long, which a review may question.
+- The service needs webOS 5 or newer (Node.js 8; webOS 4 has 0.12, without WebAssembly). On webOS 4
+  MKV files go to the TV's player as they are: DTS plays with the TV's own decoder (2018 and 2019
+  models have one), Opus doesn't play, and neither do the subtitles inside them or streams that need
+  request headers. DTS is decoded from its core, 5.1 at most: the lossless (DTS-HD MA) and 7.1
+  extensions are left out. Movies with a DTS track take the service's way even where the TV has its
+  own DTS decoder (2022 models on). The service runs while such a movie plays, and for a minute from a
+  movie's page or after playing; LG advises against services that run for long, which a review may
+  question.
 - Subtitles inside MKV files, drawn by the app, need webOS 5 or newer like the service. ASS/SSA
-  subtitles show as plain text at the bottom (no styling or positions); PGS pictures are placed for
-  the Fit picture shape. DVD (VobSub) subtitles aren't supported. The chosen subtitles and audio track
-  stay while a movie restarts (after an error, or back from the background) but not for the next
-  episode.
-- Catch-up/timeshift, VOD and series (Xtream) are not implemented yet.
+  subtitles show as plain text at the bottom (no styling or positions); PGS and DVD pictures are placed
+  for the Fit picture shape. The chosen subtitles and audio track stay while a movie restarts (after an
+  error, or back from the background); the next episode takes the tracks with the same labels, so a
+  series whose files list their tracks differently starts with the defaults.
+- Catch-up/timeshift is not implemented yet.
 - Sources, cached channel lists, guide addresses, the PIN and the extra guide URL are encrypted with a
   key kept on the TV (AES-GCM, non-extractable, in IndexedDB). That protects a copied database, not a
   TV someone fully controls. Favorites, recent channels and guide programmes are stored unencrypted.
@@ -162,8 +177,9 @@ src/data/              models, M3U/Xtream/XMLTV parsers, IndexedDB, library, gui
 src/workers/           parse worker and its message protocol
 src/player/            engines (native, hls.js, mpegts.js, remux), retries, vendor script loading,
                        Matroska track list, MKV subtitles (text, PGS)
-service/               JS service: streams movies to the TV's player with Opus audio as PCM (Matroska
-                       remux) and reads their subtitles for the app
+service/               JS service: streams movies to the TV's player with Opus and DTS audio as PCM
+                       (Matroska remux), reads their subtitles for the app, fetches streams that need
+                       request headers; dts/ holds the DTS decoder and its build
 src/ui/                focus, navigation, virtual list, dialogs, PIN pad, channel rows, formatting
 src/screens/           Home, Search, Player, Guide, Settings (sources, guide, parental, about), source form
 src/i18n.ts            every user-facing string
@@ -179,4 +195,6 @@ docs/PUBLISHING.md     how to submit the app to the LG Content Store
 
 Free and open source under the [MIT License](LICENSE). Bundled libraries are under free licenses
 (MIT, ISC, Apache-2.0 or BSD-3-Clause); hls.js and mpegts.js are shipped with their license files, the
-service with those of opus-decoder and libopus (`service/THIRD-PARTY-LICENSES.txt`).
+service with those of opus-decoder and libopus (`service/THIRD-PARTY-LICENSES.txt`). The service's DTS
+decoder is FFmpeg's, under the LGPL 2.1 or later, in its own file (`dts/dts.wasm`) that can be rebuilt
+or replaced with `service/dts/build.sh`; the license text is in the same file.

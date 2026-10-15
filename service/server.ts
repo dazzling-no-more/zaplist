@@ -1,6 +1,7 @@
 import * as http from 'http'
 import type { AddressInfo } from 'net'
 import { URL } from 'url' // not a global in Node 8
+import { proxy } from './proxy'
 import { info, Job, remux } from './remux'
 
 // The TV's player streams movies through this server, on the TV's loopback address only:
@@ -8,6 +9,7 @@ import { info, Job, remux } from './remux'
 //   /remux?u=<movie URL>&t=<start>&a=<track>&s=<subtitle tracks, comma-separated>
 //                                                  the movie as Matroska with PCM audio
 //   /subs                                          JSON { cues }: subtitle cues of /remux read since the last call
+//   /proxy?u=<stream URL>&h=<headers, Name=value&…> the stream fetched with those headers
 // /info and /remux stop the stream before them (a seek or another movie): one connection to the IPTV server.
 
 let listening: Promise<number> | undefined
@@ -35,6 +37,7 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse): void {
   const { pathname, searchParams: query } = new URL(req.url || '', 'http://127.0.0.1')
   if (pathname === '/subs') return send(res, 200, { cues: current ? current.takeCues() : [] })
   const url = query.get('u')
+  if (pathname === '/proxy' && url) return proxy(url, query.get('h') || '', req, res)
   if ((pathname !== '/info' && pathname !== '/remux') || !url) {
     res.writeHead(404)
     res.end()

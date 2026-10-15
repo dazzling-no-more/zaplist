@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Playback } from '../player/playback'
-import { pgsPixels, type PgsPicture, type Subtitle } from '../player/subtitles'
+import { objectPixels, type Subtitle, type SubtitlePicture } from '../player/subtitles'
 
 const CHECK_MS = 200
 const WIDTH = 1920
@@ -27,8 +27,8 @@ export function Subtitles({ playback, raised }: { playback?: Playback; raised: b
   )
 }
 
-/** A PGS picture, scaled from the movie's frame to the screen. */
-function Picture({ picture }: { picture: PgsPicture }) {
+/** A PGS or DVD picture, scaled from the movie's frame to the screen. */
+function Picture({ picture }: { picture: SubtitlePicture }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const context = canvas.current?.getContext('2d')
@@ -40,7 +40,7 @@ function Picture({ picture }: { picture: PgsPicture }) {
       const bitmap = document.createElement('canvas')
       bitmap.width = object.width
       bitmap.height = object.height
-      bitmap.getContext('2d')?.putImageData(new ImageData(pgsPixels(object), object.width, object.height), 0, 0)
+      bitmap.getContext('2d')?.putImageData(new ImageData(objectPixels(object), object.width, object.height), 0, 0)
       context.drawImage(bitmap, object.x * scaleX, object.y * scaleY, object.width * scaleX, object.height * scaleY)
     }
   }, [picture])

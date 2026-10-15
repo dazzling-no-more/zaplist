@@ -1,7 +1,8 @@
 // Bundles the app's JS service (service/) into dist-service/, which scripts/ares.mjs packages next to
 // dist/. webOS TV 5 and 6 run services on Node.js 8: the bundle is lowered to it and kept free of
-// what it lacks. opus-decoder stays at 0.7.1, the last release whose WebAssembly Node 8 can compile.
-import { copyFileSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+// what it lacks. opus-decoder stays at 0.7.1, the last release whose WebAssembly Node 8 can compile;
+// the DTS decoder (service/dts/dts.wasm, built by service/dts/build.sh) goes next to the bundle.
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { build } from 'esbuild'
 
 const OUT = 'dist-service'
@@ -26,3 +27,5 @@ await build({
 writeFileSync(`${OUT}/package.json`, JSON.stringify({ name, main: 'service.js' }, null, 2) + '\n')
 writeFileSync(`${OUT}/services.json`, JSON.stringify({ id: name, description, services: [{ name, description }] }, null, 2) + '\n')
 copyFileSync('service/THIRD-PARTY-LICENSES.txt', `${OUT}/THIRD-PARTY-LICENSES.txt`)
+mkdirSync(`${OUT}/dts`)
+copyFileSync('service/dts/dts.wasm', `${OUT}/dts/dts.wasm`)

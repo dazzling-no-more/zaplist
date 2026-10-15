@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { library, useLibrary } from '../data/library'
 import type { Episode } from '../data/models'
 import { ASPECTS, updatePrefs, usePrefs, type Aspect } from '../data/prefs'
-import { getWatch, recordWatch, resumePosition } from '../data/watch'
+import { getWatch, lastTracks, recordWatch, resumePosition } from '../data/watch'
 import { t } from '../i18n'
 import { onRemoteKey } from '../platform/keys'
 import { onNetworkChange } from '../platform/network'
@@ -74,7 +74,7 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
     return knownLength.current || (episode?.duration ?? 0)
   }
   const save = () => {
-    if (position.current > 0) recordWatch(itemId, { position: position.current, duration: duration(), seriesId: series?.id })
+    if (position.current > 0) recordWatch(itemId, { position: position.current, duration: duration(), seriesId: series?.id, tracks: playback?.chosenLabels() })
   }
   const latestSave = useRef(save)
   latestSave.current = save
@@ -98,7 +98,8 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
         position.current = (fromStart ? undefined : resumePosition(getWatch(itemId))) ?? 0
         knownLength.current = 0
       }
-      playback.play(urls, () => position.current)
+      // An episode starts with the audio and subtitles chosen for the one before (by label).
+      playback.play(urls, () => position.current, lastTracks(itemId, series?.id))
     } else {
       latestSave.current()
       playback.stop()
@@ -160,7 +161,7 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
   // At the end: mark it watched, then the next episode, or back to where it was started from.
   const ended = () => {
     const length = duration()
-    recordWatch(itemId, { position: length, duration: length, seriesId: series?.id })
+    recordWatch(itemId, { position: length, duration: length, seriesId: series?.id, tracks: playback?.chosenLabels() })
     position.current = 0
     if (next) playNext()
     else close()

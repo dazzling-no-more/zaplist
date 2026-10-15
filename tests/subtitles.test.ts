@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { readTracks, trackLabel } from '../src/player/matroska'
-import { CueList, PgsDecoder, pgsPixels, subtitleText, type PgsPicture } from '../src/player/subtitles'
+import { CueList, objectPixels, PgsDecoder, subtitleText, VobSubDecoder, type SubtitlePicture } from '../src/player/subtitles'
 import { element, ID, uintElement } from '../service/ebml'
+import { SPU, VOBSUB_IDX } from './fixtures/vobsub'
 
 describe('subtitleText', () => {
   it('keeps the words of an ASS event: no fields, styling or drawings', () => {
@@ -36,7 +37,7 @@ describe('PGS', () => {
     const decoder = new PgsDecoder()
     const picture = decoder.decode(set(pcs(0x80, [[0, 100, 900]]), pds, ods, end))!
     expect(picture).toMatchObject({ width: 1920, height: 1080, objects: [{ x: 100, y: 900, width: 4, height: 2 }] })
-    const pixels = Array.from(pgsPixels(picture.objects[0]))
+    const pixels = Array.from(objectPixels(picture.objects[0]))
     expect(pixels.slice(0, 4)).toEqual([255, 255, 255, 255])
     expect(pixels.slice(12, 16)).toEqual([255, 255, 255, 255])
     expect(pixels.slice(16).every((v) => v === 0)).toBe(true)
@@ -45,6 +46,23 @@ describe('PGS', () => {
     expect(decoder.decode(set(pcs(0, [[0, 10, 20]]), end))!.objects[0]).toMatchObject({ x: 10, y: 20, width: 4 })
     // A new epoch forgets the old objects: one that needs them can't be shown.
     expect(decoder.decode(set(pcs(0x80, [[0, 10, 20]]), end))).toBeUndefined()
+  })
+})
+
+describe('VobSub', () => {
+  it('decodes a subpicture with the track’s palette, where and while it shows', () => {
+    const decoder = new VobSubDecoder(VOBSUB_IDX)
+    const unit = decoder.decode(SPU)!
+    expect(unit.start).toBe(0)
+    expect(unit.end).toBeCloseTo((88 * 1024) / 90000)
+    expect(unit.picture).toMatchObject({ width: 720, height: 576, objects: [{ x: 10, y: 20, width: 4, height: 2 }] })
+    const pixels = Array.from(objectPixels(unit.picture.objects[0]))
+    const color = (rgb: number) => [rgb >> 16, (rgb >> 8) & 255, rgb & 255, 255]
+    expect(pixels).toEqual([...color(0xf0f0f0), ...color(0xf0f0f0), ...color(0xcccccc), ...color(0xcccccc), ...[0, 1, 2, 3].flatMap(() => color(0x999999))])
+  })
+
+  it('gives up on a unit without its bitmap', () => {
+    expect(new VobSubDecoder('').decode(new Uint8Array([0, 6, 0, 4, 0xff, 0xff]))).toBeUndefined()
   })
 })
 
@@ -64,12 +82,15 @@ describe('CueList', () => {
   })
 
   it('shows a picture until the next one of the track', () => {
-    const picture = (objects: number): PgsPicture => ({ width: 1920, height: 1080, objects: Array.from({ length: objects }, () => ({ x: 0, y: 0, width: 1, height: 1, rle: new Uint8Array(), palette: new Uint8Array(1024) })) })
+    const picture = (objects: number): SubtitlePicture => ({ width: 1920, height: 1080, objects: Array.from({ length: objects }, () => ({ x: 0, y: 0, width: 1, height: 1, rle: new Uint8Array(), palette: new Uint8Array(1024) })) })
     const list = new CueList()
     list.add({ start: 5, picture: picture(1) })
     list.add({ start: 8, picture: picture(0) })
     expect(list.at(7)).toHaveLength(1)
     expect(list.at(9)).toEqual([])
+    list.add({ start: 10, end: 12, picture: picture(1) }) // DVD subpictures end on their own
+    expect(list.at(11)).toHaveLength(1)
+    expect(list.at(12.5)).toEqual([])
   })
 })
 

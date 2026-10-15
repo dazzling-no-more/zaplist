@@ -9,7 +9,7 @@ import { t } from '../i18n'
 import { onRemoteKey } from '../platform/keys'
 import { onNetworkChange } from '../platform/network'
 import { toggleFullscreen } from '../platform/screen'
-import type { PlaybackError } from '../player/streams'
+import { withHeaders, type PlaybackError } from '../player/streams'
 import { useSoundBlocked } from '../player/autoplay'
 import { Playback, usePlaybackStatus } from '../player/playback'
 import { ASPECT_CLASS } from '../ui/aspect'
@@ -112,7 +112,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   // (Re)start the stream whenever the channel changes, the user retries, or the app/network returns.
   useEffect(() => {
     if (!playback) return
-    if (channel && online && shown) playback.play(channel.urls)
+    if (channel && online && shown) playback.play(withHeaders(channel.urls, channel.options))
     else playback.stop()
   }, [playback, channelId, attempt, online, shown])
 

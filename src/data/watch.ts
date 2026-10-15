@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import type { TrackLabels } from '../player/streams'
 
 /** How far a movie or an episode was watched. */
 export interface WatchEntry {
@@ -10,6 +11,8 @@ export interface WatchEntry {
   at: number
   /** For episodes: the series they belong to. */
   seriesId?: string
+  /** The audio and subtitles chosen, by label. */
+  tracks?: TrackLabels
 }
 
 const KEY = 'iptv-player.watch'
@@ -44,6 +47,17 @@ export const isFinished = (entry: WatchEntry | undefined): boolean => !!entry &&
 /** Where to resume: undefined when it was barely started or already finished. */
 export function resumePosition(entry: WatchEntry | undefined): number | undefined {
   return entry && entry.position >= 30 && !isFinished(entry) ? entry.position : undefined
+}
+
+/** The tracks to start with: for an episode those chosen for the series' latest one watched, else the movie's own. */
+export function lastTracks(id: string, seriesId?: string): TrackLabels | undefined {
+  if (!seriesId) return entries[id]?.tracks
+  let latest: WatchEntry | undefined
+  for (const key of Object.keys(entries)) {
+    const entry = entries[key]
+    if (entry.seriesId === seriesId && entry.tracks && (!latest || entry.at > latest.at)) latest = entry
+  }
+  return latest?.tracks
 }
 
 export function recordWatch(id: string, entry: Omit<WatchEntry, 'at'>): void {

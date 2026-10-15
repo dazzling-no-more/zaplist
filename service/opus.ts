@@ -32,6 +32,7 @@ export const SAMPLE_RATE = 48000
 /** Decodes Opus packets to interleaved 16-bit PCM at 48 kHz. Layouts beyond 7.1 are mixed to stereo. */
 export class OpusToPcm {
   readonly channels: number
+  readonly sampleRate = SAMPLE_RATE
   private readonly decoder: OpusDecoder
 
   constructor(head: OpusHead) {

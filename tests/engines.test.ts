@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 // The real engines and Playback against a fake <video>: zapping races happen between them.
-vi.mock('../src/platform/webos', () => ({ isWebOS: () => false }))
+vi.mock('../src/platform/webos', () => ({ isWebOS: () => false, deviceInfo: () => undefined }))
 vi.mock('../src/data/http', () => ({ proxied: (url: string) => url }))
 
 const { createEngine } = await import('../src/player/engines')

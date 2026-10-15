@@ -5,8 +5,9 @@ import type { Episode, SeriesDetails } from '../data/models'
 import { unlock, useUnlocked } from '../data/parental'
 import { usePrefs } from '../data/prefs'
 import { isVodLocked } from '../data/vod'
-import { isFinished, useWatch, type WatchEntry } from '../data/watch'
+import { isFinished, resumePosition, useWatch, type WatchEntry } from '../data/watch'
 import { t } from '../i18n'
+import { warmService } from '../player/engines'
 import { Button } from '../ui/Button'
 import { Chips } from '../ui/Chips'
 import { formatClock } from '../ui/format'
@@ -64,6 +65,9 @@ export function SeriesScreen({ entry }: ScreenProps<'series'>) {
   const list = Array.isArray(episodes) ? episodes : []
   const seasons = useMemo(() => Array.from(new Set(list.map((e) => e.season))), [episodes])
   const next = useMemo(() => nextUp(list, watch), [episodes, watch])
+  useEffect(() => {
+    if (next && !locked && next.urls[0]) warmService(next.urls[0], resumePosition(watch[next.id]) ?? 0)
+  }, [next?.id, locked])
   const [season, setSeason] = useState<number | undefined>(memo.season)
   const shownSeason = season !== undefined && seasons.indexOf(season) >= 0 ? season : (next?.season ?? seasons[0])
   const seasonEpisodes = useMemo(() => list.filter((e) => e.season === shownSeason), [episodes, shownSeason])

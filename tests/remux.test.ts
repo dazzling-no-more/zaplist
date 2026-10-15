@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { PassThrough } from 'node:stream'
@@ -27,6 +28,10 @@ function block(id: number, track: number, flags: number, payload: Buffer): Buffe
 /** Three Opus frames, Xiph-laced. */
 const lacedOpus = () => block(ID.SimpleBlock, 2, 0x80 | 0x02, Buffer.concat([Buffer.from([2, 3, 3]), OPUS_SILENCE, OPUS_SILENCE, OPUS_SILENCE]))
 const videoFrame = (i: number) => Buffer.from(`video frame ${i}`)
+const VOBSUB_IDX = 'size: 720x576\npalette: 000000, f0f0f0, cccccc, 999999\n'
+/** A 440 Hz tone in 5.1 encoded by FFmpeg's DTS encoder: three frames of 1024 bytes, 512 samples each. */
+const TONE = readFileSync(new URL('./fixtures/tone.dts', import.meta.url))
+const dtsFrame = (i: number) => TONE.subarray(i * 1024, (i + 1) * 1024)
 
 function movie(): Buffer {
   const info = element(ID.Info, [uintElement(ID.TimecodeScale, 1000000), floatElement(0x4489, 30000)])
@@ -43,6 +48,9 @@ function movie(): Buffer {
     ]),
     element(ID.TrackEntry, [uintElement(ID.TrackNumber, 3), uintElement(ID.TrackType, 2), text(ID.CodecID, 'A_AC3'), text(ID.Language, 'deu'), uintElement(ID.FlagDefault, 0)]),
     element(ID.TrackEntry, [uintElement(ID.TrackNumber, 4), uintElement(ID.TrackType, 17), text(ID.CodecID, 'S_TEXT/UTF8')]),
+    element(ID.TrackEntry, [uintElement(ID.TrackNumber, 5), uintElement(ID.TrackType, 17), text(ID.CodecID, 'S_VOBSUB'), text(ID.CodecPrivate, VOBSUB_IDX)]),
+    // Says 7.1, as DTS-HD tracks do; its core is 5.1.
+    element(ID.TrackEntry, [uintElement(ID.TrackNumber, 6), uintElement(ID.TrackType, 2), text(ID.CodecID, 'A_DTS'), uintElement(ID.FlagDefault, 0), element(ID.Audio, [floatElement(ID.SamplingFrequency, 48000), uintElement(ID.Channels, 8)])]),
   ])
   const clusters = CLUSTER_TIMES.map((time, i) =>
     element(ID.Cluster, [
@@ -51,6 +59,8 @@ function movie(): Buffer {
       lacedOpus(),
       block(ID.SimpleBlock, 3, 0x80, Buffer.from('ac3 frame')),
       element(ID.BlockGroup, [block(ID.Block, 4, 0, Buffer.from(`subtitle ${i}`)), uintElement(ID.BlockDuration, 2500)]),
+      block(ID.SimpleBlock, 5, 0x80, Buffer.from(`subpicture ${i}`)),
+      block(ID.SimpleBlock, 6, 0x80, dtsFrame(i)),
     ]),
   )
   // The SeekHead's position fields have a fixed width, so its size doesn't depend on them.
@@ -141,8 +151,12 @@ describe('remux', () => {
       audio: [
         { number: 2, name: 'English', language: 'eng', codec: 'A_OPUS', default: true },
         { number: 3, name: '', language: 'deu', codec: 'A_AC3', default: false },
+        { number: 6, name: '', language: 'eng', codec: 'A_DTS', default: false },
       ],
-      subtitles: [{ number: 4, name: '', language: 'eng', codec: 'S_TEXT/UTF8', default: true }],
+      subtitles: [
+        { number: 4, name: '', language: 'eng', codec: 'S_TEXT/UTF8', default: true },
+        { number: 5, name: '', language: 'eng', codec: 'S_VOBSUB', default: true, private: VOBSUB_IDX },
+      ],
     })
     expect((await info(url, 15, new Job())).start).toBe(10)
     expect((await info(url, 25, new Job())).start).toBe(20)
@@ -173,6 +187,26 @@ describe('remux', () => {
       { track: 4, start: 20, end: 22.5, text: 'subtitle 2' },
     ])
     expect(blocks(clusters[0]).map(([track]) => track)).toEqual([1, 2]) // not in the stream itself
+  })
+
+  it('turns DTS into PCM with the channels its frames have, not those the track says', async () => {
+    const { tracks, clusters } = await run(newUrl(), 0, 6)
+    expect(child(tracks[1], ID.CodecID)!.toString()).toBe('A_PCM/INT/LIT')
+    const pcm = child(tracks[1], ID.Audio)!
+    expect([uint(child(pcm, ID.Channels)), uint(child(pcm, ID.BitDepth))]).toEqual([6, 16])
+    clusters.forEach((cluster) => {
+      const [, audio] = blocks(cluster)
+      expect(audio[0]).toBe(6)
+      expect(audio[1].length).toBe(512 * 6 * 2)
+    })
+  })
+
+  it('passes DVD subpictures on to the app as they are', async () => {
+    const { cues } = await run(newUrl(), 15, undefined, [5])
+    expect(cues).toEqual([
+      { track: 5, start: 10, data: Buffer.from('subpicture 1').toString('base64') },
+      { track: 5, start: 20, data: Buffer.from('subpicture 2').toString('base64') },
+    ])
   })
 
   it('starts at the cue before the position, over one connection at a time, redirected once', async () => {

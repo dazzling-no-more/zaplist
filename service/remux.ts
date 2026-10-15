@@ -1,6 +1,7 @@
 import type { Writable } from 'stream'
 import { inflateSync } from 'zlib'
 import { child, children, element, encodeId, encodeSize, floatElement, ID, readId, readVint, subtitleKind, trackLanguage, TRACK_AUDIO, TRACK_SUBTITLE, TRACK_VIDEO, uint, uintElement, UNKNOWN, UNKNOWN_SIZE } from './ebml'
+import { DtsToPcm } from './dts'
 import { get } from './fetch'
 import { OpusToPcm, parseOpusHead, SAMPLE_RATE } from './opus'
 import { Reader, type ElementHeader } from './reader'
@@ -28,6 +29,8 @@ export interface TrackInfo {
   language: string
   codec: string
   default: boolean
+  /** DVD subtitles: the track's .idx header (frame size, palette), which the app needs to draw them. */
+  private?: string
 }
 
 /** A subtitle as the TV's player can't show it: the app draws it (src/player/subtitles.ts). */
@@ -112,7 +115,13 @@ async function open(url: string, job: Job, seconds: number): Promise<{ movie: Mo
 export async function info(url: string, seconds: number, job: Job): Promise<{ start: number; audio: TrackInfo[]; subtitles: TrackInfo[] }> {
   const { movie } = await open(url, job, seconds)
   const [start] = await cueAt(url, movie, seconds, job)
-  const list = (tracks: Track[]) => tracks.map((t) => ({ number: t.number, name: t.name, language: t.language, codec: t.codec, default: t.isDefault }))
+  const list = (tracks: Track[]) =>
+    tracks.map((t) => {
+      const info: TrackInfo = { number: t.number, name: t.name, language: t.language, codec: t.codec, default: t.isDefault }
+      const header = t.codec === 'S_VOBSUB' && child(t.body, ID.CodecPrivate)
+      if (header) info.private = header.toString('utf8')
+      return info
+    })
   return {
     start,
     audio: list(movie.tracks.filter((t) => t.type === TRACK_AUDIO)),
@@ -130,12 +139,24 @@ export interface RemuxOptions {
   subtitles?: number[]
 }
 
+/** Turns a track's audio into 16-bit PCM (OpusToPcm, DtsToPcm). */
+interface Converter {
+  readonly ready: Promise<void>
+  /** What decode gives; for DTS known once a frame has been decoded (see fix). */
+  readonly channels: number
+  readonly sampleRate: number
+  decode(frames: Buffer[]): Buffer
+  /** The stream's header now gives `channels` and `sampleRate`: they must not change. */
+  fix?(): void
+  free(): void
+}
+
 /**
- * Writes the movie to `out` as Matroska with its video and one audio track; Opus audio becomes PCM,
- * which the TV's player decodes. Resolves at the end of the movie or once the job stops.
+ * Writes the movie to `out` as Matroska with its video and one audio track; Opus and DTS audio
+ * become PCM, which the TV's player decodes. Resolves at the end of the movie or once the job stops.
  */
 export async function remux(options: RemuxOptions, out: Writable, job: Job): Promise<void> {
-  let converter: OpusToPcm | undefined
+  let converter: Converter | undefined
   let reader: Reader | undefined
   try {
     const { movie, pending } = await open(options.url, job, options.start)
@@ -143,14 +164,25 @@ export async function remux(options: RemuxOptions, out: Writable, job: Job): Pro
     if (!video) throw new Error('No video track')
     const audios = movie.tracks.filter((t) => t.type === TRACK_AUDIO)
     const audio = audios.filter((t) => t.number === options.audio)[0] || audios.filter((t) => t.isDefault)[0] || audios[0]
-    const entries = [element(ID.TrackEntry, [video.body])]
     if (audio && audio.codec === 'A_OPUS') {
       const head = child(audio.body, ID.CodecPrivate)
       if (!head) throw new Error('Opus track without a header')
       converter = new OpusToPcm(parseOpusHead(head))
-      await Promise.race([converter.ready, new Promise((_, reject) => setTimeout(() => reject(new Error('The Opus decoder did not load')), DECODER_TIMEOUT_MS))])
-      entries.push(pcmTrack(audio.body, converter.channels))
-    } else if (audio) entries.push(element(ID.TrackEntry, [audio.body]))
+    } else if (audio && audio.codec === 'A_DTS') {
+      const settings = child(audio.body, ID.Audio)
+      converter = new DtsToPcm(uint(settings && child(settings, ID.Channels), 2), SAMPLE_RATE)
+    }
+    if (converter) await Promise.race([converter.ready, new Promise((_, reject) => setTimeout(() => reject(new Error('The audio decoder did not load')), DECODER_TIMEOUT_MS))])
+    // Written before the first cluster, after its audio was decoded: a DTS stream's first frame
+    // tells its channels.
+    const header = () => {
+      const entries = [element(ID.TrackEntry, [video.body])]
+      if (audio && converter) {
+        if (converter.fix) converter.fix()
+        entries.push(pcmTrack(audio.body, converter.channels, converter.sampleRate))
+      } else if (audio) entries.push(element(ID.TrackEntry, [audio.body]))
+      return Buffer.concat([movie.ebml, encodeId(ID.Segment), UNKNOWN_SIZE, element(ID.Info, [movie.info]), element(ID.Tracks, entries)])
+    }
 
     let head: ElementHeader | undefined
     if (pending && options.start <= 0) {
@@ -166,7 +198,7 @@ export async function remux(options: RemuxOptions, out: Writable, job: Job): Pro
       if (t.type === TRACK_SUBTITLE && kind && (options.subtitles || []).indexOf(t.number) >= 0) subtitles[t.number] = { kind, frames: t.frames }
     }
     const selection: Selection = { video: video.number, audio: audio && audio.number, audioFrames: audio && audio.frames, converter, subtitles, scale: timecodeScale(movie) }
-    await write(out, Buffer.concat([movie.ebml, encodeId(ID.Segment), UNKNOWN_SIZE, element(ID.Info, [movie.info]), element(ID.Tracks, entries)]))
+    let started = false
     while (!job.closed) {
       const next = head || (await reader.header())
       head = undefined
@@ -177,6 +209,8 @@ export async function remux(options: RemuxOptions, out: Writable, job: Job): Pro
       const cues: SubtitleCue[] = []
       const data = cluster(body, selection, cues)
       job.addCues(cues)
+      if (!started) await write(out, header())
+      started = true
       await write(out, data)
     }
   } finally {
@@ -267,13 +301,13 @@ export function contentDecoder(body: Buffer): (frame: Buffer) => Buffer {
   return unchanged
 }
 
-/** The track entry with Opus swapped for 16-bit PCM. */
-export function pcmTrack(body: Buffer, channels: number): Buffer {
+/** The track entry with its audio (Opus, DTS) swapped for 16-bit PCM. */
+export function pcmTrack(body: Buffer, channels: number, sampleRate: number): Buffer {
   const dropped = [ID.CodecID, ID.CodecPrivate, ID.CodecDelay, ID.SeekPreRoll, ID.DefaultDuration, ID.Audio, ID.ContentEncodings]
   const parts = children(body)
     .filter((c) => dropped.indexOf(c.id) < 0)
     .map((c) => element(c.id, [c.data]))
-  const audio = element(ID.Audio, [floatElement(ID.SamplingFrequency, SAMPLE_RATE), uintElement(ID.Channels, channels), uintElement(ID.BitDepth, 16)])
+  const audio = element(ID.Audio, [floatElement(ID.SamplingFrequency, sampleRate), uintElement(ID.Channels, channels), uintElement(ID.BitDepth, 16)])
   return element(ID.TrackEntry, parts.concat([element(ID.CodecID, [Buffer.from('A_PCM/INT/LIT')]), audio]))
 }
 
@@ -346,12 +380,12 @@ export function parseCues(body: Buffer, movie: { info: Buffer; segmentStart: num
 export interface Selection {
   video: number
   audio?: number
-  /** Turns the audio into PCM (Opus); without it, the audio passes through. */
-  converter?: OpusToPcm
+  /** Turns the audio into PCM (Opus, DTS); without it, the audio passes through. */
+  converter?: Converter
   /** Undoes the audio's content encoding before the converter. */
   audioFrames?: (frame: Buffer) => Buffer
   /** The subtitle tracks whose cues are collected: how the app shows them, how to undo their encoding. */
-  subtitles: { [track: number]: { kind: 'text' | 'pgs'; frames: (frame: Buffer) => Buffer } }
+  subtitles: { [track: number]: { kind: 'text' | 'pgs' | 'vobsub'; frames: (frame: Buffer) => Buffer } }
   /** Seconds per unit of Matroska time. */
   scale: number
 }
