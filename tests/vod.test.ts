@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Movie } from '../src/data/models'
 import type { Prefs } from '../src/data/prefs'
-import { ALL_ITEMS, CONTINUE, vodByCategory, vodForGroup, vodGroups } from '../src/data/vod'
+import { ALL_ITEMS, CONTINUE, vodByCategory, vodForGroup, vodGroups, WATCHLIST } from '../src/data/vod'
 
-const prefs = (patch: Partial<Prefs> = {}): Prefs => ({ favorites: [], recents: [], lockedCategories: [], epgOffsetMinutes: 0, epgRefreshHours: 12, aspect: 'fit', ...patch })
+const prefs = (patch: Partial<Prefs> = {}): Prefs => ({ favorites: [], recents: [], lockedCategories: [], epgOffsetMinutes: 0, epgRefreshHours: 12, aspect: 'fit', watchlist: [], hiddenCategories: [], ...patch })
 const movie = (id: string, categoryId?: string): Movie => ({ id, sourceId: 's', categoryId, name: id, urls: [] })
 
 describe('movie and series groups', () => {
@@ -17,9 +17,19 @@ describe('movie and series groups', () => {
     { id: 'sc', sourceId: 's', name: 'Drama', kind: 'series' as const },
   ]
 
-  it('lists Continue watching, All and the categories of that kind only', () => {
-    const groups = vodGroups('movie', categories, [], prefs(), { continue: 'Continue', all: 'All movies' })
-    expect(groups.map((g) => g.id)).toEqual([CONTINUE, ALL_ITEMS, 'c1', 'c2'])
+  it('lists Continue watching, My list, All and the categories of that kind only, not hidden ones', () => {
+    const groups = vodGroups('movie', categories, [], prefs(), { continue: 'Continue', watchlist: 'My list', all: 'All movies' })
+    expect(groups.map((g) => g.id)).toEqual([CONTINUE, WATCHLIST, ALL_ITEMS, 'c1', 'c2'])
+    const hidden = vodGroups('movie', categories, [], prefs({ hiddenCategories: ['c2'] }), { continue: 'Continue', watchlist: 'My list', all: 'All movies' })
+    expect(hidden.map((g) => g.id)).toEqual([CONTINUE, WATCHLIST, ALL_ITEMS, 'c1'])
+  })
+
+  it('shows the user’s list, latest added first, and leaves hidden categories out everywhere', () => {
+    expect(vodForGroup(WATCHLIST, movies, byCategory, byId, [], prefs({ watchlist: ['b', 'gone', 'a'] }), false).map((m) => m.id)).toEqual(['b', 'a'])
+    const hidden = prefs({ hiddenCategories: ['c2'], watchlist: ['b', 'a'] })
+    expect(vodForGroup(ALL_ITEMS, movies, byCategory, byId, [], hidden, true).map((m) => m.id)).toEqual(['a', 'c'])
+    expect(vodForGroup(WATCHLIST, movies, byCategory, byId, [], hidden, true).map((m) => m.id)).toEqual(['a'])
+    expect(vodForGroup('c2', movies, byCategory, byId, [], hidden, true)).toEqual([])
   })
 
   it('shows a category’s items, and Continue watching in watch order', () => {

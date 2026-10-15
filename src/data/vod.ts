@@ -1,25 +1,34 @@
 import type { Category, Movie, Series, Source } from './models'
-import { categoryGroups, isCategoryLocked, type ChannelGroup } from './lists'
+import { categoryGroups, isCategoryLocked, leavesOut, leftOut, type ChannelGroup } from './lists'
 import type { Prefs } from './prefs'
 
 /** Sidebar groups of the Movies and Series screens, before the categories. */
 export const CONTINUE = 'continue'
+/** The movies or series on the user's list. */
+export const WATCHLIST = 'watchlist'
 export const ALL_ITEMS = 'all'
 
 export type VodKind = 'movie' | 'series'
 export type VodItem = Movie | Series
 
-export function vodGroups(kind: VodKind, categories: readonly Category[], sources: readonly Source[], prefs: Prefs, labels: { continue: string; all: string }): ChannelGroup[] {
+export function vodGroups(
+  kind: VodKind,
+  categories: readonly Category[],
+  sources: readonly Source[],
+  prefs: Prefs,
+  labels: { continue: string; watchlist: string; all: string },
+): ChannelGroup[] {
   return [
     { id: CONTINUE, name: labels.continue, locked: false },
+    { id: WATCHLIST, name: labels.watchlist, locked: false },
     { id: ALL_ITEMS, name: labels.all, locked: false },
     ...categoryGroups(categories.filter((c) => c.kind === kind), sources, prefs),
   ]
 }
 
 /**
- * Movies or series shown for a group. As with channels, those in locked categories are left out
- * everywhere until the PIN unlocks them for the session.
+ * Movies or series shown for a group. As with channels, those in hidden categories are left out
+ * everywhere, those in locked ones until the PIN unlocks them for the session.
  */
 export function vodForGroup<T extends VodItem>(
   groupId: string,
@@ -30,10 +39,12 @@ export function vodForGroup<T extends VodItem>(
   prefs: Prefs,
   unlocked: boolean,
 ): readonly T[] {
-  const hidden = (item: T) => !unlocked && isCategoryLocked(item.categoryId, prefs)
-  if (groupId === CONTINUE) return continueIds.map(byId).filter((item): item is T => !!item && !hidden(item))
-  if (groupId === ALL_ITEMS) return prefs.pin && !unlocked && prefs.lockedCategories.length ? items.filter((item) => !hidden(item)) : items
-  if (!unlocked && isCategoryLocked(groupId, prefs)) return []
+  const out = leftOut(prefs, unlocked)
+  const fromIds = (ids: readonly string[]) => ids.map(byId).filter((item): item is T => !!item && !out(item.categoryId))
+  if (groupId === CONTINUE) return fromIds(continueIds)
+  if (groupId === WATCHLIST) return fromIds(prefs.watchlist)
+  if (groupId === ALL_ITEMS) return leavesOut(prefs, unlocked) ? items.filter((item) => !out(item.categoryId)) : items
+  if (out(groupId)) return []
   return byCategory.get(groupId) ?? []
 }
 

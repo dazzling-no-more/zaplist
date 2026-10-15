@@ -195,3 +195,35 @@ describe('renamedIds', () => {
     expect(renamed).toEqual(new Map([['a', 'b'], ['a~2', 'b~2']]))
   })
 })
+
+describe('automatic refresh', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    db.getSecretSettings.mockResolvedValue(undefined)
+    db.getPlaylistMeta.mockResolvedValue({ sourceId: 's', categories: [], epgUrls: [], chunks: 1 })
+    db.getChannelChunk.mockResolvedValue([channel])
+    ingestSource.mockImplementation(async (saved: M3uSource) => ({ source: { ...saved, refreshedAt: Date.now() }, channels: 1, categories: 0 }))
+  })
+
+  it('downloads lists older than 12 hours shortly after launch and every hour, then the guide', async () => {
+    const fresh = { ...source, id: 'f', refreshedAt: Date.now() - 3_600_000 }
+    const old = { ...source, id: 'o', refreshedAt: Date.now() - 13 * 3_600_000 }
+    db.getSources.mockResolvedValue([fresh, old])
+    const library = await load()
+    await library.init()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'Date'] })
+    try {
+      const refreshed = vi.fn()
+      library.startAutoRefresh(refreshed)
+      await vi.advanceTimersByTimeAsync(30_100) // and the loading's yields to the UI
+      expect(ingestSource.mock.calls.map(([s]) => (s as M3uSource).id)).toEqual(['o'])
+      expect(refreshed).toHaveBeenCalledOnce()
+
+      await vi.advanceTimersByTimeAsync(11 * 3_600_000 + 100) // 'f' is 12 h old by then, 'o' 11 h
+      expect(ingestSource.mock.calls.map(([s]) => (s as M3uSource).id)).toEqual(['o', 'f'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

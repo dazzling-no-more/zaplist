@@ -42,6 +42,11 @@ export function platformBack(): void {
   if (isWebOS()) window.webOS?.platformBack()
 }
 
+/** Closes the app (the sleep timer). Does nothing in a desktop browser. */
+export function closeApp(): void {
+  if (isWebOS()) window.close()
+}
+
 /** Whether the Magic Remote pointer is on screen right now. */
 export function cursorVisible(): boolean {
   return !!(window.webOSSystem ?? window.PalmSystem)?.cursor?.visibility

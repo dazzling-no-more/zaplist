@@ -46,6 +46,7 @@ library.init().then(
   () => {
     resumeLastChannel()
     void guide.start()
+    library.startAutoRefresh(() => void guide.refresh())
   },
   () => undefined, // Home shows the error with Try again and Reset
 )

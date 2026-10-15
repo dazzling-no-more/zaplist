@@ -10,6 +10,7 @@ import { onNetworkChange } from '../platform/network'
 import { toggleFullscreen } from '../platform/screen'
 import { useSoundBlocked } from '../player/autoplay'
 import { Playback, usePlaybackStatus } from '../player/playback'
+import { useSleep } from '../player/sleep'
 import { withHeaders } from '../player/streams'
 import { ASPECT_CLASS } from '../ui/aspect'
 import { Button } from '../ui/Button'
@@ -17,6 +18,7 @@ import { formatClock } from '../ui/format'
 import { backStack, useBackHandler, type ScreenProps } from '../ui/navigation'
 import { Region } from '../ui/Region'
 import { Subtitles } from '../ui/Subtitles'
+import { SleepButton } from '../ui/SleepTimer'
 import { TrackDialog } from '../ui/TrackDialog'
 import { episodeLabel } from './SeriesDetails'
 
@@ -255,7 +257,9 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
   }
 
   const latest = useRef({ seekBy, togglePause, showOsd, hideOsd, close, osd, modal: false })
-  latest.current = { seekBy, togglePause, showOsd, hideOsd, close, osd, modal: !!picker }
+  // The sleep timer's warning is a dialog over the player too: keys go to it.
+  const sleepWarning = useSleep().warning
+  latest.current = { seekBy, togglePause, showOsd, hideOsd, close, osd, modal: !!picker || sleepWarning }
 
   // With nothing on screen, Left/Right seek and OK pauses; Up or Down shows the controls.
   const { ref: surface } = useFocusable<object, HTMLDivElement>({
@@ -365,6 +369,7 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
               <Button focusKey="osd-aspect" icon="aspect" onPress={cycleAspect}>
                 {t('player.aspectIs', { aspect: t(`aspect.${aspect}`) })}
               </Button>
+              <SleepButton />
             </Region>
           )}
         </div>

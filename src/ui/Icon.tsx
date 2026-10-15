@@ -38,6 +38,7 @@ const PATHS = {
   down: 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z',
   right: 'M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z',
   home: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
+  sleep: 'M12.34 2.02C6.59 1.82 2 6.42 2 12c0 5.52 4.48 10 10 10 3.71 0 6.93-2.02 8.66-5.02-7.51-.25-12.09-8.43-8.32-14.96z',
   playlist: 'M19 9H2v2h17V9zm0-4H2v2h17V5zM2 15h13v-2H2v2zm15-2v6l5-3-5-3z',
   info: 'M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z',
   // The app icon's mark (store/art/icon.svg): five rounded bars that form a play button.

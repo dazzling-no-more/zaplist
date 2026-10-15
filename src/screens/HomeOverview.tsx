@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { library, useLibrary } from '../data/library'
-import { channelsForGroup, FAVORITES, RECENT } from '../data/lists'
+import { channelsForGroup, FAVORITES, leftOut, RECENT } from '../data/lists'
 import type { Channel } from '../data/models'
 import { useUnlocked } from '../data/parental'
 import { usePrefs } from '../data/prefs'
-import { isVodLocked, type VodItem } from '../data/vod'
+import type { VodItem } from '../data/vod'
 import { continueIds, useWatch, type WatchEntry } from '../data/watch'
 import { t } from '../i18n'
 import { Logo } from '../ui/Logo'
@@ -31,19 +31,27 @@ export interface Started {
   progress?: WatchEntry
 }
 
+/** A movie or series on the user's list. */
+export interface Listed {
+  kind: 'movie' | 'series'
+  item: VodItem
+}
+
 export interface Overview {
   started: Started[]
+  watchlist: Listed[]
   favorites: readonly Channel[]
   recent: readonly Channel[]
 }
 
-export const isOverviewEmpty = (overview: Overview): boolean => !overview.started.length && !overview.favorites.length && !overview.recent.length
+export const isOverviewEmpty = (overview: Overview): boolean =>
+  !overview.started.length && !overview.watchlist.length && !overview.favorites.length && !overview.recent.length
 
 /** The first shelf's focus key, to focus the overview from its top. */
 export const overviewFocusKey = (overview: Overview): string =>
-  overview.started.length ? 'overview-started' : overview.favorites.length ? 'overview-favorites' : 'overview-recent'
+  overview.started.length ? 'overview-started' : overview.watchlist.length ? 'overview-watchlist' : overview.favorites.length ? 'overview-favorites' : 'overview-recent'
 
-/** What Home's overview shows. Locked categories are left out until the PIN unlocks them, as everywhere. */
+/** What Home's overview shows. Hidden categories are left out, locked ones until the PIN unlocks them, as everywhere. */
 export function useOverview(): Overview {
   const { channels, movies, series } = useLibrary()
   const prefs = usePrefs()
@@ -66,13 +74,22 @@ export function useOverview(): Overview {
       const item = library.series(id)
       if (item) started.push({ kind: 'series', item, at: seriesAt.get(id) ?? 0 })
     }
+    const watchlist: Listed[] = []
+    for (const id of prefs.watchlist) {
+      const movie = library.movie(id)
+      const show = movie ? undefined : library.series(id)
+      if (movie) watchlist.push({ kind: 'movie', item: movie })
+      else if (show) watchlist.push({ kind: 'series', item: show })
+    }
+    const out = leftOut(prefs, unlocked)
     const byId = (id: string) => library.channel(id)
     return {
-      started: started.filter((s) => !isVodLocked(s.item, prefs, unlocked)).sort((a, b) => b.at - a.at),
+      started: started.filter((s) => !out(s.item.categoryId)).sort((a, b) => b.at - a.at),
+      watchlist: watchlist.filter((l) => !out(l.item.categoryId)),
       favorites: channelsForGroup(FAVORITES, channels, byId, NO_CATEGORIES, prefs, unlocked),
       recent: channelsForGroup(RECENT, channels, byId, NO_CATEGORIES, prefs, unlocked),
     }
-  }, [channels, movies, series, watch, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked])
+  }, [channels, movies, series, watch, prefs.favorites, prefs.recents, prefs.watchlist, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories, unlocked])
 }
 
 interface Props {
@@ -85,7 +102,7 @@ interface Props {
   height: number
 }
 
-/** Home's first group: movies and series to continue, then favorite and recent channels, a shelf each. */
+/** Home's first group: movies and series to continue and on the user's list, then favorite and recent channels, a shelf each. */
 export function HomeOverview({ overview, memo, played, width, height }: Props) {
   const [indexes, setIndexes] = useState<Record<string, number>>(() => {
     const saved = { ...memo.overview }
@@ -125,6 +142,24 @@ export function HomeOverview({ overview, memo, played, width, height }: Props) {
           height={POSTER_CELL_HEIGHT}
           onSelect={(s) => navigate(s.kind === 'movie' ? { name: 'movie', movieId: s.item.id } : { name: 'series', seriesId: s.item.id })}
           renderCell={(s, _, focused) => <PosterCell item={s.item} focused={focused} progress={s.progress} />}
+        />
+      ),
+    })
+  }
+  if (overview.watchlist.length) {
+    shelves.push({
+      key: 'watchlist',
+      title: t('vod.myList'),
+      height: POSTER_CELL_HEIGHT,
+      node: (
+        <Shelf
+          {...shelfProps('watchlist', overview.watchlist.length)}
+          items={overview.watchlist}
+          itemKey={(l) => l.item.id}
+          cellWidth={POSTER_CELL_WIDTH}
+          height={POSTER_CELL_HEIGHT}
+          onSelect={(l) => navigate(l.kind === 'movie' ? { name: 'movie', movieId: l.item.id } : { name: 'series', seriesId: l.item.id })}
+          renderCell={(l, _, focused) => <PosterCell item={l.item} focused={focused} />}
         />
       ),
     })

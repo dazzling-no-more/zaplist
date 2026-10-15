@@ -19,6 +19,7 @@ import { PinDialog } from '../ui/PinDialog'
 import { Region } from '../ui/Region'
 import { clampIndex } from '../ui/scroll'
 import { VirtualList } from '../ui/VirtualList'
+import { ListButton } from './MovieDetails'
 
 const EPISODE_ROW = 92
 const EPISODE_LIST_HEIGHT = 644
@@ -121,11 +122,14 @@ export function SeriesScreen({ entry }: ScreenProps<'series'>) {
           <p className="dim">{t('vod.noEpisodes')}</p>
         ) : (
           <>
-            {next && (
-              <Button focusKey="series-continue" className="inline primary" icon="play" onPress={() => play(next)}>
-                {t(nextEntry && !isFinished(nextEntry) ? 'vod.continueEpisode' : 'vod.playEpisode', { episode: episodeLabel(next) })}
-              </Button>
-            )}
+            <div className="button-row">
+              {next && (
+                <Button focusKey="series-continue" className="inline primary" icon="play" onPress={() => play(next)}>
+                  {t(nextEntry && !isFinished(nextEntry) ? 'vod.continueEpisode' : 'vod.playEpisode', { episode: episodeLabel(next) })}
+                </Button>
+              )}
+              <ListButton id={series.id} listed={prefs.watchlist.includes(series.id)} />
+            </div>
             {seasons.length > 1 && (
               <Region focusKey="series-seasons" className="segmented season-picker">
                 {seasons.map((s) => (

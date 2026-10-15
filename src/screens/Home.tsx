@@ -129,7 +129,7 @@ function Browse({ entry }: ScreenProps<'home'>) {
 
   const groups = useMemo(
     () => [{ id: OVERVIEW, name: t('home.overview'), locked: false }, ...buildGroups(categories, sources, prefs, groupLabels())],
-    [categories, sources, prefs.pin, prefs.lockedCategories],
+    [categories, sources, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories],
   )
   const byCategory = useMemo(() => channelsByCategory(channels), [channels])
   const overview = useOverview()
@@ -154,7 +154,7 @@ function Browse({ entry }: ScreenProps<'home'>) {
 
   const list = useMemo(
     () => channelsForGroup(groupId, channels, (id) => library.channel(id), byCategory, prefs, unlocked),
-    [groupId, channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked],
+    [groupId, channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories, unlocked],
   )
   /** The channel played since Home was last shown (by zapping, it may not be the one picked here). */
   const [played] = useState(() => (memo.lastPlayed !== prefs.lastChannelId ? prefs.lastChannelId : undefined))
@@ -170,7 +170,7 @@ function Browse({ entry }: ScreenProps<'home'>) {
           .filter((g) => g.id !== OVERVIEW)
           .map((g) => [g.id, channelsForGroup(g.id, channels, (id) => library.channel(id), byCategory, prefs, unlocked).length]),
       ),
-    [groups, channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked],
+    [groups, channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories, unlocked],
   )
   const group: ChannelGroup | undefined = groups.find((g) => g.id === groupId)
   const index = clampIndex(channelIndex, list.length)

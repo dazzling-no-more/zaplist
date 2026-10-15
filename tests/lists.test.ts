@@ -21,7 +21,7 @@ const labels = { favorites: 'Favorites', recent: 'Recent', all: 'All' }
 let prefs: Prefs
 
 beforeEach(() => {
-  prefs = { favorites: ['3', '1', 'gone'], recents: ['2', '3'], lockedCategories: [], epgOffsetMinutes: 0, epgRefreshHours: 12, aspect: 'fit' }
+  prefs = { favorites: ['3', '1', 'gone'], recents: ['2', '3'], lockedCategories: [], epgOffsetMinutes: 0, epgRefreshHours: 12, aspect: 'fit', watchlist: [], hiddenCategories: [] }
 })
 
 describe('buildGroups', () => {
@@ -71,6 +71,14 @@ describe('channelsForGroup', () => {
     expect(channelsForGroup('kids', channels, byId, byCategory, prefs, false)).toEqual([])
     expect(ids(channelsForGroup('kids', channels, byId, byCategory, prefs, true))).toEqual(['3'])
     expect(channelsForGroup(ALL, channels, byId, byCategory, prefs, true)).toBe(channels)
+  })
+
+  it('leaves hidden categories out of every list and the sidebar, PIN or not', () => {
+    prefs.hiddenCategories = ['kids']
+    expect(ids(channelsForGroup(ALL, channels, byId, byCategory, prefs, true))).toEqual(['1', '2', '4'])
+    expect(ids(channelsForGroup(FAVORITES, channels, byId, byCategory, prefs, true))).toEqual(['1'])
+    expect(channelsForGroup('kids', channels, byId, byCategory, prefs, true)).toEqual([])
+    expect(buildGroups(categories, [], prefs, labels).map((g) => g.id)).not.toContain('kids')
   })
 
   it('ignores locked categories when no PIN is set', () => {

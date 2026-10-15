@@ -4,7 +4,7 @@ import { library, useLibrary } from '../data/library'
 import type { ChannelGroup } from '../data/lists'
 import { unlock, useUnlocked } from '../data/parental'
 import { usePrefs } from '../data/prefs'
-import { ALL_ITEMS, CONTINUE, vodByCategory, vodForGroup, vodGroups, type VodItem } from '../data/vod'
+import { ALL_ITEMS, CONTINUE, vodByCategory, vodForGroup, vodGroups, WATCHLIST, type VodItem } from '../data/vod'
 import { continueIds, useWatch } from '../data/watch'
 import { t } from '../i18n'
 import { Button } from '../ui/Button'
@@ -45,8 +45,8 @@ export function VodScreen({ entry }: ScreenProps<'vod'>) {
   const byCategory = useMemo(() => vodByCategory(items), [items])
 
   const groups = useMemo(
-    () => vodGroups(kind, categories, sources, prefs, { continue: t('vod.continue'), all: t(kind === 'movie' ? 'vod.allMovies' : 'vod.allSeries') }),
-    [kind, categories, sources, prefs.pin, prefs.lockedCategories],
+    () => vodGroups(kind, categories, sources, prefs, { continue: t('vod.continue'), watchlist: t('vod.myList'), all: t(kind === 'movie' ? 'vod.allMovies' : 'vod.allSeries') }),
+    [kind, categories, sources, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories],
   )
   const forGroup = (groupId: string): readonly VodItem[] =>
     vodForGroup<VodItem>(
@@ -64,8 +64,8 @@ export function VodScreen({ entry }: ScreenProps<'vod'>) {
   const [itemIndex, setItemIndex] = useState(memo.itemIndex ?? 0)
   const [askPin, setAskPin] = useState(false)
 
-  const list = useMemo(() => forGroup(groupId), [groupId, byCategory, recent, prefs.pin, prefs.lockedCategories, unlocked])
-  const counts = useMemo(() => new Map(groups.map((g) => [g.id, forGroup(g.id).length])), [groups, byCategory, recent, unlocked])
+  const list = useMemo(() => forGroup(groupId), [groupId, byCategory, recent, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories, prefs.watchlist, unlocked])
+  const counts = useMemo(() => new Map(groups.map((g) => [g.id, forGroup(g.id).length])), [groups, byCategory, recent, prefs.watchlist, unlocked])
   const group: ChannelGroup | undefined = groups.find((g) => g.id === groupId)
   const locked = !!group?.locked && !unlocked
   const index = clampIndex(itemIndex, list.length)
@@ -92,7 +92,7 @@ export function VodScreen({ entry }: ScreenProps<'vod'>) {
   }, [groupIndex])
 
   const open = (item: VodItem) => navigate(kind === 'movie' ? { name: 'movie', movieId: item.id } : { name: 'series', seriesId: item.id })
-  const emptyText = groupId === CONTINUE ? t('vod.noContinue') : t(kind === 'movie' ? 'vod.noMovies' : 'vod.noSeries')
+  const emptyText = groupId === CONTINUE ? t('vod.noContinue') : groupId === WATCHLIST ? t('vod.noList') : t(kind === 'movie' ? 'vod.noMovies' : 'vod.noSeries')
 
   return (
     <div className="screen">

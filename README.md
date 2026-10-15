@@ -8,7 +8,8 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 
 - **Sources**: several M3U URLs and Xtream Codes logins, each checked by downloading it before it is
   saved. Xtream accounts show their expiry date and connection limit. Refresh, edit or delete
-  sources at any time.
+  sources at any time; a source whose lists are 12 hours old is downloaded again on its own (shortly
+  after launch, then checked every hour).
 - **Add from your phone**: the start screen and the source form show a QR code. It opens a page on
   the phone where the playlist or login can be typed; it arrives in the TV's form, end-to-end
   encrypted (the key is only in the QR code), through a small relay (`relay/`, a Cloudflare Worker)
@@ -16,14 +17,16 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 - **Browse**: sidebar with Search, TV guide, Settings, Home, Favorites, Recent, All channels and the
   playlist categories, folded to a rail of icons while you browse the channels; a virtualized channel
   list (50,000+ channels) with logos, numbers and the programme on now. Home shows rows of the movies
-  and series to continue and the favorite and recent channels.
+  and series to continue, those on My list, and the favorite and recent channels. Categories you don't
+  use can be hidden (Settings > Categories): they leave every list, the guide and search.
 - **Search** across channel, movie and series names in any script (ignores case, accents and
   punctuation), updating as you type.
 - **Favorites** (the star on each channel: Right then OK, or click it; also the red button or hold OK) in
   your own order, and the last 20 channels watched.
 - **Player**: native playback first, then hls.js (HLS) or mpegts.js (MPEG-TS) when the TV's player
   can't play a stream. Zapping, number entry, a mini channel list, now/next, play/pause, audio and subtitle tracks,
-  picture shape (fit, zoom, fill, 16:9, 4:3), automatic retries and a readable error otherwise. Playback
+  picture shape (fit, zoom, fill, 16:9, 4:3), the previous channel, a sleep timer (30 minutes to 2 hours,
+  then playback stops and the app closes), automatic retries and a readable error otherwise. Playback
   stops when the app is hidden or the network drops and resumes on its own. The last channel reopens
   when the app starts. Streams whose playlist asks for a User-Agent or Referer (`#EXTVLCOPT`, Kodi's
   `url|User-Agent=…` and `#KODIPROP` stream headers), which web apps can't send, are fetched through
@@ -31,7 +34,8 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 - **Movies and series**: from Xtream Codes servers (VOD and series lists, episodes and details on
   request) and from M3U playlists (`/movie/` and `/series/` links, video files, `S01E02` names grouped
   into series). Poster grids by category, details, seasons and episodes; the player seeks, resumes where
-  you stopped and goes on to the next episode; Continue watching lists what you started. Movie and
+  you stopped and goes on to the next episode; Continue watching lists what you started, My list what
+  you added on a movie's or series' page. Movie and
   series categories can be locked with the parental PIN like channel categories. MKV and WebM movies
   with Opus audio, which the TV's player can't decode, or DTS audio (LG's TVs of 2020 and 2021 have no
   DTS decoder) stream through the app's service (`service/`), which turns the audio into PCM on the TV
@@ -65,7 +69,7 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 |            | 0–9                          | Go to channel number (after 1.5 s)                      |
 |            | OK                           | Channel list                                            |
 |            | Left/Right, Info             | Info bar with now/next, audio, subtitles, picture shape |
-|            | Red / Yellow                 | Favorite / picture shape                                |
+|            | Red / Yellow / Blue          | Favorite / picture shape / previous channel             |
 |            | Play, Pause, Stop            | Resume, pause, leave the player                         |
 | Guide      | Arrows, OK                   | Move through programmes; OK watches what's on now, or a past programme marked for catch-up |
 | Movie/episode player | Left/Right         | 10 s back / ahead (on the progress bar too)             |

@@ -10,6 +10,7 @@ import { SourceEditScreen } from './screens/SourceEdit'
 import { VodScreen } from './screens/Vod'
 import { VodPlayerScreen } from './screens/VodPlayer'
 import { useBackStack, type ScreenName, type ScreenProps } from './ui/navigation'
+import { SleepTimer } from './ui/SleepTimer'
 
 const SCREENS: { [N in ScreenName]: ComponentType<ScreenProps<N>> } = {
   home: HomeScreen,
@@ -29,5 +30,10 @@ export function App() {
   const top = screens[screens.length - 1]
   const Screen = SCREENS[top.name] as ComponentType<ScreenProps>
 
-  return <Screen key={top.id} entry={top} />
+  return (
+    <>
+      <Screen key={top.id} entry={top} />
+      <SleepTimer />
+    </>
+  )
 }

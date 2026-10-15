@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { library, useLibrary } from '../data/library'
 import type { MovieDetails } from '../data/models'
 import { unlock, useUnlocked } from '../data/parental'
-import { usePrefs } from '../data/prefs'
+import { toggleWatchlist, usePrefs } from '../data/prefs'
 import { isVodLocked } from '../data/vod'
 import { getWatch, resumePosition, useWatch } from '../data/watch'
 import { t } from '../i18n'
@@ -76,6 +76,7 @@ export function MovieScreen({ entry }: ScreenProps<'movie'>) {
                   {t('vod.fromStart')}
                 </Button>
               )}
+              <ListButton id={movie.id} listed={prefs.watchlist.includes(movie.id)} />
             </div>
           </>
         )}
@@ -91,5 +92,14 @@ export function MovieScreen({ entry }: ScreenProps<'movie'>) {
         />
       )}
     </div>
+  )
+}
+
+/** Puts a movie or series on the user's list ("My list"), or takes it off. */
+export function ListButton({ id, listed }: { id: string; listed: boolean }) {
+  return (
+    <Button focusKey="details-list" className="inline" icon={listed ? 'star' : 'starOutline'} onPress={() => toggleWatchlist(id)}>
+      {t(listed ? 'vod.removeFromList' : 'vod.addToList')}
+    </Button>
   )
 }

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { library, useLibrary } from '../data/library'
-import { ALL, channelsByCategory, channelsForGroup, searchChannels } from '../data/lists'
+import { ALL, channelsByCategory, channelsForGroup, leftOut, searchChannels } from '../data/lists'
 import type { Channel, Movie, Series } from '../data/models'
 import { useUnlocked } from '../data/parental'
 import { toggleFavorite, usePrefs } from '../data/prefs'
-import { isVodLocked } from '../data/vod'
 import { t } from '../i18n'
 import { ChannelRow } from '../ui/ChannelRow'
 import { formatCount } from '../ui/format'
@@ -49,11 +48,12 @@ export function SearchScreen({ entry }: ScreenProps<'search'>) {
   // Locked categories stay out of search results too.
   const searchable = useMemo(
     () => channelsForGroup(ALL, channels, (id) => library.channel(id), channelsByCategory(channels), prefs, unlocked),
-    [channels, prefs.pin, prefs.lockedCategories, unlocked],
+    [channels, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories, unlocked],
   )
-  // Channels first, then movies, then series; locked categories stay out here too.
+  // Channels first, then movies, then series; locked and hidden categories stay out here too.
   const results = useMemo((): Result[] => {
-    const shown = (item: Movie | Series) => !isVodLocked(item, prefs, unlocked)
+    const out = leftOut(prefs, unlocked)
+    const shown = (item: Movie | Series) => !out(item.categoryId)
     return [
       ...searchChannels(searchable, debounced).map((item): Result => ({ kind: 'channel', item })),
       ...searchChannels(movies, debounced)
@@ -63,7 +63,7 @@ export function SearchScreen({ entry }: ScreenProps<'search'>) {
         .filter(shown)
         .map((item): Result => ({ kind: 'series', item })),
     ]
-  }, [searchable, movies, series, debounced, prefs.pin, prefs.lockedCategories, unlocked])
+  }, [searchable, movies, series, debounced, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories, unlocked])
   const current = clampIndex(index, results.length)
   Object.assign(memo, { query, index: current })
 

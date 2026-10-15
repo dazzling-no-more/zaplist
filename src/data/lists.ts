@@ -39,6 +39,22 @@ export function channelsByCategory(channels: readonly Channel[]): Map<string, Ch
 export const isCategoryLocked = (categoryId: string | undefined, prefs: Pick<Prefs, 'pin' | 'lockedCategories'>): boolean =>
   !!prefs.pin && !!categoryId && prefs.lockedCategories.includes(categoryId)
 
+type ListPrefs = Pick<Prefs, 'pin' | 'lockedCategories' | 'hiddenCategories'>
+
+/** Left out of every list: its category is hidden, or locked while the PIN hasn't been entered. */
+export const isLeftOut = (categoryId: string | undefined, prefs: ListPrefs, unlocked: boolean): boolean =>
+  (!!categoryId && prefs.hiddenCategories.includes(categoryId)) || (!unlocked && isCategoryLocked(categoryId, prefs))
+
+/** isLeftOut for many items: the hidden categories as a set, looked up once each. */
+export function leftOut(prefs: ListPrefs, unlocked: boolean): (categoryId: string | undefined) => boolean {
+  const hidden = new Set(prefs.hiddenCategories)
+  return (categoryId) => (!!categoryId && hidden.has(categoryId)) || (!unlocked && isCategoryLocked(categoryId, prefs))
+}
+
+/** Whether a whole list could have something left out (otherwise it is shown as it is). */
+export const leavesOut = (prefs: ListPrefs, unlocked: boolean): boolean =>
+  prefs.hiddenCategories.length > 0 || (!!prefs.pin && !unlocked && prefs.lockedCategories.length > 0)
+
 /** The sidebar for live TV: Favorites, Recent, All channels and the live categories. */
 export function buildGroups(categories: readonly Category[], sources: readonly Source[], prefs: Prefs, labels: GroupLabels): ChannelGroup[] {
   return [
@@ -49,8 +65,9 @@ export function buildGroups(categories: readonly Category[], sources: readonly S
   ]
 }
 
-/** One group per category; categories that share a name are told apart by their source. */
-export function categoryGroups(categories: readonly Category[], sources: readonly Source[], prefs: Prefs): ChannelGroup[] {
+/** One group per category not hidden; categories that share a name are told apart by their source. */
+export function categoryGroups(all: readonly Category[], sources: readonly Source[], prefs: Prefs): ChannelGroup[] {
+  const categories = prefs.hiddenCategories.length ? all.filter((c) => prefs.hiddenCategories.indexOf(c.id) < 0) : all
   const sourceNames = new Map(sources.map((s) => [s.id, s.name]))
   const nameCount = new Map<string, number>()
   for (const c of categories) nameCount.set(c.name, (nameCount.get(c.name) ?? 0) + 1)
@@ -63,8 +80,8 @@ export function categoryGroups(categories: readonly Category[], sources: readonl
 }
 
 /**
- * Channels shown for a group. Channels in locked categories are left out everywhere until the
- * PIN unlocks them for the session; a locked category itself shows nothing.
+ * Channels shown for a group. Channels in hidden categories are left out everywhere, those in locked
+ * ones until the PIN unlocks them for the session; such a category itself shows nothing.
  */
 export function channelsForGroup(
   groupId: string,
@@ -74,12 +91,12 @@ export function channelsForGroup(
   prefs: Prefs,
   unlocked: boolean,
 ): readonly Channel[] {
-  const hidden = (c: Channel) => !unlocked && isCategoryLocked(c.categoryId, prefs)
-  const fromIds = (ids: string[]) => ids.map(byId).filter((c): c is Channel => !!c && !hidden(c))
+  const out = leftOut(prefs, unlocked)
+  const fromIds = (ids: string[]) => ids.map(byId).filter((c): c is Channel => !!c && !out(c.categoryId))
   if (groupId === FAVORITES) return fromIds(prefs.favorites)
   if (groupId === RECENT) return fromIds(prefs.recents)
-  if (groupId === ALL) return prefs.pin && !unlocked && prefs.lockedCategories.length ? channels.filter((c) => !hidden(c)) : channels
-  if (!unlocked && isCategoryLocked(groupId, prefs)) return []
+  if (groupId === ALL) return leavesOut(prefs, unlocked) ? channels.filter((c) => !out(c.categoryId)) : channels
+  if (out(groupId)) return []
   return byCategory.get(groupId) ?? []
 }
 

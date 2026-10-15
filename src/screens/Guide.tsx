@@ -57,7 +57,7 @@ export function GuideScreen({ entry }: ScreenProps<'guide'>) {
   const memo = entry.memo as { row?: number; focusTime?: number; viewStart?: number }
   const list = useMemo(
     () => channelsForGroup(entry.listId, channels, (id) => library.channel(id), channelsByCategory(channels), prefs, unlocked),
-    [channels, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked],
+    [channels, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories, unlocked],
   )
   // Back REPLAY_HOURS when channels in the list can show past programmes again (catch-up).
   const range = useMemo(() => {

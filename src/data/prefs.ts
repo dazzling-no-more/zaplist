@@ -26,12 +26,16 @@ export interface Prefs {
   lastListId?: string
   /** Picture shape in the player. */
   aspect: Aspect
+  /** Movie and series ids on the user's list ("My list"), the latest added first. */
+  watchlist: string[]
+  /** Categories left out of every list (not parental control: no PIN undoes it, Settings does). */
+  hiddenCategories: string[]
 }
 
 export const MAX_RECENTS = 20
 
 const KEY = 'iptv-player.prefs'
-const DEFAULTS: Prefs = { favorites: [], recents: [], lockedCategories: [], epgOffsetMinutes: 0, epgRefreshHours: 12, aspect: 'fit' }
+const DEFAULTS: Prefs = { favorites: [], recents: [], lockedCategories: [], epgOffsetMinutes: 0, epgRefreshHours: 12, aspect: 'fit', watchlist: [], hiddenCategories: [] }
 
 function load(): Prefs {
   try {
@@ -144,14 +148,25 @@ export function moveFavorite(channelId: string, delta: number, shown: readonly s
   return to
 }
 
-/** Channels whose ids changed (old id → new id): their favorites, recents and the last channel follow. */
+/** Puts a movie or series on the user's list, or takes it off. */
+export function toggleWatchlist(id: string): void {
+  updatePrefs({ watchlist: prefs.watchlist.includes(id) ? prefs.watchlist.filter((other) => other !== id) : [id, ...prefs.watchlist] })
+}
+
+export function toggleHiddenCategory(categoryId: string): void {
+  const hidden = prefs.hiddenCategories
+  updatePrefs({ hiddenCategories: hidden.includes(categoryId) ? hidden.filter((id) => id !== categoryId) : [...hidden, categoryId] })
+}
+
+/** Channels, movies and series whose ids changed (old id → new id): favorites, recents, the last channel and the list follow. */
 export function renameIds(renamed: ReadonlyMap<string, string>): void {
   const rename = (id: string) => renamed.get(id) ?? id
   const changed = (ids: string[]) => ids.some((id) => renamed.has(id))
-  if (!changed(prefs.favorites) && !changed(prefs.recents) && !(prefs.lastChannelId && renamed.has(prefs.lastChannelId))) return
+  if (!changed(prefs.favorites) && !changed(prefs.recents) && !changed(prefs.watchlist) && !(prefs.lastChannelId && renamed.has(prefs.lastChannelId))) return
   updatePrefs({
     favorites: prefs.favorites.map(rename),
     recents: prefs.recents.map(rename),
+    watchlist: prefs.watchlist.map(rename),
     lastChannelId: prefs.lastChannelId && rename(prefs.lastChannelId),
   })
 }

@@ -33,6 +33,12 @@ export interface LibraryState {
 
 const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
+/** Sources are downloaded again once their lists are this old: Xtream movie lists change daily. */
+export const AUTO_REFRESH_MS = 12 * 3_600_000
+/** The first check waits a little, so playback started at launch goes first. */
+const AUTO_REFRESH_DELAY_MS = 30_000
+const AUTO_REFRESH_CHECK_MS = 60 * 60_000
+
 class Library {
   private state: LibraryState = { ready: false, sources: [], categories: [], channels: [], movies: [], series: [], progress: {} }
   private readonly data = new Map<string, SourceData>()
@@ -188,6 +194,33 @@ class Library {
         this.setProgress(source.id, undefined)
       }
     })
+  }
+
+  /**
+   * Downloads, one at a time, the sources whose lists are older than AUTO_REFRESH_MS: shortly after
+   * launch, then every hour while the app runs. `refreshed` runs after a check that refreshed any (the
+   * guide follows them). A source that fails keeps its lists and is tried at the next check.
+   */
+  startAutoRefresh(refreshed: () => void): void {
+    let checking = false
+    const check = async () => {
+      if (checking) return
+      checking = true
+      let any = false
+      for (const source of this.state.sources) {
+        if (Date.now() - (source.refreshedAt ?? 0) < AUTO_REFRESH_MS || this.state.progress[source.id]) continue
+        await this.refresh(source.id).then(
+          () => (any = true),
+          () => undefined,
+        )
+      }
+      checking = false
+      if (any) refreshed()
+    }
+    setTimeout(() => {
+      void check()
+      setInterval(() => void check(), AUTO_REFRESH_CHECK_MS)
+    }, AUTO_REFRESH_DELAY_MS)
   }
 
   /** Removes a source and its stored data, also what a save still running for it stores afterwards. */

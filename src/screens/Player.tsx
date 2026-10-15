@@ -13,6 +13,7 @@ import { toggleFullscreen } from '../platform/screen'
 import { withHeaders, type PlaybackError } from '../player/streams'
 import { useSoundBlocked } from '../player/autoplay'
 import { Playback, usePlaybackStatus } from '../player/playback'
+import { useSleep } from '../player/sleep'
 import { ASPECT_CLASS } from '../ui/aspect'
 import { Button } from '../ui/Button'
 import { ChannelRow } from '../ui/ChannelRow'
@@ -25,6 +26,7 @@ import { recordPlay } from '../ui/play'
 import { formatCount } from '../ui/format'
 import { Region } from '../ui/Region'
 import { clampIndex } from '../ui/scroll'
+import { SleepButton } from '../ui/SleepTimer'
 import { TrackDialog } from '../ui/TrackDialog'
 import { VirtualList } from '../ui/VirtualList'
 
@@ -56,7 +58,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
 
   const byCategory = useMemo(() => channelsByCategory(channels), [channels])
   const visible = (groupId: string) => channelsForGroup(groupId, channels, (id) => library.channel(id), byCategory, prefs, unlocked)
-  const listDeps = [channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked]
+  const listDeps = [channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories, unlocked]
   // Zapping through Recent keeps its order from when the channel was picked: each channel played goes
   // to the top of Recent, so Up and Down would only swap the last two.
   const [zapRecents, setZapRecents] = useState(prefs.recents)
@@ -70,7 +72,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   }, [...listDeps, listId, channelId, zapRecents])
   /** Digits a channel number can have: number entry keeps that many. */
   const numberDigits = useMemo(() => String(channels.reduce((most, c) => Math.max(most, c.number), 0)).length, [channels])
-  const groups = useMemo(() => buildGroups(categories, sources, prefs, groupLabels()), [categories, sources, prefs.pin, prefs.lockedCategories])
+  const groups = useMemo(() => buildGroups(categories, sources, prefs, groupLabels()), [categories, sources, prefs.pin, prefs.lockedCategories, prefs.hiddenCategories])
   const channel = library.channel(channelId)
   const index = list.findIndex((c) => c.id === channelId)
 
@@ -197,6 +199,12 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
     if (!list.length) return
     tune(list[((index < 0 ? 0 : index) + delta + list.length) % list.length])
   }
+  /** The channel watched before this one (Recent keeps them in order): the blue key goes back to it. */
+  const previousChannel = () => visible(RECENT).find((c) => c.id !== channelId)
+  const previous = () => {
+    const target = previousChannel()
+    if (target) tune(target)
+  }
   const jumpTo = (number: number) => {
     const target = list.find((c) => c.number === number) ?? visible(ALL).find((c) => c.number === number)
     if (target) tune(target)
@@ -250,8 +258,10 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
     return () => clearTimeout(timer)
   }, [digits])
 
-  const latest = useRef({ zap, openList, showOsd, hideOsd, favorite, cycleAspect, osd, numberDigits, modal: false })
-  latest.current = { zap, openList, showOsd, hideOsd, favorite, cycleAspect, osd, numberDigits, modal: miniList || !!picker }
+  const latest = useRef({ zap, previous, openList, showOsd, hideOsd, favorite, cycleAspect, osd, numberDigits, modal: false })
+  // The sleep timer's warning is a dialog over the player too: keys go to it.
+  const sleepWarning = useSleep().warning
+  latest.current = { zap, previous, openList, showOsd, hideOsd, favorite, cycleAspect, osd, numberDigits, modal: miniList || !!picker || sleepWarning }
 
   const { ref: surface } = useFocusable<object, HTMLDivElement>({
     focusKey: 'player-surface',
@@ -275,6 +285,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
       else if (key === 'info') s.osd ? s.hideOsd() : s.showOsd(true)
       else if (key === 'red') s.favorite()
       else if (key === 'yellow') s.cycleAspect()
+      else if (key === 'blue') s.previous()
       else if (key === 'pause') video.current?.pause()
       else if (key === 'play') void video.current?.play()
       else if (key === 'stop') backStack.pop()
@@ -345,6 +356,11 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
               <Button focusKey="osd-channels" icon="all" onPress={openList}>
                 {t('player.channelList')}
               </Button>
+              {previousChannel() && (
+                <Button focusKey="osd-previous" icon="recent" onPress={previous}>
+                  {t('player.previousChannel')}
+                </Button>
+              )}
               <Button focusKey="osd-favorite" icon={prefs.favorites.includes(channel.id) ? 'star' : 'starOutline'} onPress={favorite}>
                 {t(prefs.favorites.includes(channel.id) ? 'menu.removeFavorite' : 'menu.addFavorite')}
               </Button>
@@ -357,6 +373,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
               <Button focusKey="osd-aspect" icon="aspect" onPress={cycleAspect}>
                 {t('player.aspectIs', { aspect: t(`aspect.${aspect}`) })}
               </Button>
+              <SleepButton />
             </Region>
           )}
         </div>

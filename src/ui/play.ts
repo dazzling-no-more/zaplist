@@ -1,5 +1,5 @@
 import { library } from '../data/library'
-import { ALL, isCategoryLocked } from '../data/lists'
+import { ALL, isLeftOut } from '../data/lists'
 import type { Channel } from '../data/models'
 import { addRecent, getPrefs, updatePrefs } from '../data/prefs'
 import { backStack, navigate, type Replay } from './navigation'
@@ -23,6 +23,6 @@ export function playChannel(channel: Channel, listId: string, catchup?: Replay):
 export function resumeLastChannel(): void {
   const prefs = getPrefs()
   const channel = prefs.lastChannelId ? library.channel(prefs.lastChannelId) : undefined
-  if (!channel || isCategoryLocked(channel.categoryId, prefs)) return
+  if (!channel || isLeftOut(channel.categoryId, prefs, false)) return
   backStack.push({ name: 'player', channelId: channel.id, listId: prefs.lastListId ?? ALL }, 'home-channels')
 }

@@ -5,13 +5,14 @@ import type { IconName } from '../ui/Icon'
 import { useScreenFocus, type ScreenProps } from '../ui/navigation'
 import { Region } from '../ui/Region'
 import { AboutSection } from './settings/About'
+import { CategoriesSection } from './settings/Categories'
 import { GuideSection } from './settings/Guide'
 import { ParentalSection } from './settings/Parental'
 import { SourcesSection } from './settings/Sources'
 
-const SECTIONS = ['sources', 'guide', 'parental', 'about'] as const
+const SECTIONS = ['sources', 'categories', 'guide', 'parental', 'about'] as const
 type Section = (typeof SECTIONS)[number]
-const ICONS: Record<Section, IconName> = { sources: 'playlist', guide: 'guide', parental: 'lock', about: 'info' }
+const ICONS: Record<Section, IconName> = { sources: 'playlist', categories: 'folder', guide: 'guide', parental: 'lock', about: 'info' }
 
 export function SettingsScreen({ entry }: ScreenProps<'settings'>) {
   const [section, setSection] = useState<Section>((entry.memo.section as Section) ?? 'sources')
@@ -33,6 +34,7 @@ export function SettingsScreen({ entry }: ScreenProps<'settings'>) {
         ))}
       </Region>
       {section === 'sources' && <SourcesSection />}
+      {section === 'categories' && <CategoriesSection />}
       {section === 'guide' && <GuideSection />}
       {section === 'parental' && <ParentalSection />}
       {section === 'about' && <AboutSection />}
