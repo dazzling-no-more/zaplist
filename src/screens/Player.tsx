@@ -411,7 +411,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
       )}
       {miniList && <FocusOnMount focusKey={browseList.length ? 'player-list' : 'player-groups'} />}
 
-      {picker && <TrackDialog kind={picker} engine={playback?.current()} onClose={() => setPicker(undefined)} />}
+      {picker && <TrackDialog kind={picker} playback={playback} onClose={() => setPicker(undefined)} />}
     </div>
   )
 }

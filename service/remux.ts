@@ -1,6 +1,6 @@
 import type { Writable } from 'stream'
 import { inflateSync } from 'zlib'
-import { child, children, element, encodeId, encodeSize, floatElement, ID, readVint, subtitleKind, trackLanguage, TRACK_AUDIO, TRACK_SUBTITLE, TRACK_VIDEO, uint, uintElement, UNKNOWN, UNKNOWN_SIZE } from './ebml'
+import { child, children, element, encodeId, encodeSize, floatElement, ID, readId, readVint, subtitleKind, trackLanguage, TRACK_AUDIO, TRACK_SUBTITLE, TRACK_VIDEO, uint, uintElement, UNKNOWN, UNKNOWN_SIZE } from './ebml'
 import { get } from './fetch'
 import { OpusToPcm, parseOpusHead, SAMPLE_RATE } from './opus'
 import { Reader, type ElementHeader } from './reader'
@@ -48,7 +48,8 @@ interface Movie {
   ebml: Buffer
   /** File offset of the Segment's body; cluster and cue positions count from here. */
   segmentStart: number
-  firstCluster: number
+  /** Unknown when the header was read only up to the track list (open): then the first cue gives it. */
+  firstCluster?: number
   info: Buffer
   tracks: Track[]
   /** File offset of the Cues element, if the SeekHead names one. */
@@ -94,18 +95,22 @@ export class Job {
   }
 }
 
-/** The movie's header, from the cache or read from the start of the file (`pending`: that reader, at the first cluster). */
-async function open(url: string, job: Job): Promise<{ movie: Movie; pending?: { reader: Reader; cluster: ElementHeader } }> {
+/**
+ * The movie's header, from the cache or read from the start of the file (`pending`: that reader, at
+ * the first cluster). To start further in, reading stops after the track list: the cue index says
+ * where to go, and the fonts and chapters often stored before the first cluster aren't needed.
+ */
+async function open(url: string, job: Job, seconds: number): Promise<{ movie: Movie; pending?: { reader: Reader; cluster: ElementHeader } }> {
   if (cached && cached.url === url) return { movie: cached.movie }
   const reader = await job.open(url, 0)
-  const { movie, cluster } = await readMovie(reader)
+  const { movie, cluster } = await readMovie(reader, seconds > 0)
   cached = { url, movie }
-  return { movie, pending: { reader, cluster } }
+  return { movie, pending: cluster && { reader, cluster } }
 }
 
 /** The movie's audio and subtitle tracks, and where a stream asked to start at `seconds` really starts. */
 export async function info(url: string, seconds: number, job: Job): Promise<{ start: number; audio: TrackInfo[]; subtitles: TrackInfo[] }> {
-  const { movie } = await open(url, job)
+  const { movie } = await open(url, job, seconds)
   const [start] = await cueAt(url, movie, seconds, job)
   const list = (tracks: Track[]) => tracks.map((t) => ({ number: t.number, name: t.name, language: t.language, codec: t.codec, default: t.isDefault }))
   return {
@@ -133,7 +138,7 @@ export async function remux(options: RemuxOptions, out: Writable, job: Job): Pro
   let converter: OpusToPcm | undefined
   let reader: Reader | undefined
   try {
-    const { movie, pending } = await open(options.url, job)
+    const { movie, pending } = await open(options.url, job, options.start)
     const video = movie.tracks.filter((t) => t.type === TRACK_VIDEO)[0]
     if (!video) throw new Error('No video track')
     const audios = movie.tracks.filter((t) => t.type === TRACK_AUDIO)
@@ -194,8 +199,11 @@ function write(out: Writable, data: Buffer): Promise<void> {
   })
 }
 
-/** Reads the EBML header and the Segment up to its first cluster, and that cluster's header. */
-async function readMovie(reader: Reader): Promise<{ movie: Movie; cluster: ElementHeader }> {
+/**
+ * Reads the EBML header and the Segment up to its first cluster, and that cluster's header. `early`:
+ * stops once it has the track list and the cue index's place.
+ */
+async function readMovie(reader: Reader, early: boolean): Promise<{ movie: Movie; cluster?: ElementHeader }> {
   const ebmlHead = await reader.header()
   const ebmlBody = ebmlHead && ebmlHead.id === ID.EBML ? await reader.read(ebmlHead.size) : undefined
   if (!ebmlBody) throw new Error('Not a Matroska file')
@@ -206,6 +214,7 @@ async function readMovie(reader: Reader): Promise<{ movie: Movie; cluster: Eleme
   let tracks: Track[] = []
   let cuesAt: number | undefined
   for (;;) {
+    if (early && info && tracks.length && cuesAt !== undefined) return { movie: { ebml: element(ID.EBML, [ebmlBody]), segmentStart, info, tracks, cuesAt } }
     const head = await reader.header()
     if (!head) throw new Error('No clusters')
     if (head.id === ID.Cluster) {
@@ -270,15 +279,19 @@ export function pcmTrack(body: Buffer, channels: number): Buffer {
 
 /** [seconds, file offset] of the last cluster starting at or before `seconds`, from the cue index. */
 async function cueAt(url: string, movie: Movie, seconds: number, job: Job): Promise<[number, number]> {
-  if (seconds <= 0) return [0, movie.firstCluster]
-  if (!movie.cues && movie.cuesAt !== undefined) {
+  if ((seconds > 0 || movie.firstCluster === undefined) && !movie.cues && movie.cuesAt !== undefined) {
     const reader = await job.open(url, movie.cuesAt)
     const head = await reader.header()
     const body = head && head.id === ID.Cues && head.size !== UNKNOWN ? await reader.read(head.size) : undefined
     reader.destroy()
     movie.cues = body ? parseCues(body, movie) : []
   }
-  let found: [number, number] = [0, movie.firstCluster]
+  // Header read up to the tracks only: the first cue is the first cluster (no usable cues: read up to it).
+  if (movie.firstCluster === undefined) {
+    movie.firstCluster = movie.cues && movie.cues.length ? movie.cues[0][1] : (await readMovie(await job.open(url, 0), false)).movie.firstCluster
+  }
+  let found: [number, number] = [0, movie.firstCluster!]
+  if (seconds <= 0) return found
   for (const cue of movie.cues || []) {
     if (cue[0] > seconds) break
     found = cue
@@ -290,13 +303,43 @@ async function cueAt(url: string, movie: Movie, seconds: number, job: Job): Prom
 const timecodeScale = (movie: { info: Buffer }) => uint(child(movie.info, ID.TimecodeScale), 1000000) / 1e9
 const toMilliseconds = (seconds: number) => Math.round(seconds * 1000) / 1000
 
+/** Calls `visit` for each element in buf[from, to), without building element lists. */
+function scan(buf: Buffer, from: number, to: number, visit: (id: number, start: number, end: number) => void): void {
+  for (let pos = from; pos < to; ) {
+    const id = readId(buf, pos)
+    const size = id && readVint(buf, pos + id[1])
+    if (!id || !size || size[0] === UNKNOWN) return
+    const start = pos + id[1] + size[1]
+    if (start + size[0] > to) return
+    visit(id[0], start, start + size[0])
+    pos = start + size[0]
+  }
+}
+
+function uintAt(buf: Buffer, start: number, end: number): number {
+  let value = 0
+  for (let i = start; i < end; i++) value = value * 256 + buf[i]
+  return value
+}
+
+/** The cue index: a movie has tens of thousands of cue points, so this is one pass over the bytes. */
 export function parseCues(body: Buffer, movie: { info: Buffer; segmentStart: number }): Array<[number, number]> {
   const scale = timecodeScale(movie)
   const cues: Array<[number, number]> = []
-  for (const point of children(body)) {
-    const positions = point.id === ID.CuePoint ? child(point.data, ID.CueTrackPositions) : undefined
-    if (positions) cues.push([toMilliseconds(uint(child(point.data, ID.CueTime)) * scale), movie.segmentStart + uint(child(positions, ID.CueClusterPosition))])
-  }
+  scan(body, 0, body.length, (id, start, end) => {
+    if (id !== ID.CuePoint) return
+    let time = -1
+    let cluster = -1
+    scan(body, start, end, (field, from, to) => {
+      if (field === ID.CueTime) time = uintAt(body, from, to)
+      else if (field === ID.CueTrackPositions && cluster < 0) {
+        scan(body, from, to, (position, at, until) => {
+          if (position === ID.CueClusterPosition) cluster = uintAt(body, at, until)
+        })
+      }
+    })
+    if (time >= 0 && cluster >= 0) cues.push([toMilliseconds(time * scale), movie.segmentStart + cluster])
+  })
   return cues.sort((a, b) => a[0] - b[0])
 }
 

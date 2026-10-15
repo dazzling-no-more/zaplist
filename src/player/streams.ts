@@ -19,13 +19,20 @@ export interface Track {
   label: string
 }
 
+/** Track ids chosen in the audio and subtitle menus (subtitle -1: off), kept while a stream restarts. */
+export interface TrackChoices {
+  audio?: number
+  subtitle?: number
+}
+
 export interface Engine {
   readonly name: EngineName
   /**
-   * Resolves once video plays, `position` seconds in (movies; live streams start where they are);
-   * rejects with a PlaybackError when this engine can't play the stream.
+   * Resolves once video plays, `position` seconds in (movies; live streams start where they are) and
+   * with the `choices` made before the stream restarted; rejects with a PlaybackError when this engine
+   * can't play the stream.
    */
-  start(position?: number): Promise<void>
+  start(position?: number, choices?: TrackChoices): Promise<void>
   /** Seconds into the stream. */
   currentTime(): number
   seek(seconds: number): void

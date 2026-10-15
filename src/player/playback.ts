@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { diagnostics, recordError } from './diagnostics'
 import { createEngine, mseSupport, nativePlaysMpegTs, releaseVideo, remuxSupport } from './engines'
-import { playbackAttempts, PlaybackError, summarizeFailures, type Engine, type Failure } from './streams'
+import { playbackAttempts, PlaybackError, summarizeFailures, type Engine, type Failure, type TrackChoices } from './streams'
 
 /** Waits before each retry of a failed stream; after the last one playback gives up. */
 export const RETRY_DELAYS_MS = [1000, 2000, 4000]
@@ -25,6 +25,7 @@ export class Playback {
   private starting?: Engine
   private urls: string[] = []
   private position = () => 0
+  private choices: TrackChoices = {}
   private retries = 0
   /** Bumped by every play/stop so late results of an earlier load are ignored. */
   private token = 0
@@ -42,8 +43,12 @@ export class Playback {
     }
   }
 
-  /** `position`: seconds into the stream to start at, asked again on every retry (movies). */
+  /**
+   * `position`: seconds into the stream to start at, asked again on every retry (movies). Playing the
+   * same stream again (app back from the background, network back) keeps the tracks chosen for it.
+   */
   play(urls: string[], position: () => number = () => 0): void {
+    if (urls.join('\n') !== this.urls.join('\n')) this.choices = {}
     this.urls = urls
     this.position = position
     this.retries = 0
@@ -70,6 +75,18 @@ export class Playback {
     this.engine?.seek(seconds)
   }
 
+  /** Chooses an audio track (id from current().audioTracks()); kept when the stream restarts. */
+  setAudioTrack(id: number): void {
+    this.choices.audio = id
+    this.engine?.setAudioTrack(id)
+  }
+
+  /** Chooses subtitles (id from current().subtitleTracks(), -1: off); kept when the stream restarts. */
+  setSubtitleTrack(id: number): void {
+    this.choices.subtitle = id
+    this.engine?.setSubtitleTrack(id)
+  }
+
   private reset(): number {
     clearTimeout(this.timer)
     this.starting?.destroy()
@@ -88,7 +105,7 @@ export class Playback {
       const engine = createEngine(attempt, this.video)
       this.starting = engine
       try {
-        await engine.start(this.position())
+        await engine.start(this.position(), { ...this.choices })
       } catch (error) {
         engine.destroy()
         failures.push({ engine: attempt.engine, error: error instanceof PlaybackError ? error : new PlaybackError('format', String(error)) })

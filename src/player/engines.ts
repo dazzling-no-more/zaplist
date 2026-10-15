@@ -6,7 +6,7 @@ import { isWebOS } from '../platform/webos'
 import { playWithSound } from './autoplay'
 import { subtitleKind, TRACK_AUDIO, TRACK_SUBTITLE } from './ebml'
 import { readTracks, trackLabel } from './matroska'
-import { PlaybackError, type Attempt, type Engine, type EngineName, type Track } from './streams'
+import { PlaybackError, type Attempt, type Engine, type EngineName, type Track, type TrackChoices } from './streams'
 import { CueList, PgsDecoder, subtitleText, type Subtitle } from './subtitles'
 import { loadHls, loadMpegts, type Hls } from './vendor'
 
@@ -100,6 +100,13 @@ interface MediaTrackList {
   [index: number]: { label: string; language: string; enabled: boolean }
 }
 
+/** Once the stream plays: back to `position`, with the tracks chosen before it restarted. */
+function resume(engine: Engine, position: number, { audio, subtitle }: TrackChoices): void {
+  if (position > 0) engine.seek(position)
+  if (audio !== undefined && audio !== engine.selectedAudio()) engine.setAudioTrack(audio)
+  if (subtitle !== undefined && subtitle !== engine.selectedSubtitle()) engine.setSubtitleTrack(subtitle)
+}
+
 class NativeEngine implements Engine {
   name: EngineName = 'native'
   onFatal?: (error: PlaybackError) => void
@@ -112,9 +119,9 @@ class NativeEngine implements Engine {
     protected readonly url: string,
   ) {}
 
-  async start(position = 0): Promise<void> {
+  async start(position = 0, choices: TrackChoices = {}): Promise<void> {
     await this.load(this.url)
-    if (position > 0) this.seek(position)
+    resume(this, position, choices)
   }
 
   /** Plays `src` until the first frames show, then watches it for errors and stalls. */
@@ -202,7 +209,7 @@ class HlsEngine implements Engine {
     private readonly url: string,
   ) {}
 
-  async start(position = 0): Promise<void> {
+  async start(position = 0, choices: TrackChoices = {}): Promise<void> {
     const Hls = await loadHls().catch((error: Error) => Promise.reject(new PlaybackError('format', error.message)))
     if (this.destroyed) throw cancelled()
     const hls = (this.hls = new Hls({
@@ -232,7 +239,7 @@ class HlsEngine implements Engine {
     if (this.destroyed) throw cancelled()
     this.started = true
     this.unwatch = watchVideo(this.video, this)
-    if (position > 0) this.seek(position)
+    resume(this, position, choices)
   }
 
   currentTime(): number {
@@ -293,7 +300,7 @@ class MpegtsEngine implements Engine {
     private readonly url: string,
   ) {}
 
-  async start(position = 0): Promise<void> {
+  async start(position = 0, choices: TrackChoices = {}): Promise<void> {
     const mpegts = await loadMpegts().catch((error: Error) => Promise.reject(new PlaybackError('format', error.message)))
     if (this.destroyed) throw cancelled()
     const player = (this.player = mpegts.createPlayer(
@@ -318,7 +325,7 @@ class MpegtsEngine implements Engine {
     if (this.destroyed) throw cancelled()
     this.started = true
     this.unwatch = watchVideo(this.video, this)
-    if (position > 0) this.seek(position)
+    resume(this, position, choices)
   }
 
   currentTime(): number {
@@ -472,7 +479,7 @@ class RemuxEngine extends NativeEngine {
   private pollTimer?: ReturnType<typeof setInterval>
   private shown?: Subtitle
 
-  async start(position = 0): Promise<void> {
+  async start(position = 0, choices: TrackChoices = {}): Promise<void> {
     const head = await Promise.race([readHead(this.url), this.cancellation.promise])
     const tracks = head && readTracks(head)
     if (tracks) {
@@ -480,7 +487,12 @@ class RemuxEngine extends NativeEngine {
       this.subtitles = tracks.filter((t) => t.type === TRACK_SUBTITLE && subtitleKind(t.codec))
     }
     const opus = tracks ? tracks.some((t) => t.type === TRACK_AUDIO && t.codec === 'A_OPUS') : !!head && contains(head, OPUS_CODEC_ID)
-    if (!opus) return super.start(position)
+    // Subtitles chosen before a restart need the service's stream too: go there straight away.
+    const subtitle = choices.subtitle !== undefined ? this.subtitles[choices.subtitle] : undefined
+    if (!opus && !subtitle) return super.start(position, { audio: choices.audio })
+    const audio = choices.audio !== undefined ? this.audios[choices.audio] : undefined
+    if (audio) this.audio = audio.number
+    if (subtitle) this.subtitle = subtitle.number
     this.name = 'remux'
     await this.connect()
     await this.open(position)

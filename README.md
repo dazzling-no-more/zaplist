@@ -126,9 +126,10 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
 
 ## Known limits
 
-- **Not yet tested on a TV or the webOS simulator.** Everything above was checked in desktop
-  Chrome (dev server and the `file://` build) with keyboard and simulated remote events. Playback in
-  desktop Chrome doesn't prove playback on the TV.
+- **Tested on one TV only.** Playback (4K HLS channels, MP4 and MKV movies, Opus audio through the
+  service, MKV subtitles, seeking and resuming) was tested on an LG OLED65GX (2020, webOS 5). The rest
+  was checked in desktop Chrome (dev server and the `file://` build) with keyboard and simulated
+  remote events. webOS 4.x and webOS 6 or newer haven't been tried.
 - `#EXTVLCOPT` and `#KODIPROP` options are read and stored but not applied. Web apps can't set
   headers such as `User-Agent` or `Referer`, and DRM (Widevine/PlayReady) is out of scope, so streams
   that need them won't play.
@@ -142,9 +143,9 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
   movie plays; LG advises against services that run for long, which a review may question.
 - Subtitles inside MKV files, drawn by the app, need webOS 5 or newer like the service. ASS/SSA
   subtitles show as plain text at the bottom (no styling or positions); PGS pictures are placed for
-  the Fit picture shape. DVD (VobSub) subtitles aren't supported. The choice of subtitles (and of an
-  audio track) resets when the stream restarts after an error or when the app returns from the
-  background.
+  the Fit picture shape. DVD (VobSub) subtitles aren't supported. The chosen subtitles and audio track
+  stay while a movie restarts (after an error, or back from the background) but not for the next
+  episode.
 - Catch-up/timeshift, VOD and series (Xtream) are not implemented yet.
 - Sources, cached channel lists, guide addresses, the PIN and the extra guide URL are encrypted with a
   key kept on the TV (AES-GCM, non-extractable, in IndexedDB). That protects a copied database, not a

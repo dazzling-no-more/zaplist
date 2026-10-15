@@ -1,17 +1,21 @@
 import { useRef, type WheelEvent } from 'react'
 import { t } from '../i18n'
-import type { Engine } from '../player/streams'
+import type { Playback } from '../player/playback'
 import { Button } from './Button'
 import { Dialog } from './Dialog'
 import { revealChild } from './scroll'
 
-/** Audio or subtitle track choice for the stream playing now (live channels, movies, episodes). */
-export function TrackDialog({ kind, engine, onClose }: { kind: 'audio' | 'subtitles'; engine?: Engine; onClose: () => void }) {
+/**
+ * Audio or subtitle track choice for the stream playing now (live channels, movies, episodes),
+ * made through Playback so that it stays when the stream restarts.
+ */
+export function TrackDialog({ kind, playback, onClose }: { kind: 'audio' | 'subtitles'; playback?: Playback; onClose: () => void }) {
+  const engine = playback?.current()
   const tracks = engine ? (kind === 'audio' ? engine.audioTracks() : engine.subtitleTracks()) : []
   const selected = engine ? (kind === 'audio' ? engine.selectedAudio() : engine.selectedSubtitle()) : -1
   const select = (id: number) => {
-    if (kind === 'audio') engine?.setAudioTrack(id)
-    else engine?.setSubtitleTrack(id)
+    if (kind === 'audio') playback?.setAudioTrack(id)
+    else playback?.setSubtitleTrack(id)
     onClose()
   }
   const options = kind === 'subtitles' && tracks.length ? [{ id: -1, label: t('player.subtitlesOff') }, ...tracks] : tracks

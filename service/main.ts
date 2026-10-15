@@ -14,16 +14,22 @@ interface Message {
   respond(response: Record<string, unknown>): void
 }
 
+/** How long the service stays up after the app stops playing through it: a resume or replay soon after finds it running, the movie's header and cues still read. */
+const LINGER_MS = 60000
+
 const service = new Service(SERVICE_ID)
 const subscribers: { [token: string]: true } = {}
 let keepAlive: unknown
+let linger: ReturnType<typeof setTimeout> | undefined
 
 // The app subscribes to `start` while it plays a movie through the service. webOS stops services
-// that look idle; the open subscription and a keep-alive activity hold it up until the app cancels.
+// that look idle; the open subscription and a keep-alive activity hold it up until the app cancels,
+// and LINGER_MS longer.
 const start = service.register('start')
 start.on('request', (message: Message) => {
   if (message.isSubscription) {
     subscribers[message.uniqueToken] = true
+    clearTimeout(linger)
     if (!keepAlive) service.activityManager.create('keepAlive', (activity: unknown) => (keepAlive = activity))
   }
   startServer().then(
@@ -34,7 +40,10 @@ start.on('request', (message: Message) => {
 start.on('cancel', (message: Message) => {
   delete subscribers[message.uniqueToken]
   if (Object.keys(subscribers).length) return
-  stopPlayback()
-  if (keepAlive) service.activityManager.complete(keepAlive, () => undefined)
-  keepAlive = undefined
+  stopPlayback() // the connection to the IPTV server closes now
+  clearTimeout(linger)
+  linger = setTimeout(() => {
+    if (keepAlive) service.activityManager.complete(keepAlive, () => undefined)
+    keepAlive = undefined
+  }, LINGER_MS)
 })

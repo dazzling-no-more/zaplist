@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { playbackAttempts, PlaybackError, streamKind, summarizeFailures, type Attempt, type Engine } from '../src/player/streams'
+import { playbackAttempts, PlaybackError, streamKind, summarizeFailures, type Attempt, type Engine, type TrackChoices } from '../src/player/streams'
 
 // Fake engines: each attempt's outcome comes from `outcomes` (keyed by engine name), in order.
 const outcomes: Record<string, (() => Promise<void>)[]> = {}
-const created: { attempt: Attempt; engine: Engine & { destroyed: boolean; position?: number } }[] = []
+const created: { attempt: Attempt; engine: Engine & { destroyed: boolean; position?: number; choices?: TrackChoices } }[] = []
 
 vi.mock('../src/player/engines', () => ({
   mseSupport: () => ({ hls: true, mpegts: true }),
@@ -16,8 +16,10 @@ vi.mock('../src/player/engines', () => ({
       name: attempt.engine,
       destroyed: false,
       position: undefined as number | undefined,
-      start(position?: number) {
+      choices: undefined as TrackChoices | undefined,
+      start(position?: number, choices?: TrackChoices) {
         this.position = position
+        this.choices = choices
         return next()
       },
       currentTime: () => 0,
@@ -201,6 +203,26 @@ describe('Playback', () => {
     playback.play(['channel.m3u8']) // live streams start where they are
     await flush()
     expect(created[2].engine.position).toBe(0)
+  })
+
+  it('keeps the chosen tracks when the same stream restarts, and forgets them for another one', async () => {
+    outcomes.native = [ok, ok, ok, ok]
+    const playback = new Playback(video)
+    playback.play(['movie.mp4'])
+    await flush()
+    playback.setAudioTrack(1)
+    playback.setSubtitleTrack(2)
+    playback.current()!.onFatal!(new PlaybackError('timeout', 'stalled'))
+    vi.advanceTimersByTime(RETRY_DELAYS_MS[0])
+    await flush()
+    expect(created[1].engine.choices).toEqual({ audio: 1, subtitle: 2 })
+
+    playback.play(['movie.mp4']) // back from the background
+    await flush()
+    expect(created[2].engine.choices).toEqual({ audio: 1, subtitle: 2 })
+    playback.play(['next-episode.mp4'])
+    await flush()
+    expect(created[3].engine.choices).toEqual({})
   })
 
   it('stop releases the engine and cancels a pending retry', async () => {

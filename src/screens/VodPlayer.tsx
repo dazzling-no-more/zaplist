@@ -53,6 +53,8 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
   const [attempt, setAttempt] = useState(0)
   const [osd, setOsd] = useState(true)
   const [paused, setPaused] = useState(false)
+  /** Playing, but waiting for data: a seek, a stall, or a new stream after a seek (remux engine). */
+  const [buffering, setBuffering] = useState(false)
   const [time, setTime] = useState({ current: 0, duration: 0 })
   const [picker, setPicker] = useState<'audio' | 'subtitles'>()
   const [toast, setToast] = useState<string>()
@@ -126,16 +128,24 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
       if (element.paused) latestSave.current()
     }
     const onEnded = () => latestEnded.current()
+    const waiting = ['waiting', 'seeking', 'loadstart']
+    const going = ['playing', 'canplay', 'error', 'ended']
+    const onWaiting = () => setBuffering(true)
+    const onGoing = () => setBuffering(false)
     element.addEventListener('timeupdate', onTime)
     element.addEventListener('play', onPlayState)
     element.addEventListener('pause', onPlayState)
     element.addEventListener('ended', onEnded)
+    waiting.forEach((type) => element.addEventListener(type, onWaiting))
+    going.forEach((type) => element.addEventListener(type, onGoing))
     const timer = setInterval(() => latestSave.current(), SAVE_EVERY_MS)
     return () => {
       element.removeEventListener('timeupdate', onTime)
       element.removeEventListener('play', onPlayState)
       element.removeEventListener('pause', onPlayState)
       element.removeEventListener('ended', onEnded)
+      waiting.forEach((type) => element.removeEventListener(type, onWaiting))
+      going.forEach((type) => element.removeEventListener(type, onGoing))
       clearInterval(timer)
     }
   }, [playback])
@@ -341,7 +351,7 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
         </div>
       )}
 
-      {(status.state === 'loading' || status.state === 'retrying') && <div className="spinner" />}
+      {(status.state === 'loading' || status.state === 'retrying' || (status.state === 'playing' && buffering)) && <div className="spinner" />}
       {!online && <div className="banner">{t('player.offline')}</div>}
       {online && soundBlocked && <div className="toast">{t('player.soundBlocked')}</div>}
       {toast && <div className="toast">{toast}</div>}
@@ -362,7 +372,7 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
         </Region>
       )}
 
-      {picker && <TrackDialog kind={picker} engine={playback?.current()} onClose={() => setPicker(undefined)} />}
+      {picker && <TrackDialog kind={picker} playback={playback} onClose={() => setPicker(undefined)} />}
     </div>
   )
 }

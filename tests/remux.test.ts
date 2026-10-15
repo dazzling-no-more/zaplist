@@ -75,10 +75,19 @@ let server: Server
 let base = ''
 let open = 0
 let mostOpen = 0
+/** Paths asked for, in order. */
+let asked: string[] = []
 
 beforeAll(async () => {
-  // Serves the movie with byte ranges, like an IPTV server, and counts open connections.
+  // Like an IPTV server: movie links redirect to a stream server, which sends the file with byte
+  // ranges. Counts open connections.
   server = createServer((req, res) => {
+    asked.push(req.url!)
+    if (req.url!.startsWith('/movie/')) {
+      res.writeHead(302, { Location: req.url!.replace('/movie/', '/stream/') })
+      res.end()
+      return
+    }
     open++
     mostOpen = Math.max(mostOpen, open)
     res.on('close', () => open--)
@@ -166,11 +175,21 @@ describe('remux', () => {
     expect(blocks(clusters[0]).map(([track]) => track)).toEqual([1, 2]) // not in the stream itself
   })
 
-  it('starts at the cue before the position, over one connection at a time', async () => {
+  it('starts at the cue before the position, over one connection at a time, redirected once', async () => {
     mostOpen = 0
+    asked = []
     const { clusters } = await run(newUrl(), 15)
     expect(clusters.map((c) => uint(child(c, ID.Timecode)))).toEqual([10000, 20000])
     expect(mostOpen).toBe(1)
+    // The header, the cues, the cluster: only the first request goes through the redirect.
+    expect(asked.map((path) => path.split('/')[1])).toEqual(['movie', 'stream', 'stream', 'stream'])
+  })
+
+  it('starts from the beginning after a header read only up to the tracks (resume, then replay)', async () => {
+    const url = newUrl()
+    expect((await info(url, 15, new Job())).start).toBe(10)
+    const { clusters } = await run(url, 0)
+    expect(clusters.map((c) => uint(child(c, ID.Timecode)))).toEqual(CLUSTER_TIMES)
   })
 
   it('passes another audio track through untouched when it is chosen', async () => {

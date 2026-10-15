@@ -111,8 +111,10 @@ for Full HD TVs. Both hold the same app, which scales itself to the screen; the 
 
 ## 5. Test on your TV
 
-Zaplist has been tested in desktop Chrome only. LG tests on real TVs, and the Self Checklist states
-results for a TV, so run it on one first; a rejection costs a review round.
+Playback has been tested on one TV, an LG OLED65GX (2020, webOS 5): 4K HLS channels, MP4 and MKV
+movies (Opus audio through the JS service, MKV subtitles), seeking and resuming. The rest of the app
+was tested in desktop Chrome. LG tests on real TVs, and the Self Checklist states results for a TV,
+so go through it on one first; a rejection costs a review round.
 
 1. Create an account on the [LG webOS TV developer site](https://webostv.developer.lge.com).
 2. On the TV, install **Developer Mode** from the LG Content Store, sign in with that account and turn
@@ -243,6 +245,15 @@ LG's scanner flags the words "password", "credential" and "token". In this packa
 Xtream Codes API parameters, the login form field, the core-js URL polyfill (`URL.password`), the
 `withCredentials` options of hls.js and mpegts.js, and `uniqueToken` (webOS's ID of a subscription) in
 the JS service; nothing is hard-coded. The UX scenario's appendix says so for the reviewers.
+
+The package includes a JS service, `zaplist.player.service` (`service/`). LG advises against services
+that run for long, and this one runs for as long as a movie plays through it, so explain it to the
+reviewers too (in the appendix, or the submission's notes): the TV's player can't decode Opus audio or
+show the subtitles inside MKV files, so for those movies the service streams the file to the player
+with the audio turned into PCM and reads the subtitles for the app to draw. It runs only while such a
+movie plays and for a minute after, listens on the TV's loopback address (127.0.0.1) only, and opens
+no connection but the one to the movie's own server. The test playlist has no such movie, so the
+reviewers won't see it run.
 
 ## Sources
 
