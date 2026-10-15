@@ -35,6 +35,12 @@ export function storedWindow(now: number): { from: number; to: number } {
   return { from: from - MAX_OFFSET_MINUTES * 60_000, to: to + MAX_OFFSET_MINUTES * 60_000 }
 }
 
+/** How far back the guide goes for channels whose programmes can be watched again (catch-up). */
+export const REPLAY_HOURS = 24
+
+/** Where the stored programmes of catch-up channels start: REPLAY_HOURS back, under any offset. */
+export const storedReplayFrom = (now: number): number => now - (REPLAY_HOURS + 1) * HOUR - MAX_OFFSET_MINUTES * 60_000
+
 /**
  * Where a guide key's programmes from the guide at `url` are stored. Each guide file keeps its own,
  * since two providers can use the same channel id for different channels.
@@ -52,10 +58,17 @@ export class GuideCollector implements XmltvHandlers {
   /** Guide channels and programmes kept, each counted once however many keys store it. */
   readonly kept = { channels: new Set<string>(), programmes: 0 }
 
+  /** `replay`: keys of catch-up channels, whose programmes are kept from `replay.from` on. */
   constructor(
     private readonly wanted: Set<string>,
     private readonly window: { from: number; to: number },
+    private readonly replay: { keys: Set<string>; from: number } = { keys: new Set(), from: window.from },
   ) {}
+
+  /** Where the programmes kept for `key` start. */
+  private from(key: string): number {
+    return this.replay.keys.has(key) ? Math.min(this.replay.from, this.window.from) : this.window.from
+  }
 
   channel(channel: XmltvChannel): void {
     const keys: string[] = []
@@ -69,7 +82,7 @@ export class GuideCollector implements XmltvHandlers {
   }
 
   programme(p: XmltvProgramme): void {
-    if (p.start > this.window.to || (p.stop > p.start && p.stop < this.window.from)) return
+    if (p.start > this.window.to || (p.stop > p.start && p.stop < Math.min(this.window.from, this.replay.from))) return
     let keys = this.keysById.get(p.channel)
     if (!keys) {
       // Programme for a channel without a <channel> element: match its id directly.
@@ -77,6 +90,7 @@ export class GuideCollector implements XmltvHandlers {
       keys = this.wanted.has(id) ? [id] : []
       this.keysById.set(p.channel, keys)
     }
+    if (p.stop > p.start && p.stop < this.window.from) keys = keys.filter((key) => p.stop >= this.from(key))
     if (!keys.length) return
     this.kept.channels.add(p.channel)
     this.kept.programmes++
@@ -105,7 +119,8 @@ export class GuideCollector implements XmltvHandlers {
         if (p.stop <= p.start) clean.push({ ...p, stop: next && next.start > p.start ? next.start : p.start + HOUR })
         else clean.push(p)
       }
-      this.lists.set(key, clean.filter((p) => p.stop >= this.window.from))
+      const from = this.from(key)
+      this.lists.set(key, clean.filter((p) => p.stop >= from))
     }
     return this.lists
   }

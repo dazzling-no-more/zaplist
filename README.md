@@ -43,6 +43,10 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
   with the same label), a movie with those it had.
 - **TV guide**: XMLTV (plain or gzipped) from the playlist, the Xtream server or a URL you enter; the
   Xtream short EPG as a fallback. Grid guide, time offset, automatic refresh every 6/12/24 hours.
+- **Catch-up**: on channels that keep their past programmes, the guide goes back 24 hours and marks
+  those that can be watched again; OK plays one from its start. Xtream servers' timeshift, and M3U
+  `catchup` of the kinds `default` and `append` (with `catchup-source` templates as Kodi reads them),
+  `shift`, `flussonic` and `xc`.
 - **Parental control**: a 4-digit PIN locks the categories you choose until it is entered. After five
   wrong PINs, entry is blocked for 30 seconds, twice as long after each further wrong one.
 - **About**: app version, TV model and webOS version, playback engine, last error; clear the cache.
@@ -63,7 +67,7 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
 |            | Left/Right, Info             | Info bar with now/next, audio, subtitles, picture shape |
 |            | Red / Yellow                 | Favorite / picture shape                                |
 |            | Play, Pause, Stop            | Resume, pause, leave the player                         |
-| Guide      | Arrows, OK                   | Move through programmes; OK watches what's on now       |
+| Guide      | Arrows, OK                   | Move through programmes; OK watches what's on now, or a past programme marked for catch-up |
 | Movie/episode player | Left/Right         | 10 s back / ahead (on the progress bar too)             |
 |            | Rewind / Fast forward        | 30 s back / ahead                                       |
 |            | OK, Play/Pause               | Pause or resume                                         |
@@ -166,7 +170,10 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
   for the Fit picture shape. The chosen subtitles and audio track stay while a movie restarts (after an
   error, or back from the background); the next episode takes the tracks with the same labels, so a
   series whose files list their tracks differently starts with the defaults.
-- Catch-up/timeshift is not implemented yet.
+- Catch-up plays a past programme from its start, in the live player: it can be paused but not
+  seeked, and ends back on live TV. The guide goes back 24 hours, however many days a channel keeps.
+  Xtream servers get the start in their own time zone (from their login answer, so after a source's
+  first refresh with this version); M3U `xc` catch-up assumes UTC.
 - Sources, cached channel lists, guide addresses, the PIN and the extra guide URL are encrypted with a
   key kept on the TV (AES-GCM, non-extractable, in IndexedDB). That protects a copied database, not a
   TV someone fully controls. Favorites, recent channels and guide programmes are stored unencrypted.

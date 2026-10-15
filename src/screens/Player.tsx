@@ -1,5 +1,6 @@
 import { getCurrentFocusKey, setFocus, useFocusable } from '@noriginmedia/norigin-spatial-navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { catchupUrls } from '../data/catchup'
 import { library, useLibrary } from '../data/library'
 import { ALL, buildGroups, channelsByCategory, channelsForGroup, RECENT } from '../data/lists'
 import type { Channel } from '../data/models'
@@ -18,7 +19,8 @@ import { ChannelRow } from '../ui/ChannelRow'
 import { emptyListText, groupLabels, GroupRow } from '../ui/GroupRow'
 import { Logo } from '../ui/Logo'
 import { NowNext } from '../ui/NowPlaying'
-import { backStack, navigate, useBackHandler, type ScreenProps } from '../ui/navigation'
+import { formatTime } from '../ui/clock'
+import { backStack, navigate, useBackHandler, type Replay, type ScreenProps } from '../ui/navigation'
 import { recordPlay } from '../ui/play'
 import { formatCount } from '../ui/format'
 import { Region } from '../ui/Region'
@@ -41,14 +43,16 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   const { channels, categories, sources } = useLibrary()
   const prefs = usePrefs()
   const unlocked = useUnlocked()
-  const memo = entry.memo as { channelId?: string; listId?: string }
+  const memo = entry.memo as { channelId?: string; listId?: string; replay?: Replay | null }
   const [channelId, setChannelId] = useState(memo.channelId ?? entry.channelId)
   // The group zapping moves through; picking a channel from another group in the list switches it.
   const [listId, setListId] = useState(memo.listId ?? entry.listId)
   // A refresh gave the channel a new id (renamedIds): follow it.
   const renamedTo = library.currentId(channelId)
   if (renamedTo !== channelId) setChannelId(renamedTo)
-  Object.assign(memo, { channelId, listId })
+  /** A past programme playing again (catch-up) rather than what's on; zapping goes back to live TV. */
+  const [replay, setReplay] = useState<Replay | undefined>(() => (memo.replay !== undefined ? (memo.replay ?? undefined) : entry.catchup))
+  Object.assign(memo, { channelId, listId, replay: replay ?? null })
 
   const byCategory = useMemo(() => channelsByCategory(channels), [channels])
   const visible = (groupId: string) => channelsForGroup(groupId, channels, (id) => library.channel(id), byCategory, prefs, unlocked)
@@ -123,9 +127,23 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   // (Re)start the stream whenever the channel changes, the user retries, or the app/network returns.
   useEffect(() => {
     if (!playback) return
-    if (channel && online && shown) playback.play(withHeaders(channel.urls, channel.options))
+    playback.live = !replay
+    const source = channel && sources.find((s) => s.id === channel.sourceId)
+    const urls = channel && (replay ? catchupUrls(channel, source, replay.start, replay.stop) : channel.urls)
+    if (replay && channel && !urls) return setReplay(undefined) // can't be watched again any more: what's on now
+    if (channel && urls && online && shown) playback.play(withHeaders(urls, channel.options))
     else playback.stop()
-  }, [playback, channelId, attempt, online, shown])
+  }, [playback, channelId, attempt, online, shown, replay])
+
+  // The end of a programme played again: back to what's on.
+  const latestReplay = useRef(replay)
+  latestReplay.current = replay
+  useEffect(() => {
+    const element = video.current!
+    const onEnded = () => latestReplay.current && setReplay(undefined)
+    element.addEventListener('ended', onEnded)
+    return () => element.removeEventListener('ended', onEnded)
+  }, [])
 
   useEffect(() => onNetworkChange(setOnline), [])
   useEffect(() => {
@@ -169,6 +187,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
 
   const tune = (target: Channel, fromList = listId) => {
     recordPlay(target, fromList)
+    setReplay(undefined)
     setListId(fromList)
     setChannelId(target.id)
     setAttempt((n) => n + 1)
@@ -303,7 +322,13 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
             <Logo url={channel.logo} name={channel.name} />
             <div className="osd-text">
               <div className="osd-name">{channel.name}</div>
-              {loadingText ? <div className="osd-status">{loadingText}</div> : <NowNext channel={channel} />}
+              {loadingText ? (
+                <div className="osd-status">{loadingText}</div>
+              ) : replay ? (
+                <div className="osd-status">{t('player.catchup', { title: replay.title, time: `${formatTime(replay.start)}–${formatTime(replay.stop)}` })}</div>
+              ) : (
+                <NowNext channel={channel} />
+              )}
             </div>
           </div>
           {osd && (
@@ -312,6 +337,11 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
               <Button focusKey="osd-pause" icon={paused ? 'play' : 'pause'} onPress={togglePause}>
                 {t(paused ? 'player.play' : 'player.pause')}
               </Button>
+              {replay && (
+                <Button focusKey="osd-live" icon="tv" onPress={() => setReplay(undefined)}>
+                  {t('player.live')}
+                </Button>
+              )}
               <Button focusKey="osd-channels" icon="all" onPress={openList}>
                 {t('player.channelList')}
               </Button>

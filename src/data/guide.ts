@@ -142,19 +142,24 @@ class Guide {
   private async runRefresh(): Promise<void> {
     const { sources, channels } = library.getState()
     const urls = new Map(sources.map((s) => [s.id, this.urls(s.id)]))
-    // Per guide URL, the keys of the channels whose sources use it.
+    // Per guide URL, the keys of the channels whose sources use it, and of those with catch-up.
     const wanted = new Map<string, Set<string>>()
+    const replayable = new Map<string, Set<string>>()
+    const add = (map: Map<string, Set<string>>, url: string, channel: Channel) => {
+      let keys = map.get(url)
+      if (!keys) map.set(url, (keys = new Set()))
+      for (const key of guideKeys(channel)) keys.add(key)
+    }
     for (const channel of channels) {
       for (const url of urls.get(channel.sourceId) ?? []) {
-        let keys = wanted.get(url)
-        if (!keys) wanted.set(url, (keys = new Set()))
-        for (const key of guideKeys(channel)) keys.add(key)
+        add(wanted, url, channel)
+        if (channel.catchup) add(replayable, url, channel)
       }
     }
     if (!wanted.size) return
     this.set({ progress: { stage: 'download' }, error: undefined })
     try {
-      const guides = Array.from(wanted, ([url, keys]) => ({ url, wanted: Array.from(keys) }))
+      const guides = Array.from(wanted, ([url, keys]) => ({ url, wanted: Array.from(keys), replayable: Array.from(replayable.get(url) ?? []) }))
       const result = await ingestGuideUrls(guides, (progress) => this.set({ progress }))
       const info: GuideInfo = { refreshedAt: Date.now(), channels: result.channels, programmes: result.programmes, failedUrls: result.failed, format: GUIDE_FORMAT }
       await setMeta('guide', info)

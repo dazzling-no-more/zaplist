@@ -1,7 +1,8 @@
 import { useFocusable } from '@noriginmedia/norigin-spatial-navigation'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { replayableFrom } from '../data/catchup'
 import { useProgrammes } from '../data/guide'
-import { guideWindow, programmeAt, shiftMs } from '../data/guideData'
+import { guideWindow, programmeAt, REPLAY_HOURS, shiftMs } from '../data/guideData'
 import { library, useLibrary } from '../data/library'
 import { channelsByCategory, channelsForGroup } from '../data/lists'
 import type { Channel, Programme } from '../data/models'
@@ -13,6 +14,7 @@ import { formatTime, useNow } from '../ui/clock'
 import { Dialog } from '../ui/Dialog'
 import { canHover, isPointerVisible } from '../ui/focus'
 import { Hint, Key } from '../ui/Hint'
+import { Icon } from '../ui/Icon'
 import { Logo } from '../ui/Logo'
 import { useScreenFocus, type ScreenProps } from '../ui/navigation'
 import { playChannel } from '../ui/play'
@@ -48,7 +50,7 @@ function programmeCovering(programmes: readonly Programme[], time: number): Prog
 }
 
 export function GuideScreen({ entry }: ScreenProps<'guide'>) {
-  const { channels } = useLibrary()
+  const { channels, sources } = useLibrary()
   const prefs = usePrefs()
   const unlocked = useUnlocked()
   const now = useNow()
@@ -57,10 +59,21 @@ export function GuideScreen({ entry }: ScreenProps<'guide'>) {
     () => channelsForGroup(entry.listId, channels, (id) => library.channel(id), channelsByCategory(channels), prefs, unlocked),
     [channels, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked],
   )
+  // Back REPLAY_HOURS when channels in the list can show past programmes again (catch-up).
   const range = useMemo(() => {
     const { from, to } = guideWindow(Date.now())
-    return { from: floorSlot(from + 60 * MINUTE), to: to - 2 * 60 * MINUTE }
+    const replay = list.some((c) => c.catchup)
+    return { from: replay ? floorSlot(Date.now() - REPLAY_HOURS * 60 * MINUTE) : floorSlot(from + 60 * MINUTE), to: to - 2 * 60 * MINUTE }
   }, [])
+  /**
+   * The earliest start of a programme `target` can show again, if it can. Kept per channel until the
+   * clock ticks: for Xtream servers it formats a time in their time zone, slow on webOS 4.
+   */
+  const replayCache = useMemo(() => new Map<string, number | undefined>(), [sources, now])
+  const replayFrom = (target: Channel) => {
+    if (!replayCache.has(target.id)) replayCache.set(target.id, replayableFrom(target, sources.find((s) => s.id === target.sourceId), now))
+    return replayCache.get(target.id)
+  }
   const [row, setRow] = useState(() => memo.row ?? Math.max(0, list.findIndex((c) => c.id === prefs.lastChannelId)))
   const [focusTime, setFocusTime] = useState(memo.focusTime ?? now)
   const [viewStart, setViewStart] = useState(memo.viewStart ?? floorSlot(now) - SLOT)
@@ -97,10 +110,16 @@ export function GuideScreen({ entry }: ScreenProps<'guide'>) {
       const before = programmeCovering(programmes, edge - 1)
       show(before ? Math.max(before.start, range.from) : edge - SLOT)
     },
-    /** OK on a programme: one on air (or no guide data) plays the channel, others show their details. */
+    /**
+     * OK on a programme: one on air (or no guide data) plays the channel, a past one it can show again
+     * plays that (catch-up), others show their details.
+     */
     open: (target: Channel | undefined, programme: Programme | undefined) => {
       if (!target) return
-      if (programme && !(programme.start <= now && now < programme.stop)) setDetails({ channel: target, programme })
+      const from = replayFrom(target)
+      if (programme && programme.stop <= now && from !== undefined && programme.start >= from) {
+        playChannel(target, entry.listId, { start: programme.start, stop: programme.stop, title: programme.title })
+      } else if (programme && !(programme.start <= now && now < programme.stop)) setDetails({ channel: target, programme })
       else playChannel(target, entry.listId)
     },
     select: () => actions.open(channel, focused),
@@ -149,6 +168,7 @@ export function GuideScreen({ entry }: ScreenProps<'guide'>) {
         top={i * ROW - top.current}
         viewStart={viewStart}
         now={now}
+        replayFrom={replayFrom(list[i])}
         offsetMinutes={prefs.epgOffsetMinutes}
         focusTime={gridFocused && i === current ? focusTime : undefined}
         onPointer={(time, select, programme) => {
@@ -218,6 +238,8 @@ interface RowProps {
   viewStart: number
   /** Programmes before it are dimmed, the one on air is marked. */
   now: number
+  /** Past programmes that started after this can be watched again (catch-up): they are marked. */
+  replayFrom?: number
   offsetMinutes: number
   /** Set on the focused row: the time whose programme is highlighted. */
   focusTime?: number
@@ -225,7 +247,7 @@ interface RowProps {
   onPointer: (time: number, select: boolean, programme?: Programme) => void
 }
 
-const GuideRow = memo(function GuideRow({ channel, top, viewStart, now, offsetMinutes, focusTime, onPointer }: RowProps) {
+const GuideRow = memo(function GuideRow({ channel, top, viewStart, now, replayFrom, offsetMinutes, focusTime, onPointer }: RowProps) {
   const programmes = useShownProgrammes(channel, offsetMinutes)
   const viewEnd = viewStart + VIEW
   const cells = []
@@ -237,6 +259,7 @@ const GuideRow = memo(function GuideRow({ channel, top, viewStart, now, offsetMi
     const isFocused = focusTime !== undefined && p.start <= focusTime && focusTime < p.stop
     const time = Math.max(p.start, viewStart)
     const when = p.stop <= now ? ' past' : p.start <= now ? ' live' : ''
+    const replay = replayFrom !== undefined && p.stop <= now && p.start >= replayFrom
     cells.push(
       <div
         key={p.start}
@@ -245,6 +268,7 @@ const GuideRow = memo(function GuideRow({ channel, top, viewStart, now, offsetMi
         onMouseEnter={() => onPointer(time, false, p)}
         onClick={() => onPointer(time, true, p)}
       >
+        {replay && <Icon name="restart" />}
         {p.title}
       </div>,
     )

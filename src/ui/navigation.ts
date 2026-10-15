@@ -4,6 +4,13 @@ import { BackStack, type ScreenEntry } from '../platform/backStack'
 import type { PhoneEntry } from '../data/relay'
 import { platformBack } from '../platform/webos'
 
+/** A past programme played again (catch-up): its times as the guide shows them, and its title. */
+export interface Replay {
+  start: number
+  stop: number
+  title: string
+}
+
 export type Route =
   | { name: 'home' }
   | { name: 'search' }
@@ -11,7 +18,7 @@ export type Route =
   /** phone: entered on a phone from the welcome screen, to fill the form with. */
   | { name: 'sourceEdit'; sourceId?: string; phone?: PhoneEntry }
   /** listId: the group the channel was picked from (Favorites, a category, ...), for zapping. */
-  | { name: 'player'; channelId: string; listId: string }
+  | { name: 'player'; channelId: string; listId: string; catchup?: Replay }
   | { name: 'guide'; listId: string }
   | { name: 'vod'; kind: 'movie' | 'series' }
   | { name: 'movie'; movieId: string }

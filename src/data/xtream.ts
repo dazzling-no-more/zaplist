@@ -141,6 +141,7 @@ export function parseAccount(login: XtreamLogin): XtreamAccount {
   const info = login.user_info
   if (!info || (info.auth !== true && String(info.auth) !== '1')) throw new XtreamAuthError(info?.message || 'Login rejected')
   const expires = toInt(info.exp_date)
+  const timezone = login.server_info?.timezone
   return {
     status: info.status || 'Active',
     // Panels send 0, negative or missing values for accounts that don't expire.
@@ -149,6 +150,7 @@ export function parseAccount(login: XtreamLogin): XtreamAccount {
     activeConnections: toInt(info.active_cons),
     trial: String(info.is_trial) === '1',
     outputFormats: Array.isArray(info.allowed_output_formats) ? info.allowed_output_formats : [],
+    timezone: typeof timezone === 'string' && timezone ? timezone : undefined,
   }
 }
 

@@ -115,6 +115,38 @@ describe('guide', () => {
     expect((await programmesOf(sport('b')))?.map((p) => p.title)).toEqual(['B Final'])
   })
 
+  it('keeps a day of past programmes for channels with catch-up only', async () => {
+    const replay = { ...sport('a'), id: 'a:2', tvgId: 'replay1', catchup: { type: 'shift' } }
+    state.sources = [source('a')]
+    state.channels = [sport('a'), replay]
+    state.playlistGuides = { a: [A] }
+    const past = (t: number) => (t < hour - 20 * HOUR ? 'Old' : t < hour - 4 * HOUR ? 'Earlier' : 'Recent')
+    serve({ [A]: xmltv('sport1', hour - 50 * HOUR, hour, past).replace('</tv>', '') + xmltv('replay1', hour - 50 * HOUR, hour, past).replace('<tv>', '') })
+    await guide.refresh()
+    const titles = async (channel: Channel) => new Set((await programmesOf(channel))?.map((p) => p.title))
+    expect(await titles(sport('a'))).toEqual(new Set(['Recent', 'Earlier'])) // 15 h back: 3 h, and the offset's 12
+    expect(await titles(replay)).toEqual(new Set(['Recent', 'Earlier', 'Old'])) // 37 h back
+  })
+
+  it('keeps a guide’s programmes over the part read before its download broke', async () => {
+    state.sources = [source('a'), source('b')]
+    state.channels = [sport('a'), sport('b')]
+    state.playlistGuides = { a: [A], b: [B] }
+    serve({ [A]: xmltv('sport1', hour, hour + 3 * HOUR, () => 'Full'), [B]: xmltv('sport1', hour, hour + HOUR, () => 'B') })
+    await guide.refresh()
+    const full = xmltv('sport1', hour, hour + 3 * HOUR, () => 'Cut')
+    const part = new TextEncoder().encode(full.slice(0, full.indexOf('</programme>') + '</programme>'.length))
+    // A's connection breaks after its first programme.
+    const broken = () => new ReadableStream<Uint8Array>({ start: (controller) => (controller.enqueue(part), controller.error(new Error('connection reset'))) })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => (url.endsWith(A.replace('http://', '')) ? new Response(broken()) : new Response(xmltv('sport1', hour, hour + HOUR, () => 'B')))),
+    )
+    await guide.refresh()
+    expect(guide.getStatus().failedUrls).toBe(1)
+    expect((await programmesOf(sport('a')))?.map((p) => p.title)).toEqual(['Full', 'Full', 'Full'])
+  })
+
   it('refreshes again for a source added while a refresh runs', async () => {
     state.sources = [source('a')]
     state.channels = [sport('a')]

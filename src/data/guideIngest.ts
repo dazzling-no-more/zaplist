@@ -1,6 +1,6 @@
 import { Inflate } from 'pako'
 import { saveGuide } from './db'
-import { GuideCollector, storedGuideKey, storedWindow } from './guideData'
+import { GuideCollector, storedGuideKey, storedReplayFrom, storedWindow } from './guideData'
 import { LoadError, request } from './http'
 import type { Programme } from './models'
 import { XmltvParser, type XmltvHandlers } from './xmltv'
@@ -100,11 +100,14 @@ export async function readXmltv(
 export interface GuideUrl {
   url: string
   wanted: string[]
+  /** Those of channels with catch-up, whose past programmes are kept longer. */
+  replayable?: string[]
 }
 
 /** Downloads every guide URL, keeps the programmes of the channels wanted from each, and replaces the stored guide. */
 export async function ingestGuide(guides: GuideUrl[], progress: (p: GuideProgress) => void): Promise<GuideResult> {
   const window = storedWindow(Date.now())
+  const replayFrom = storedReplayFrom(Date.now())
   const stored = new Map<string, Programme[]>()
   const kept = { channels: 0, programmes: 0 }
   /** Guide URLs that couldn't be read, as their stored keys' prefix: they keep what they had. */
@@ -122,7 +125,7 @@ export async function ingestGuide(guides: GuideUrl[], progress: (p: GuideProgres
     }
     let last = 0
     const reader: ByteReader = response.body ? response.body.getReader() : bufferReader(new Uint8Array(await response.arrayBuffer()))
-    const collector = new GuideCollector(new Set(guides[i].wanted), window)
+    const collector = new GuideCollector(new Set(guides[i].wanted), window, { keys: new Set(guides[i].replayable ?? []), from: replayFrom })
     try {
       await readXmltv(reader, collector, {
         onBytes: (bytes) => {

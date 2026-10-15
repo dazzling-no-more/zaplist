@@ -59,7 +59,7 @@ describe('URLs', () => {
 })
 
 describe('parseAccount', () => {
-  it('reads expiry, connections and output formats', () => {
+  it('reads expiry, connections, output formats and the server’s time zone', () => {
     expect(parseAccount(json('xtream-login.json'))).toEqual({
       status: 'Active',
       expiresAt: 1798761600000,
@@ -67,6 +67,7 @@ describe('parseAccount', () => {
       activeConnections: 0,
       trial: false,
       outputFormats: ['m3u8', 'ts', 'rtmp'],
+      timezone: 'Europe/Berlin',
     })
   })
 

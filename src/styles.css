@@ -1145,6 +1145,12 @@ h3 {
   text-overflow: ellipsis;
 }
 
+/* The mark of a past programme that can be watched again (catch-up). */
+.guide-cell .icon {
+  margin-right: 8px;
+  vertical-align: -0.15em;
+}
+
 .guide-cell.empty,
 .guide-cell.past {
   color: var(--text-dim);

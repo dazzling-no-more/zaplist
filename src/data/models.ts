@@ -34,6 +34,8 @@ export interface XtreamAccount {
   trial: boolean
   /** Stream containers the server allows, e.g. ["m3u8", "ts"]. */
   outputFormats: string[]
+  /** The server's time zone (IANA name): catch-up addresses give times in it. */
+  timezone?: string
 }
 
 export interface Category {

@@ -136,6 +136,8 @@ const en = {
   'player.favoriteAdded': 'Added to favorites',
   'player.favoriteRemoved': 'Removed from favorites',
   'player.channelList': 'Channel list',
+  'player.catchup': 'Catch-up: {title} · {time}',
+  'player.live': 'Back to live',
   'player.pause': 'Pause',
   'player.play': 'Play',
   'player.audio': 'Audio',
@@ -185,7 +187,7 @@ const en = {
   'guide.noInfo': 'No programme information',
   'guide.next': 'Next: {title}',
   'guide.empty': 'No channels in this list.',
-  'guide.hintWatch': 'Watch the programme on air, or see details',
+  'guide.hintWatch': 'Watch what’s on or a past programme marked for catch-up, or see details',
   'guide.hintPage': 'Page',
 
   'guideSettings.never': 'The guide hasn’t been downloaded yet.',
