@@ -1,4 +1,4 @@
-import type { GuideProgress, GuideResult } from './guideIngest'
+import type { GuideProgress, GuideResult, GuideUrl } from './guideIngest'
 import { LoadError } from './http'
 import { toLoadError } from './ingest'
 import { runJob } from './jobs'
@@ -78,7 +78,7 @@ export function ingestSource(source: Source, onProgress?: (progress: IngestProgr
   return run({ type: 'ingest', source }, onProgress as (p: IngestProgress | GuideProgress) => void) as Promise<IngestResult>
 }
 
-/** Downloads the guide URLs and stores the programmes of the `wanted` guide keys. */
-export function ingestGuideUrls(urls: string[], wanted: string[], onProgress?: (progress: GuideProgress) => void): Promise<GuideResult> {
-  return run({ type: 'guide', urls, wanted }, onProgress as (p: IngestProgress | GuideProgress) => void) as Promise<GuideResult>
+/** Downloads the guide URLs and stores the programmes of the guide keys wanted from each. */
+export function ingestGuideUrls(guides: GuideUrl[], onProgress?: (progress: GuideProgress) => void): Promise<GuideResult> {
+  return run({ type: 'guide', guides }, onProgress as (p: IngestProgress | GuideProgress) => void) as Promise<GuideResult>
 }

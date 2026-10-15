@@ -109,9 +109,9 @@ class Library {
     return request
   }
 
-  /** Guide URLs named by the playlists themselves. */
-  epgUrls(): string[] {
-    return Array.from(this.data.values()).flatMap((d) => d.epgUrls)
+  /** Guide URLs named by a source's playlist itself. */
+  epgUrls(sourceId: string): string[] {
+    return this.data.get(sourceId)?.epgUrls ?? []
   }
 
   /** Reads all cached sources. Chunks load with yields in between so the UI keeps responding. */

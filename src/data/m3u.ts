@@ -1,5 +1,5 @@
 // Tolerant M3U / M3U8 playlist parser: BOM, CRLF, lower-case directives, unquoted or missing
-// attributes, blank lines, URL lines without #EXTINF, and 50k+ entries.
+// attributes, blank lines, URL lines without #EXTINF, and 50k+ entries. Other lines are skipped.
 
 export interface M3uEntry {
   /** Display name after the comma in #EXTINF, empty when missing. */
@@ -25,6 +25,8 @@ export interface M3uPlaylist {
 const ATTRIBUTE = /\s*([^\s=,"']+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,"']*))/y
 // Fallback for junk between attributes: skip one token.
 const TOKEN = /\s*[^\s,]+/y
+// scheme://… (http, https, rtmp, rtsp, udp, …).
+const STREAM_URL = /^[a-z][a-z0-9+.-]*:\/\//i
 
 export function parseAttributes(text: string, start = 0): { attrs: Record<string, string>; end: number } {
   const attrs: Record<string, string> = {}
@@ -86,6 +88,8 @@ export function parseM3u(text: string): M3uPlaylist {
       else if (startsWith(line, '#KODIPROP:')) addOption(options, line.slice(10))
       continue
     }
+    // Only stream URLs: an error page served in place of the playlist ("Account expired") isn't one.
+    if (!STREAM_URL.test(line)) continue
     entries.push({ title: info?.title ?? '', url: line, attrs: info?.attrs ?? {}, group, options })
     info = undefined
     group = undefined

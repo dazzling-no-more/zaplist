@@ -367,6 +367,8 @@ const SERVICE_TIMEOUT_MS = 15_000
 /** Bytes read from the start of a movie to find its tracks: Matroska lists them first. */
 const PROBE_BYTES = 64 * 1024
 const PROBE_TIMEOUT_MS = 10_000
+/** How long the service may take to read where a stream starts (/info). */
+const INFO_TIMEOUT_MS = 20_000
 /**
  * Matroska codec IDs of the audio the service turns into PCM (service/remux.ts): Opus and DTS. Also
  * looked for as bytes when the track list is cut off.
@@ -611,12 +613,18 @@ class RemuxEngine extends ServiceEngine {
   private async open(position: number): Promise<void> {
     let response: Response
     let info: MovieInfo & { error?: string }
+    // The service reads the movie's header and cue index from the IPTV server, which can stall.
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), INFO_TIMEOUT_MS)
     try {
-      response = await Promise.race([fetch(`${this.base}/info?u=${encodeURIComponent(this.url)}&t=${position}`), this.cancellation.promise])
+      response = await Promise.race([fetch(`${this.base}/info?u=${encodeURIComponent(this.url)}&t=${position}`, { signal: controller.signal }), this.cancellation.promise])
       info = await response.json()
     } catch (error) {
       if (this.destroyed) throw cancelled()
+      if (controller.signal.aborted) throw new PlaybackError('timeout', "The app's service didn't answer")
       throw new PlaybackError('format', `The app's service didn't answer: ${String(error)}`)
+    } finally {
+      clearTimeout(timer)
     }
     // The service couldn't read the movie: the IPTV server refused or failed.
     if (!response.ok) throw new PlaybackError('network', info.error)

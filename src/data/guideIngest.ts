@@ -1,7 +1,8 @@
 import { Inflate } from 'pako'
 import { saveGuide } from './db'
-import { GuideCollector, guideWindow } from './guideData'
+import { GuideCollector, storedGuideKey, storedWindow } from './guideData'
 import { LoadError, request } from './http'
+import type { Programme } from './models'
 import { XmltvParser, type XmltvHandlers } from './xmltv'
 
 export interface ByteReader {
@@ -95,13 +96,22 @@ export async function readXmltv(
   parser.end()
 }
 
-/** Downloads every guide URL, keeps the programmes of the wanted channels, and replaces the stored guide. */
-export async function ingestGuide(urls: string[], wanted: string[], progress: (p: GuideProgress) => void): Promise<GuideResult> {
-  const collector = new GuideCollector(new Set(wanted), guideWindow(Date.now()))
+/** A guide URL and the guide keys wanted from it: those of the channels whose sources use it. */
+export interface GuideUrl {
+  url: string
+  wanted: string[]
+}
+
+/** Downloads every guide URL, keeps the programmes of the channels wanted from each, and replaces the stored guide. */
+export async function ingestGuide(guides: GuideUrl[], progress: (p: GuideProgress) => void): Promise<GuideResult> {
+  const window = storedWindow(Date.now())
+  const stored = new Map<string, Programme[]>()
+  const kept = { channels: 0, programmes: 0 }
   let failed = 0
   let lastError: LoadError | undefined
-  for (let i = 0; i < urls.length; i++) {
-    const { response, touch, done, timedOut } = await request(urls[i]).catch((error: LoadError) => {
+  for (let i = 0; i < guides.length; i++) {
+    const { url } = guides[i]
+    const { response, touch, done, timedOut } = await request(url).catch((error: LoadError) => {
       lastError = error
       return { response: undefined, touch: () => {}, done: () => {}, timedOut: () => false }
     })
@@ -111,13 +121,14 @@ export async function ingestGuide(urls: string[], wanted: string[], progress: (p
     }
     let last = 0
     const reader: ByteReader = response.body ? response.body.getReader() : bufferReader(new Uint8Array(await response.arrayBuffer()))
+    const collector = new GuideCollector(new Set(guides[i].wanted), window)
     try {
       await readXmltv(reader, collector, {
         onBytes: (bytes) => {
           touch()
           if (Date.now() - last < 250) return
           last = Date.now()
-          progress({ stage: 'download', bytes, url: i + 1, urls: urls.length })
+          progress({ stage: 'download', bytes, url: i + 1, urls: guides.length })
         },
       })
     } catch (error) {
@@ -126,11 +137,14 @@ export async function ingestGuide(urls: string[], wanted: string[], progress: (p
     } finally {
       done()
     }
+    for (const [key, list] of collector.finish()) stored.set(storedGuideKey(url, key), list)
+    kept.channels += collector.kept.channels.size
+    kept.programmes += collector.kept.programmes
   }
-  if (urls.length && failed === urls.length) throw lastError ?? new LoadError('network')
+  if (guides.length && failed === guides.length) throw lastError ?? new LoadError('network')
   progress({ stage: 'save' })
-  await saveGuide(collector.finish())
-  return { channels: collector.kept.channels.size, programmes: collector.kept.programmes, failed }
+  await saveGuide(stored)
+  return { ...kept, failed }
 }
 
 function bufferReader(bytes: Uint8Array): ByteReader {

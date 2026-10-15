@@ -34,7 +34,8 @@ export type EntryKind = 'live' | 'movie' | 'episode'
  * file is a movie, or an episode when its name says S01E02.
  */
 export function entryKind(url: string, name: string): EntryKind {
-  const path = url.split(/[?#]/)[0].toLowerCase()
+  // Request headers can follow the URL after a `|` (Kodi's `url|User-Agent=…`).
+  const path = url.split(/[?#|]/)[0].toLowerCase()
   if (path.indexOf('/series/') >= 0) return 'episode'
   if (path.indexOf('/movie/') >= 0) return 'movie'
   if (!VOD_FILE.test(path)) return 'live'
@@ -56,6 +57,7 @@ export function m3uToPlaylist(sourceId: string, playlist: M3uPlaylist): Playlist
   const channels: Channel[] = []
   const movies: Movie[] = []
   const series = new Map<string, Series>()
+  const seriesIds = new Set<string>()
 
   // Live, movie and series categories with the same name stay apart.
   const category = (entry: M3uEntry, kind: EntryKind): string | undefined => {
@@ -72,20 +74,23 @@ export function m3uToPlaylist(sourceId: string, playlist: M3uPlaylist): Playlist
     const kind = entryKind(entry.url, name)
     const categoryId = category(entry, kind)
     const id = uniqueId(ids, `${sourceId}:${hash(entry.url + '\n' + name)}`)
+    const options = Object.keys(entry.options).length ? entry.options : undefined
     if (kind === 'movie') {
-      movies.push({ id, sourceId, categoryId, name, poster: attrs['tvg-logo'] || undefined, urls: [entry.url] })
+      movies.push({ id, sourceId, categoryId, name, poster: attrs['tvg-logo'] || undefined, urls: [entry.url], options })
       continue
     }
     if (kind === 'episode') {
       const parsed = parseEpisodeName(name)
       const key = normalizeName(parsed.series) || parsed.series
-      let show = series.get(key)
+      // A series per category: one locked category's episodes must not join an unlocked one's series.
+      const seriesKey = `${categoryId}\n${key}`
+      let show = series.get(seriesKey)
       if (!show) {
-        show = { id: `${sourceId}:s:${hash(key)}`, sourceId, categoryId, name: parsed.series, poster: attrs['tvg-logo'] || undefined, episodes: [] }
-        series.set(key, show)
+        show = { id: uniqueId(seriesIds, `${sourceId}:s:${hash(key)}`), sourceId, categoryId, name: parsed.series, poster: attrs['tvg-logo'] || undefined, episodes: [] }
+        series.set(seriesKey, show)
       }
       show.poster ??= attrs['tvg-logo'] || undefined
-      show.episodes!.push({ id, season: parsed.season, episode: parsed.episode || show.episodes!.length + 1, title: parsed.title, urls: [entry.url] })
+      show.episodes!.push({ id, season: parsed.season, episode: parsed.episode || show.episodes!.length + 1, title: parsed.title, urls: [entry.url], options })
       continue
     }
     const shift = parseFloat(attrs['tvg-shift'])
@@ -109,7 +114,7 @@ export function m3uToPlaylist(sourceId: string, playlist: M3uPlaylist): Playlist
         days: catchupDays || undefined,
       }
     }
-    if (Object.keys(entry.options).length) channel.options = entry.options
+    if (options) channel.options = options
     channels.push(channel)
   }
 

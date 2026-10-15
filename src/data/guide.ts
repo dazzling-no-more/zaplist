@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { getGuide, getMeta, setMeta } from './db'
-import { guideKeys } from './guideData'
+import { guideKeys, storedGuideKey } from './guideData'
 import type { GuideProgress } from './guideIngest'
 import { fetchJson, LoadError } from './http'
 import { toLoadError } from './ingest'
@@ -22,7 +22,12 @@ export interface GuideInfo {
   programmes?: number
   /** Guide URLs that couldn't be read at the last refresh. */
   failedUrls?: number
+  /** GUIDE_FORMAT of the stored guide; absent for guides stored before it. */
+  format?: number
 }
+
+/** 2: programmes stored per guide URL (guideData.ts storedGuideKey). */
+const GUIDE_FORMAT = 2
 
 export interface GuideStatus extends GuideInfo {
   progress?: GuideProgress
@@ -65,7 +70,8 @@ class Guide {
     let programmes: readonly Programme[] | undefined
     let shortEpg = false
     try {
-      for (const key of guideKeys(channel)) {
+      const urls = this.urls(channel.sourceId)
+      for (const key of guideKeys(channel).flatMap((key) => urls.map((url) => storedGuideKey(url, key)))) {
         programmes = await getGuide(key)
         if (programmes?.length) break
       }
@@ -82,13 +88,10 @@ class Guide {
     this.remember(channel.id, programmes?.length ? programmes : NO_PROGRAMMES, shortEpg)
   }
 
-  /** All guide URLs: per-source settings, the playlists' own, and the global setting. */
-  urls(): string[] {
-    const urls = [
-      ...library.getState().sources.map((s) => s.epgUrl ?? ''),
-      ...library.epgUrls(),
-      getPrefs().epgUrl ?? '',
-    ]
+  /** A source's guide URLs, in the order they are looked in: its own setting, its playlist's, and the global setting. */
+  urls(sourceId: string): string[] {
+    const source = library.getState().sources.find((s) => s.id === sourceId)
+    const urls = [source?.epgUrl ?? '', ...library.epgUrls(sourceId), getPrefs().epgUrl ?? '']
     return Array.from(new Set(urls.map((u) => u.trim()).filter(Boolean)))
   }
 
@@ -103,8 +106,9 @@ class Guide {
     const info = await getMeta<GuideInfo>('guide')
     this.set({ ...info })
     const check = () => {
-      const due = (this.status.refreshedAt ?? 0) + getPrefs().epgRefreshHours * 3_600_000
-      if (Date.now() >= due && this.urls().length) void this.refresh()
+      // A guide stored in an older format can't be looked up any more: refresh it now.
+      const due = this.status.format === GUIDE_FORMAT ? (this.status.refreshedAt ?? 0) + getPrefs().epgRefreshHours * 3_600_000 : 0
+      if (Date.now() >= due && library.getState().sources.some((s) => this.urls(s.id).length)) void this.refresh()
     }
     check()
     setInterval(check, SCHEDULE_CHECK_MS)
@@ -119,14 +123,23 @@ class Guide {
   }
 
   private async runRefresh(): Promise<void> {
-    const urls = this.urls()
-    if (!urls.length) return
-    const wanted = new Set<string>()
-    for (const channel of library.getState().channels) for (const key of guideKeys(channel)) wanted.add(key)
+    const { sources, channels } = library.getState()
+    const urls = new Map(sources.map((s) => [s.id, this.urls(s.id)]))
+    // Per guide URL, the keys of the channels whose sources use it.
+    const wanted = new Map<string, Set<string>>()
+    for (const channel of channels) {
+      for (const url of urls.get(channel.sourceId) ?? []) {
+        let keys = wanted.get(url)
+        if (!keys) wanted.set(url, (keys = new Set()))
+        for (const key of guideKeys(channel)) keys.add(key)
+      }
+    }
+    if (!wanted.size) return
     this.set({ progress: { stage: 'download' }, error: undefined })
     try {
-      const result = await ingestGuideUrls(urls, Array.from(wanted), (progress) => this.set({ progress }))
-      const info: GuideInfo = { refreshedAt: Date.now(), channels: result.channels, programmes: result.programmes, failedUrls: result.failed }
+      const guides = Array.from(wanted, ([url, keys]) => ({ url, wanted: Array.from(keys) }))
+      const result = await ingestGuideUrls(guides, (progress) => this.set({ progress }))
+      const info: GuideInfo = { refreshedAt: Date.now(), channels: result.channels, programmes: result.programmes, failedUrls: result.failed, format: GUIDE_FORMAT }
       await setMeta('guide', info)
       this.set({ ...info, progress: undefined })
       this.invalidate()

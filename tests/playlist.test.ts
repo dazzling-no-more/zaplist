@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { parseM3u } from '../src/data/m3u'
 import { assignNumbers, entryKind, m3uToPlaylist, parseEpisodeName } from '../src/data/playlist'
-import { decodeText } from '../src/data/text'
+import { decodeText, hash } from '../src/data/text'
 
 const load = (name: string) => parseM3u(decodeText(new Uint8Array(readFileSync(new URL(`./fixtures/${name}`, import.meta.url)))))
 
@@ -101,6 +101,48 @@ describe('movies and series in M3U playlists', () => {
     expect(shorts.episodes![0]).toMatchObject({ season: 1, episode: 2, title: 'Sintel' })
   })
 
+  it('keeps series of the same name in different categories apart, so a lock on one holds', () => {
+    const split = m3uToPlaylist(
+      's1',
+      parseM3u(
+        [
+          '#EXTINF:-1 group-title="Kids",Show S01E01',
+          'http://tv.example.com/series/user/pass/1.mkv',
+          '#EXTINF:-1 group-title="Adults",Show S01E02',
+          'http://tv.example.com/series/user/pass/2.mkv',
+          '#EXTINF:-1 group-title="Kids",Show S01E03',
+          'http://tv.example.com/series/user/pass/3.mkv',
+        ].join('\n'),
+      ),
+    )
+    expect(split.series.map((s) => [s.categoryId, s.episodes!.map((e) => e.episode)])).toEqual([
+      ['s1:s:Kids', [1, 3]],
+      ['s1:s:Adults', [2]],
+    ])
+    // The first keeps the id a series of that name had before, so watch progress still finds it.
+    expect(split.series.map((s) => s.id)).toEqual([`s1:s:${hash('show')}`, `s1:s:${hash('show')}~2`])
+  })
+
+  it('keeps request header options for movies and episodes', () => {
+    const vod = m3uToPlaylist(
+      's1',
+      parseM3u(
+        [
+          '#EXTVLCOPT:http-referrer=http://site.example/',
+          '#EXTINF:-1 group-title="Films",Film',
+          'http://cdn.example.com/films/film.mp4',
+          '#EXTVLCOPT:http-user-agent=Player/1.0',
+          '#EXTINF:-1 group-title="Shows",Show S01E01',
+          'http://cdn.example.com/shows/show.s01e01.mp4',
+          '#EXTINF:-1 group-title="Films",Plain Film',
+          'http://cdn.example.com/films/plain.mp4',
+        ].join('\n'),
+      ),
+    )
+    expect(vod.movies.map((m) => m.options)).toEqual([{ 'http-referrer': 'http://site.example/' }, undefined])
+    expect(vod.series[0].episodes![0].options).toEqual({ 'http-user-agent': 'Player/1.0' })
+  })
+
   it('gives live, movie and series categories with the same name separate ids', () => {
     expect(playlist.categories.map((c) => [c.id, c.kind])).toEqual([
       ['s1:g:News', undefined],
@@ -120,6 +162,12 @@ describe('entryKind and parseEpisodeName', () => {
     expect(entryKind('http://h/series/u/p/1.mkv', 'No numbers')).toBe('episode')
     expect(entryKind('http://h/files/show.s02e05.mkv?x=1', 'Show 2x05')).toBe('episode')
     expect(entryKind('http://h/files/film.avi', 'Film')).toBe('movie')
+  })
+
+  it('looks at the URL before the request headers that follow a |', () => {
+    expect(entryKind('http://h/files/film.mp4|User-Agent=Player', 'Film')).toBe('movie')
+    expect(entryKind('http://h/files/show.s01e02.mkv|Referer=http%3A%2F%2Fsite%2F', 'Show S01E02')).toBe('episode')
+    expect(entryKind('http://h/live/123|User-Agent=Player.mp4', 'Channel')).toBe('live')
   })
 
   it('reads the series name, season and episode', () => {

@@ -94,6 +94,8 @@ export interface Movie {
   poster?: string
   /** Stream URLs to try in order. */
   urls: string[]
+  /** #EXTVLCOPT / #KODIPROP options, as for channels. */
+  options?: Record<string, string>
   /** Xtream vod_id, for get_vod_info. */
   vodId?: number
 }
@@ -104,6 +106,8 @@ export interface Episode {
   episode: number
   title: string
   urls: string[]
+  /** #EXTVLCOPT / #KODIPROP options, as for channels. */
+  options?: Record<string, string>
   /** Still image of the episode, when the server has one. */
   image?: string
   plot?: string

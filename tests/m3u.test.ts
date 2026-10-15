@@ -80,6 +80,13 @@ describe('parseM3u on a messy playlist', () => {
     expect(junk.title).toBe('After Junk')
   })
 
+  it('takes only stream URLs as entries, so an error page served as the playlist gives none', () => {
+    const page = parseM3u('<!DOCTYPE html>\n<html><head><title>Account expired</title></head>\n<body>\nAccount expired\n</body></html>\n')
+    expect(page.entries).toEqual([])
+    const junk = parseM3u('#EXTINF:-1,Kept\nnot a url\nrtmp://example.com/live/stream\n')
+    expect(junk.entries.map((e) => [e.title, e.url])).toEqual([['Kept', 'rtmp://example.com/live/stream']])
+  })
+
   it('keeps commas in the title', () => {
     expect(one('/commas.m3u8').title).toBe('Title, With, Commas')
   })

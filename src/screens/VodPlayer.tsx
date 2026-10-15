@@ -10,6 +10,7 @@ import { onNetworkChange } from '../platform/network'
 import { toggleFullscreen } from '../platform/screen'
 import { useSoundBlocked } from '../player/autoplay'
 import { Playback, usePlaybackStatus } from '../player/playback'
+import { withHeaders } from '../player/streams'
 import { ASPECT_CLASS } from '../ui/aspect'
 import { Button } from '../ui/Button'
 import { formatClock } from '../ui/format'
@@ -43,7 +44,8 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
   const next = episode && episodes ? episodes[episodes.indexOf(episode) + 1] : undefined
   const title = movie ? movie.name : (series?.name ?? '')
   const subtitle = episode ? `${episodeLabel(episode)}${episode.title ? ' · ' + episode.title : ''}` : undefined
-  const urls = movie?.urls ?? episode?.urls
+  const item = movie ?? episode
+  const urls = item && withHeaders(item.urls, item.options)
 
   const video = useRef<HTMLVideoElement>(null)
   const [playback, setPlayback] = useState<Playback>()

@@ -1,5 +1,5 @@
 import type { Channel, Programme } from './models'
-import { normalizeName } from './text'
+import { hash, normalizeName } from './text'
 import type { XmltvChannel, XmltvHandlers, XmltvProgramme } from './xmltv'
 
 const HOUR = 3_600_000
@@ -18,10 +18,28 @@ export function guideKeys(channel: Pick<Channel, 'tvgId' | 'tvgName' | 'name'>):
   return keys
 }
 
-/** Programmes kept: from 2 h ago to 24 h ahead, widened for tvg-shift and the global offset. */
+/** The guide's span: from 2 h ago to 24 h ahead, widened for tvg-shift. */
 export function guideWindow(now: number): { from: number; to: number } {
   return { from: now - 3 * HOUR, to: now + 26 * HOUR }
 }
+
+/** The furthest the guide offset setting moves every guide time, either way. */
+export const MAX_OFFSET_MINUTES = 12 * 60
+
+/**
+ * Programmes stored: the guide's span under any offset the setting allows, since the offset applies
+ * when programmes are shown and can change without a new download.
+ */
+export function storedWindow(now: number): { from: number; to: number } {
+  const { from, to } = guideWindow(now)
+  return { from: from - MAX_OFFSET_MINUTES * 60_000, to: to + MAX_OFFSET_MINUTES * 60_000 }
+}
+
+/**
+ * Where a guide key's programmes from the guide at `url` are stored. Each guide file keeps its own,
+ * since two providers can use the same channel id for different channels.
+ */
+export const storedGuideKey = (url: string, key: string): string => `${hash(url)}|${key}`
 
 /** How far a channel's guide is moved: its tvg-shift plus the global offset setting. */
 export const shiftMs = (channel: Pick<Channel, 'epgShift'> | undefined, offsetMinutes: number): number =>

@@ -1,4 +1,4 @@
-import type { GuideProgress, GuideResult } from '../data/guideIngest'
+import type { GuideProgress, GuideResult, GuideUrl } from '../data/guideIngest'
 import type { LoadErrorCode } from '../data/http'
 import type { Source } from '../data/models'
 
@@ -19,7 +19,7 @@ export interface IngestResult {
 }
 
 /** Work the worker does: download and store one source, or the whole guide. */
-export type Job = { type: 'ingest'; source: Source } | { type: 'guide'; urls: string[]; wanted: string[] }
+export type Job = { type: 'ingest'; source: Source } | { type: 'guide'; guides: GuideUrl[] }
 
 export type WorkerRequest = Job & { id: number }
 

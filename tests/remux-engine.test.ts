@@ -223,6 +223,25 @@ describe('remux engine', () => {
     const other = await start(new FakeVideo(), 0, { labels: { subtitle: 'fre' } }) // not in this movie
     expect(other.name).toBe('native')
   })
+
+  it('gives up when the service never answers /info, so playback moves on and retries', async () => {
+    head = movieHead('A_OPUS')
+    slowInfo = true
+    vi.useFakeTimers()
+    try {
+      const engine = createEngine({ url: MOVIE, engine: 'remux' }, new FakeVideo() as unknown as HTMLVideoElement)
+      let outcome: unknown = 'pending'
+      engine.start(0).then(
+        () => (outcome = 'started'),
+        (error: unknown) => (outcome = error),
+      )
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(outcome).toMatchObject({ code: 'timeout' })
+      expect(requests).toContain('/info?u=MOVIE&t=0')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('remuxSupport', () => {

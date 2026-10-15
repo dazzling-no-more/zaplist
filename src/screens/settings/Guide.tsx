@@ -1,4 +1,5 @@
 import { guide, useGuideStatus } from '../../data/guide'
+import { MAX_OFFSET_MINUTES } from '../../data/guideData'
 import { updatePrefs, usePrefs } from '../../data/prefs'
 import { t } from '../../i18n'
 import { Button } from '../../ui/Button'
@@ -8,7 +9,6 @@ import { Region } from '../../ui/Region'
 import { TextField } from '../../ui/TextField'
 
 const OFFSET_STEP = 30
-const OFFSET_LIMIT = 12 * 60
 const INTERVALS = [6, 12, 24]
 
 function formatOffset(minutes: number): string {
@@ -21,7 +21,7 @@ export function GuideSection() {
   const prefs = usePrefs()
   const status = useGuideStatus()
   const offset = prefs.epgOffsetMinutes
-  const setOffset = (minutes: number) => updatePrefs({ epgOffsetMinutes: Math.max(-OFFSET_LIMIT, Math.min(OFFSET_LIMIT, minutes)) })
+  const setOffset = (minutes: number) => updatePrefs({ epgOffsetMinutes: Math.max(-MAX_OFFSET_MINUTES, Math.min(MAX_OFFSET_MINUTES, minutes)) })
 
   let state: string
   if (status.progress?.stage === 'save') state = t('guideSettings.saving')
