@@ -24,6 +24,8 @@ export interface VirtualListProps<T> {
   onSelect?: (item: T, index: number) => void
   /** The row's button (e.g. favorite): Right moves onto it, Left back, OK presses it. */
   onRowAction?: (item: T, index: number) => void
+  /** Rows that have that button; all of them if absent. On the others OK selects the row. */
+  hasRowAction?: (item: T) => boolean
   /** Holding OK, also with the pointer. Without it, OK selects on key down instead of key up. */
   onLongPress?: (item: T, index: number) => void
   /** Up/Down before the list moves focus; return true when handled (e.g. reordering). */
@@ -50,6 +52,12 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
   const action = useRef(false)
   action.current = actionMode
 
+  /** The focused row's button has focus rather than the row (Right moved onto it). */
+  const onAction = (item: T | undefined): boolean => {
+    const { onRowAction, hasRowAction } = latest.current
+    return action.current && !!onRowAction && item !== undefined && (hasRowAction?.(item) ?? true)
+  }
+
   const move = (delta: number): boolean => {
     const { items, index, onIndexChange } = latest.current
     const next = clampIndex(index + delta, items.length)
@@ -64,11 +72,12 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
     focusable: props.items.length > 0,
     onArrowPress: (direction) => {
       // Right onto the row's button and Left back; Up/Down keep it, so you can go down the column.
-      if (direction === 'right' && latest.current.onRowAction) {
+      const { items, index, onRowAction, hasRowAction } = latest.current
+      if (direction === 'right' && onRowAction && items[index] !== undefined && (hasRowAction?.(items[index]) ?? true)) {
         setActionMode(true)
         return false
       }
-      if (direction === 'left' && action.current) {
+      if (direction === 'left' && onAction(items[index])) {
         setActionMode(false)
         return false
       }
@@ -82,7 +91,7 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
       const { items, index, onSelect, onLongPress, onRowAction } = latest.current
       const item = items[index]
       if (item === undefined) return
-      if (action.current) {
+      if (onAction(item)) {
         if (onRowAction && (details?.pressedKeys?.enter ?? 1) <= 1) onRowAction(item, index)
         return
       }
@@ -104,7 +113,7 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
       const current = press.current
       press.current = null
       const { items, index, onSelect, onLongPress } = latest.current
-      if (onLongPress && current && !current.long && !action.current && items[index] !== undefined) onSelect?.(items[index], index)
+      if (onLongPress && current && !current.long && !onAction(items[index]) && items[index] !== undefined) onSelect?.(items[index], index)
     },
     onFocus: () => latest.current.onFocusChange?.(true),
     onBlur: () => {
@@ -162,7 +171,7 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
           latest.current.onSelect?.(item, i)
         }}
       >
-        {renderRow(item, i, focused && i === index, focused && i === index && actionMode)}
+        {renderRow(item, i, focused && i === index, focused && i === index && actionMode && (props.hasRowAction?.(item) ?? true))}
       </div>,
     )
   }

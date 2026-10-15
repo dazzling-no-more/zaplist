@@ -43,7 +43,8 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
   with the same label), a movie with those it had.
 - **TV guide**: XMLTV (plain or gzipped) from the playlist, the Xtream server or a URL you enter; the
   Xtream short EPG as a fallback. Grid guide, time offset, automatic refresh every 6/12/24 hours.
-- **Parental control**: a 4-digit PIN locks the categories you choose until it is entered.
+- **Parental control**: a 4-digit PIN locks the categories you choose until it is entered. After five
+  wrong PINs, entry is blocked for 30 seconds, twice as long after each further wrong one.
 - **About**: app version, TV model and webOS version, playback engine, last error; clear the cache.
 
 ## Remote control

@@ -107,7 +107,8 @@ export async function ingestGuide(guides: GuideUrl[], progress: (p: GuideProgres
   const window = storedWindow(Date.now())
   const stored = new Map<string, Programme[]>()
   const kept = { channels: 0, programmes: 0 }
-  let failed = 0
+  /** Guide URLs that couldn't be read, as their stored keys' prefix: they keep what they had. */
+  const failed: string[] = []
   let lastError: LoadError | undefined
   for (let i = 0; i < guides.length; i++) {
     const { url } = guides[i]
@@ -116,7 +117,7 @@ export async function ingestGuide(guides: GuideUrl[], progress: (p: GuideProgres
       return { response: undefined, touch: () => {}, done: () => {}, timedOut: () => false }
     })
     if (!response) {
-      failed++
+      failed.push(storedGuideKey(url, ''))
       continue
     }
     let last = 0
@@ -132,7 +133,7 @@ export async function ingestGuide(guides: GuideUrl[], progress: (p: GuideProgres
         },
       })
     } catch (error) {
-      failed++
+      failed.push(storedGuideKey(url, ''))
       lastError = error instanceof LoadError ? error : new LoadError(timedOut() ? 'timeout' : 'network', String((error as Error)?.message ?? error))
     } finally {
       done()
@@ -141,10 +142,10 @@ export async function ingestGuide(guides: GuideUrl[], progress: (p: GuideProgres
     kept.channels += collector.kept.channels.size
     kept.programmes += collector.kept.programmes
   }
-  if (guides.length && failed === guides.length) throw lastError ?? new LoadError('network')
+  if (guides.length && failed.length === guides.length) throw lastError ?? new LoadError('network')
   progress({ stage: 'save' })
-  await saveGuide(stored)
-  return { ...kept, failed }
+  await saveGuide(stored, failed)
+  return { ...kept, failed: failed.length }
 }
 
 function bufferReader(bytes: Uint8Array): ByteReader {

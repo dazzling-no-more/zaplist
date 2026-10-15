@@ -15,6 +15,8 @@ const CACHE_LIMIT = 800
 /** Xtream short-EPG answers are re-fetched after this long. */
 const SHORT_EPG_TTL_MS = 10 * 60_000
 const SCHEDULE_CHECK_MS = 15 * 60_000
+/** A refresh where a guide URL failed is tried again after this long, not the usual 6 to 24 hours. */
+const RETRY_FAILED_MS = 60 * 60_000
 
 export interface GuideInfo {
   refreshedAt?: number
@@ -43,6 +45,8 @@ class Guide {
   private readonly loading = new Set<string>()
   private readonly listeners = new Set<() => void>()
   private refreshing: Promise<void> | undefined
+  /** A refresh asked for while one runs: it runs after, with the sources as they are then. */
+  private queued: Promise<void> | undefined
   private generation = 0
 
   getStatus = (): GuideStatus => this.status
@@ -76,11 +80,13 @@ class Guide {
         if (programmes?.length) break
       }
       if (!programmes?.length && channel.streamId !== undefined) {
-        programmes = await this.fetchShortEpg(channel)
         shortEpg = true
+        programmes = await this.fetchShortEpg(channel)
       }
     } catch {
+      // Remembered as no programmes for the short EPG's time to live, then asked again.
       programmes = undefined
+      shortEpg = true
     } finally {
       this.loading.delete(channel.id)
     }
@@ -95,9 +101,19 @@ class Guide {
     return Array.from(new Set(urls.map((u) => u.trim()).filter(Boolean)))
   }
 
-  /** Downloads all guides in the worker and replaces the stored programmes. */
+  /**
+   * Downloads all guides in the worker and replaces the stored programmes. While a refresh runs, one
+   * more follows it: the running one was set up before a source or guide URL that was just added.
+   */
   refresh(): Promise<void> {
-    this.refreshing ??= this.runRefresh().finally(() => (this.refreshing = undefined))
+    if (this.refreshing) {
+      this.queued ??= this.refreshing.then(() => {
+        this.queued = undefined
+        return this.refresh()
+      })
+      return this.queued
+    }
+    this.refreshing = this.runRefresh().finally(() => (this.refreshing = undefined))
     return this.refreshing
   }
 
@@ -107,8 +123,9 @@ class Guide {
     this.set({ ...info })
     const check = () => {
       // A guide stored in an older format can't be looked up any more: refresh it now.
-      const due = this.status.format === GUIDE_FORMAT ? (this.status.refreshedAt ?? 0) + getPrefs().epgRefreshHours * 3_600_000 : 0
-      if (Date.now() >= due && library.getState().sources.some((s) => this.urls(s.id).length)) void this.refresh()
+      const every = this.status.failedUrls ? RETRY_FAILED_MS : getPrefs().epgRefreshHours * 3_600_000
+      const due = this.status.format === GUIDE_FORMAT ? (this.status.refreshedAt ?? 0) + every : 0
+      if (!this.refreshing && Date.now() >= due && library.getState().sources.some((s) => this.urls(s.id).length)) void this.refresh()
     }
     check()
     setInterval(check, SCHEDULE_CHECK_MS)

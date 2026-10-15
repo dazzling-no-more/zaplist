@@ -122,4 +122,11 @@ describe('readTracks', () => {
   it('gives up when the list is cut off', () => {
     expect(readTracks(head.subarray(0, head.length - 20))).toBeUndefined()
   })
+
+  it('gives up on a file that is not Matroska', () => {
+    const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from('ftypisom'), Buffer.from([0, 0, 2, 0])])
+    const ts = Buffer.from([0x47, 0x40, 0x00, 0x10, 0x00, 0x00, 0xb0, 0x0d, 0x00, 0x01, 0xc1, 0x00, 0x00])
+    expect(readTracks(mp4)).toBeUndefined()
+    expect(readTracks(ts)).toBeUndefined()
+  })
 })

@@ -8,6 +8,7 @@ import { isVodLocked } from '../data/vod'
 import { isFinished, resumePosition, useWatch, type WatchEntry } from '../data/watch'
 import { t } from '../i18n'
 import { warmService } from '../player/engines'
+import { withHeaders } from '../player/streams'
 import { Button } from '../ui/Button'
 import { Chips } from '../ui/Chips'
 import { formatClock } from '../ui/format'
@@ -66,7 +67,7 @@ export function SeriesScreen({ entry }: ScreenProps<'series'>) {
   const seasons = useMemo(() => Array.from(new Set(list.map((e) => e.season))), [episodes])
   const next = useMemo(() => nextUp(list, watch), [episodes, watch])
   useEffect(() => {
-    if (next && !locked && next.urls[0]) warmService(next.urls[0], resumePosition(watch[next.id]) ?? 0)
+    if (next && !locked && next.urls[0]) warmService(withHeaders(next.urls, next.options)[0], resumePosition(watch[next.id]) ?? 0)
   }, [next?.id, locked])
   const [season, setSeason] = useState<number | undefined>(memo.season)
   const shownSeason = season !== undefined && seasons.indexOf(season) >= 0 ? season : (next?.season ?? seasons[0])

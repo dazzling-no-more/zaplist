@@ -60,3 +60,15 @@ describe('parental control settings', () => {
     expect(lockedOnDisk()).toEqual(['a'])
   })
 })
+
+describe('moveFavorite', () => {
+  it('moves past the next favorite on screen, leaving hidden ones where they are', async () => {
+    const prefs = await load({ favorites: ['a', 'locked', 'b', 'c'] })
+    const shown = ['a', 'b', 'c']
+    expect(prefs.moveFavorite('b', -1, shown)).toBe(0)
+    expect(prefs.getPrefs().favorites).toEqual(['b', 'a', 'locked', 'c'])
+    expect(prefs.moveFavorite('a', 1, ['b', 'a', 'c'])).toBe(2)
+    expect(prefs.getPrefs().favorites).toEqual(['b', 'locked', 'c', 'a'])
+    expect(prefs.moveFavorite('a', 1, ['b', 'c', 'a'])).toBe(2)
+  })
+})

@@ -101,4 +101,46 @@ describe('guide', () => {
       }
     }
   })
+
+  it('keeps a guide’s programmes when it can’t be downloaded at the next refresh', async () => {
+    state.sources = [source('a'), source('b')]
+    state.channels = [sport('a'), sport('b')]
+    state.playlistGuides = { a: [A], b: [B] }
+    serve({ [A]: xmltv('sport1', hour, hour + HOUR, () => 'A Match'), [B]: xmltv('sport1', hour, hour + HOUR, () => 'B Match') })
+    await guide.refresh()
+    serve({ [B]: xmltv('sport1', hour, hour + HOUR, () => 'B Final') })
+    await guide.refresh()
+    expect(guide.getStatus().failedUrls).toBe(1)
+    expect((await programmesOf(sport('a')))?.map((p) => p.title)).toEqual(['A Match'])
+    expect((await programmesOf(sport('b')))?.map((p) => p.title)).toEqual(['B Final'])
+  })
+
+  it('refreshes again for a source added while a refresh runs', async () => {
+    state.sources = [source('a')]
+    state.channels = [sport('a')]
+    state.playlistGuides = { a: [A], b: [B] }
+    serve({ [A]: xmltv('sport1', hour, hour + HOUR, () => 'A Match'), [B]: xmltv('sport1', hour, hour + HOUR, () => 'B Match') })
+    const first = guide.refresh()
+    state.sources = [source('a'), source('b')]
+    state.channels = [sport('a'), sport('b')]
+    await Promise.all([first, guide.refresh()])
+    expect((await programmesOf(sport('b')))?.map((p) => p.title)).toEqual(['B Match'])
+  })
+
+  it('asks the Xtream short EPG again a while after a request failed', async () => {
+    const xtream: Source = { id: 'x', kind: 'xtream', name: 'x', host: 'http://x.example', username: 'u', password: 'p', addedAt: 1 }
+    const channel: Channel = { id: 'x:1', sourceId: 'x', name: 'News', number: 1, urls: ['http://x.example/1'], streamId: 1 }
+    state.sources = [xtream]
+    state.channels = [channel]
+    state.playlistGuides = {}
+    serve({})
+    expect(await programmesOf(channel)).toEqual([])
+    const now = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(now + 11 * 60_000)
+    try {
+      expect(guide.cached(channel.id)).toBeUndefined()
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
 })

@@ -52,6 +52,8 @@ let head: Uint8Array<ArrayBuffer>
 let requests: string[]
 /** /info answers only once aborted. */
 let slowInfo = false
+/** /info answers that the service couldn't read the movie (a server its Node.js can't reach). */
+let infoFails = false
 let cues: unknown[]
 type TrackInfo = { number: number; name: string; language: string; codec: string; default: boolean; private?: string }
 const info: { audio: TrackInfo[]; subtitles: TrackInfo[] } = {
@@ -63,13 +65,15 @@ beforeEach(() => {
   requests = []
   cues = []
   slowInfo = false
+  infoFails = false
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       requests.push(url.replace(SERVICE, '').replace(encodeURIComponent(MOVIE), 'MOVIE'))
-      if (url === MOVIE) return new Response(head)
+      if (url === MOVIE || url.startsWith(`${SERVICE}/proxy?u=MOVIE&`.replace('MOVIE', encodeURIComponent(MOVIE)))) return new Response(head)
       if (url.startsWith(`${SERVICE}/info`)) {
         if (slowInfo) await new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))))
+        if (infoFails) return Response.json({ error: 'socket hang up' }, { status: 502 })
         const t = Number(new URL(url).searchParams.get('t'))
         return Response.json({ ...info, start: Math.floor(t / 10) * 10 }) // cues every 10 s
       }
@@ -122,6 +126,32 @@ describe('remux engine', () => {
     expect(video.src).toBe(`${SERVICE}/remux?u=${encodeURIComponent(MOVIE)}&t=90&a=2&s=3`)
     video.currentTime = 7 // the TV's player counts from the start of the stream
     expect(engine.currentTime()).toBe(97)
+    engine.destroy()
+  })
+
+  it('sends the request headers a movie needs through the service, on every path', async () => {
+    const withHeaders = `${MOVIE}|User-Agent=Kodi`
+    const play = async (video: FakeVideo) => {
+      const engine = createEngine({ url: withHeaders, engine: 'remux' }, video as unknown as HTMLVideoElement)
+      const started = engine.start(0)
+      await until(() => video.src !== '')
+      video.dispatchEvent(new Event('playing'))
+      await started
+      return engine
+    }
+    head = movieHead('A_OPUS')
+    const remuxed = new FakeVideo()
+    const remux = await play(remuxed)
+    expect(requests).toContain('/proxy?u=MOVIE&h=User-Agent%3DKodi') // the header read
+    expect(requests).toContain('/info?u=MOVIE&h=User-Agent%3DKodi&t=0')
+    expect(remuxed.src).toBe(`${SERVICE}/remux?u=${encodeURIComponent(MOVIE)}&h=User-Agent%3DKodi&t=0&a=2&s=3`)
+    remux.destroy()
+
+    head = movieHead('A_AC3')
+    const direct = new FakeVideo()
+    const engine = await play(direct)
+    expect(engine.name).toBe('native')
+    expect(direct.src).toBe(`${SERVICE}/proxy?u=${encodeURIComponent(MOVIE)}&h=User-Agent%3DKodi`)
     engine.destroy()
   })
 
@@ -222,6 +252,32 @@ describe('remux engine', () => {
 
     const other = await start(new FakeVideo(), 0, { labels: { subtitle: 'fre' } }) // not in this movie
     expect(other.name).toBe('native')
+  })
+
+  it('plays without the subtitles chosen when the service can’t stream the movie', async () => {
+    head = movieHead('A_AC3')
+    infoFails = true
+    const video = new FakeVideo()
+    const engine = await start(video, 0, { subtitle: 0 })
+    expect(engine.name).toBe('native')
+    expect(video.src).toBe(MOVIE)
+    expect(engine.selectedSubtitle()).toBe(-1)
+    engine.destroy()
+  })
+
+  it('still fails a movie whose audio only the service can play', async () => {
+    head = movieHead('A_OPUS')
+    infoFails = true
+    const engine = createEngine({ url: MOVIE, engine: 'remux' }, new FakeVideo() as unknown as HTMLVideoElement)
+    await expect(engine.start(0)).rejects.toMatchObject({ code: 'network' })
+  })
+
+  it('plays an .mkv link that serves MP4 with the TV’s player', async () => {
+    head = new Uint8Array([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d])
+    const video = new FakeVideo()
+    const engine = await start(video)
+    expect(engine.name).toBe('native')
+    expect(video.src).toBe(MOVIE)
   })
 
   it('gives up when the service never answers /info, so playback moves on and retries', async () => {

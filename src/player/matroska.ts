@@ -20,8 +20,20 @@ export function trackLabel(track: { name: string; language: string; codec: strin
 
 const text = (data: Uint8Array | undefined) => (data ? new TextDecoder().decode(data).replace(/\0+$/, '') : '')
 
-/** The track list at the start of a Matroska file; undefined if `head` doesn't hold all of it. */
+/**
+ * The track list at the start of a Matroska file; undefined if `head` doesn't hold all of it, or
+ * isn't Matroska (an .mkv link that serves MP4 or MPEG-TS, which the TV's player plays as it is).
+ */
 export function readTracks(head: Uint8Array): MovieTrack[] | undefined {
+  try {
+    const first = readId(head, 0)
+    return first && first[0] === ID.EBML ? trackList(head) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function trackList(head: Uint8Array): MovieTrack[] | undefined {
   for (let pos = 0; ; ) {
     const id = readId(head, pos)
     const size = id && readVint(head, pos + id[1])

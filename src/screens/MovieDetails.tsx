@@ -8,6 +8,7 @@ import { isVodLocked } from '../data/vod'
 import { getWatch, resumePosition, useWatch } from '../data/watch'
 import { t } from '../i18n'
 import { warmService } from '../player/engines'
+import { withHeaders } from '../player/streams'
 import { Button } from '../ui/Button'
 import { Chips } from '../ui/Chips'
 import { formatClock } from '../ui/format'
@@ -33,7 +34,7 @@ export function MovieScreen({ entry }: ScreenProps<'movie'>) {
     if (movie) library.movieDetails(movie).then(setDetails, () => setDetails({}))
   }, [movie?.id])
   useEffect(() => {
-    if (movie && !locked && movie.urls[0]) warmService(movie.urls[0], resume ?? 0)
+    if (movie && !locked && movie.urls[0]) warmService(withHeaders(movie.urls, movie.options)[0], resume ?? 0)
   }, [movie?.id, locked])
   useScreenFocus(entry, locked ? 'movie-unlock' : 'movie-play')
   const wasLocked = useRef(locked)

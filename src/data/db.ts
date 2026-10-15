@@ -244,14 +244,26 @@ export async function setMeta(key: string, value: unknown): Promise<void> {
   await (await db()).put('meta', value, key)
 }
 
-/** Replaces the whole guide. Written in batches so no single transaction gets huge. */
-export async function saveGuide(programmes: Map<string, Programme[]>): Promise<void> {
+/**
+ * Replaces the whole guide, except that the keys starting with a prefix in `keep` (guide URLs that
+ * couldn't be read, or only in part) keep what they had: `programmes` only adds those they had
+ * nothing for. Written in batches so no single transaction gets huge.
+ */
+export async function saveGuide(programmes: Map<string, Programme[]>, keep: string[] = []): Promise<void> {
   const database = await db()
+  const kept: GuideRecord[] = []
+  for (const prefix of keep) {
+    for (const record of await database.getAll('guide', IDBKeyRange.bound(prefix, prefix + '\uffff'))) kept.push(record)
+  }
+  const keptKeys = new Set(kept.map((record) => record.key))
   await database.clear('guide')
-  const entries = Array.from(programmes)
-  for (let i = 0; i < entries.length; i += 1000) {
+  const records = Array.from(programmes)
+    .filter(([key]) => !keptKeys.has(key))
+    .map(([key, list]): GuideRecord => ({ key, packed: pack(list) }))
+    .concat(kept)
+  for (let i = 0; i < records.length; i += 1000) {
     const tx = database.transaction('guide', 'readwrite')
-    const writes = entries.slice(i, i + 1000).map(([key, list]) => tx.store.put({ key, packed: pack(list) }))
+    const writes = records.slice(i, i + 1000).map((record) => tx.store.put(record))
     await Promise.all([...writes, tx.done])
   }
 }

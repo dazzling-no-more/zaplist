@@ -304,7 +304,7 @@ function Browse({ entry }: ScreenProps<'home'>) {
             onLongPress={(channel) => !moving && setMenu(channel)}
             onVertical={(direction) => {
               if (!moving) return false
-              setChannelIndex(moveFavorite(moving, direction))
+              setChannelIndex(moveFavorite(moving, direction, list.map((c) => c.id)))
               return true
             }}
             onKey={(key, channel) => {
@@ -323,7 +323,7 @@ function Browse({ entry }: ScreenProps<'home'>) {
                 favorite={prefs.favorites.includes(channel.id)}
                 onToggleFavorite={() => toggleFavorite(channel.id)}
                 moving={channel.id === moving}
-                onMove={(delta) => setChannelIndex(moveFavorite(channel.id, delta))}
+                onMove={(delta) => setChannelIndex(moveFavorite(channel.id, delta, list.map((c) => c.id)))}
               />
             )}
             empty={empty}

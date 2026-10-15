@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react'
+import { pinBlockedUntil } from '../data/parental'
 import { t } from '../i18n'
 import { onRemoteKey } from '../platform/keys'
 import { Button } from './Button'
@@ -25,8 +26,21 @@ export function PinDialog({ title, message, onSubmit, onCancel }: Props) {
   const id = useId()
   const [digits, setDigits] = useState('')
   const [wrong, setWrong] = useState(false)
+  /** After too many wrong PINs: when entry opens again (epoch ms), else 0. */
+  const [blockedUntil, setBlockedUntil] = useState(pinBlockedUntil)
+  const [now, setNow] = useState(Date.now)
+
+  useEffect(() => {
+    if (!blockedUntil) return
+    const timer = setInterval(() => {
+      setNow(Date.now())
+      if (Date.now() >= blockedUntil) setBlockedUntil(0)
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [blockedUntil])
 
   const press = (key: string) => {
+    if (pinBlockedUntil()) return
     setWrong(false)
     if (key === 'clear') setDigits('')
     else if (key === 'delete') setDigits((d) => d.slice(0, -1))
@@ -38,6 +52,8 @@ export function PinDialog({ title, message, onSubmit, onCancel }: Props) {
     if (onSubmit(digits) === false) {
       setWrong(true)
       setDigits('')
+      setNow(Date.now())
+      setBlockedUntil(pinBlockedUntil())
     }
   }, [digits])
 
@@ -54,7 +70,7 @@ export function PinDialog({ title, message, onSubmit, onCancel }: Props) {
   return (
     <Dialog
       title={title}
-      message={wrong ? t('pin.wrong') : message}
+      message={blockedUntil ? blockedText(blockedUntil - now) : wrong ? t('pin.wrong') : message}
       initialFocus={`${id}-5`}
       buttons={[{ label: t('common.cancel'), onPress: onCancel }]}
       onCancel={onCancel}
@@ -76,4 +92,9 @@ export function PinDialog({ title, message, onSubmit, onCancel }: Props) {
       ))}
     </Dialog>
   )
+}
+
+function blockedText(ms: number): string {
+  const seconds = Math.max(1, Math.ceil(ms / 1000))
+  return seconds < 60 ? t('pin.blockedSeconds', { count: seconds }) : t('pin.blockedMinutes', { count: Math.ceil(seconds / 60) })
 }

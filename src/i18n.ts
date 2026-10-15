@@ -51,6 +51,8 @@ const en = {
 
   'pin.enter': 'Enter the PIN',
   'pin.wrong': 'Wrong PIN. Try again.',
+  'pin.blockedSeconds': 'Too many wrong PINs. Try again in {count} second.|Too many wrong PINs. Try again in {count} seconds.',
+  'pin.blockedMinutes': 'Too many wrong PINs. Try again in {count} minute.|Too many wrong PINs. Try again in {count} minutes.',
   'pin.new': 'Choose a 4-digit PIN',
   'pin.confirm': 'Enter the new PIN again',
   'pin.mismatch': 'The PINs didn’t match. Choose a PIN again.',

@@ -1,6 +1,6 @@
 import * as http from 'http'
 import type { AddressInfo } from 'net'
-import { URL } from 'url' // not a global in Node 8
+import { URL, URLSearchParams } from 'url' // not globals in Node 8
 import { proxy } from './proxy'
 import { info, Job, remux } from './remux'
 
@@ -8,6 +8,7 @@ import { info, Job, remux } from './remux'
 //   /info?u=<movie URL>&t=<seconds>                JSON { start, audio, subtitles: [{ number, label, codec, default }] }
 //   /remux?u=<movie URL>&t=<start>&a=<track>&s=<subtitle tracks, comma-separated>
 //                                                  the movie as Matroska with PCM audio
+//   (/info and /remux also take &h=<headers, Name=value&…>: request headers the movie needs)
 //   /subs                                          JSON { cues }: subtitle cues of /remux read since the last call
 //   /proxy?u=<stream URL>&h=<headers, Name=value&…> the stream fetched with those headers
 // /info and /remux stop the stream before them (a seek or another movie): one connection to the IPTV server.
@@ -51,7 +52,9 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse): void {
     return
   }
   stopPlayback()
-  const job = (current = new Job())
+  const headers: Record<string, string> = {}
+  new URLSearchParams(query.get('h') || '').forEach((value, name) => (headers[name] = value))
+  const job = (current = new Job(headers))
   res.on('close', () => job.stop())
   const start = Number(query.get('t')) || 0
   if (pathname === '/info') {

@@ -128,14 +128,18 @@ export function toggleFavorite(channelId: string): void {
   updatePrefs({ favorites: favorites.includes(channelId) ? favorites.filter((id) => id !== channelId) : [...favorites, channelId] })
 }
 
-/** Moves a favorite by `delta` places; returns its new index. */
-export function moveFavorite(channelId: string, delta: number): number {
-  const favorites = prefs.favorites.slice()
-  const from = favorites.indexOf(channelId)
+/**
+ * Moves a favorite by `delta` places among `shown`, the favorites on screen (those hidden, locked or
+ * gone from the playlists, keep their places); returns its new index in `shown`.
+ */
+export function moveFavorite(channelId: string, delta: number, shown: readonly string[]): number {
+  const from = shown.indexOf(channelId)
   if (from < 0) return -1
-  const to = Math.max(0, Math.min(favorites.length - 1, from + delta))
-  favorites.splice(from, 1)
-  favorites.splice(to, 0, channelId)
+  const to = Math.max(0, Math.min(shown.length - 1, from + delta))
+  if (to === from) return from
+  const favorites = prefs.favorites.filter((id) => id !== channelId)
+  // Before the favorite it passes going up, after it going down.
+  favorites.splice(favorites.indexOf(shown[to]) + (to > from ? 1 : 0), 0, channelId)
   updatePrefs({ favorites })
   return to
 }

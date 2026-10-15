@@ -396,8 +396,9 @@ let warming: { cancel(): void } | undefined
  * Starts the service while a Matroska movie's page shows and has it read the movie's header and cue
  * index, so Play doesn't wait for either. It stays up a minute after (service/main.ts).
  */
-export function warmService(url: string, position: number): void {
+export function warmService(full: string, position: number): void {
   const webOS = window.webOS
+  const { url, headers } = splitHeaders(full)
   if (!remuxSupport() || !isMatroska(url) || !webOS) return
   stopWarming()
   const controller = new AbortController()
@@ -412,7 +413,7 @@ export function warmService(url: string, position: number): void {
     onSuccess: (response) => {
       if (done || !response.port) return finish()
       // Let go of the service once it has the header: cancelling first would stop the read.
-      fetch(`http://127.0.0.1:${response.port}/info?u=${encodeURIComponent(url)}&t=${position}`, { signal: controller.signal })
+      fetch(`http://127.0.0.1:${response.port}/info?${serviceSource(url, headers)}&t=${position}`, { signal: controller.signal })
         .catch(() => undefined)
         .then(finish)
     },
@@ -425,6 +426,9 @@ export function warmService(url: string, position: number): void {
     },
   }
 }
+
+/** A movie's address and request headers (`Name=value&…`) as the service's /info and /remux take them. */
+const serviceSource = (url: string, headers: string) => `u=${encodeURIComponent(url)}${headers ? `&h=${encodeURIComponent(headers)}` : ''}`
 
 /** Ends a warm-up, closing its connection to the IPTV server: the movie starting now opens its own. */
 function stopWarming(): void {
@@ -580,7 +584,10 @@ class RemuxEngine extends ServiceEngine {
 
   async start(position = 0, choices: TrackChoices = {}): Promise<void> {
     stopWarming()
-    const head = await Promise.race([readHead(this.url), this.cancellation.promise])
+    const { url, headers } = splitHeaders(this.url)
+    // A movie that needs request headers is read through the service, which sends them.
+    if (headers) await this.connect()
+    const head = await Promise.race([readHead(headers ? this.proxyUrl() : url), this.cancellation.promise])
     const tracks = head && readTracks(head)
     if (tracks) {
       this.audios = tracks.filter((t) => t.type === TRACK_AUDIO)
@@ -591,22 +598,50 @@ class RemuxEngine extends ServiceEngine {
     // Subtitles chosen before a restart need the service's stream too: go there straight away.
     const subtitleId = chosenTrack(this.subtitleTracks(), choices.subtitle, labels.subtitle)
     const subtitle = subtitleId !== undefined ? this.subtitles[subtitleId] : undefined
-    if (!convert && !subtitle) {
-      await super.start(position, { audio: choices.audio, labels: { audio: labels.audio } })
-      // The TV's player starts on the first audio track, whatever the file marks as its default.
-      // It lists them in the file's order.
-      const preferred = this.audios.findIndex((t) => t.default)
-      const listed = this.audioTracks()
-      if (preferred > 0 && listed.length === this.audios.length && chosenTrack(listed, choices.audio, labels.audio) === undefined) this.setAudioTrack(preferred)
-      return
-    }
+    if (!convert && !subtitle) return this.playItself(position, choices)
     const audioId = chosenTrack(this.serviceAudioTracks(), choices.audio, labels.audio)
     const audio = audioId !== undefined ? this.audios[audioId] : undefined
     if (audio) this.audio = audio.number
     if (subtitle) this.subtitle = subtitle.number
     this.name = 'remux'
-    await this.connect()
-    await this.open(position)
+    try {
+      await this.connect()
+      await this.open(position)
+    } catch (error) {
+      // Only the subtitles needed the service, which can't stream this movie (its Node.js can't reach
+      // some HTTPS servers): play it without them rather than not at all, now and on every retry.
+      if (convert || this.destroyed) throw error
+      this.name = 'native'
+      this.subtitle = undefined
+      await this.playItself(position, choices)
+    }
+  }
+
+  /** The TV's player plays the file as it is (through the service's proxy if it needs request headers). */
+  private async playItself(position: number, choices: TrackChoices): Promise<void> {
+    const labels = choices.labels || {}
+    const audio = { audio: choices.audio, labels: { audio: labels.audio } }
+    if (splitHeaders(this.url).headers) {
+      await this.load(this.proxyUrl())
+      resume(this, position, audio)
+    } else await super.start(position, audio)
+    // The TV's player starts on the first audio track, whatever the file marks as its default.
+    // It lists them in the file's order.
+    const preferred = this.audios.findIndex((t) => t.default)
+    const listed = this.audioTracks()
+    if (preferred > 0 && listed.length === this.audios.length && chosenTrack(listed, choices.audio, labels.audio) === undefined) this.setAudioTrack(preferred)
+  }
+
+  /** The movie fetched with its request headers by the service (once connected). */
+  private proxyUrl(): string {
+    const { url, headers } = splitHeaders(this.url)
+    return `${this.base}/proxy?u=${encodeURIComponent(url)}&h=${encodeURIComponent(headers)}`
+  }
+
+  /** The movie and its request headers as /info and /remux take them. */
+  private source(): string {
+    const { url, headers } = splitHeaders(this.url)
+    return serviceSource(url, headers)
   }
 
   /** Plays a new stream from the cue at or before `position`. */
@@ -617,7 +652,7 @@ class RemuxEngine extends ServiceEngine {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), INFO_TIMEOUT_MS)
     try {
-      response = await Promise.race([fetch(`${this.base}/info?u=${encodeURIComponent(this.url)}&t=${position}`, { signal: controller.signal }), this.cancellation.promise])
+      response = await Promise.race([fetch(`${this.base}/info?${this.source()}&t=${position}`, { signal: controller.signal }), this.cancellation.promise])
       info = await response.json()
     } catch (error) {
       if (this.destroyed) throw cancelled()
@@ -639,7 +674,7 @@ class RemuxEngine extends ServiceEngine {
       const kind = subtitleKind(t.codec)
       if (kind !== 'text' && this.collecting.indexOf(t.number) >= 0) this.pictures[t.number] = kind === 'pgs' ? new PgsDecoder() : new VobSubDecoder(t.private ?? '')
     }
-    const query = `u=${encodeURIComponent(this.url)}&t=${info.start}&a=${this.audio ?? 0}&s=${this.collecting.join(',')}`
+    const query = `${this.source()}&t=${info.start}&a=${this.audio ?? 0}&s=${this.collecting.join(',')}`
     await this.load(`${this.base}/remux?${query}`)
     if (this.subtitles.length && this.pollTimer === undefined) this.pollTimer = setInterval(() => void this.fetchCues(), SUBTITLE_POLL_MS)
   }

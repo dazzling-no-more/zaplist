@@ -1,7 +1,7 @@
 import { getCurrentFocusKey, setFocus, useFocusable } from '@noriginmedia/norigin-spatial-navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { library, useLibrary } from '../data/library'
-import { ALL, buildGroups, channelsByCategory, channelsForGroup } from '../data/lists'
+import { ALL, buildGroups, channelsByCategory, channelsForGroup, RECENT } from '../data/lists'
 import type { Channel } from '../data/models'
 import { useUnlocked } from '../data/parental'
 import { ASPECTS, toggleFavorite, updatePrefs, usePrefs, type Aspect } from '../data/prefs'
@@ -50,11 +50,17 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   const byCategory = useMemo(() => channelsByCategory(channels), [channels])
   const visible = (groupId: string) => channelsForGroup(groupId, channels, (id) => library.channel(id), byCategory, prefs, unlocked)
   const listDeps = [channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked]
+  // Zapping through Recent keeps its order from when the channel was picked: each channel played goes
+  // to the top of Recent, so Up and Down would only swap the last two.
+  const [zapRecents, setZapRecents] = useState(prefs.recents)
   // Zapping stays in the list the channel was picked from, or All when it's no longer in it.
   const list = useMemo(() => {
-    const fromList = visible(listId)
+    const fromList =
+      listId === RECENT
+        ? channelsForGroup(RECENT, channels, (id) => library.channel(id), byCategory, { ...prefs, recents: zapRecents }, unlocked)
+        : visible(listId)
     return fromList.some((c) => c.id === channelId) ? fromList : visible(ALL)
-  }, [...listDeps, listId, channelId])
+  }, [...listDeps, listId, channelId, zapRecents])
   const groups = useMemo(() => buildGroups(categories, sources, prefs, groupLabels()), [categories, sources, prefs.pin, prefs.lockedCategories])
   const channel = library.channel(channelId)
   const index = list.findIndex((c) => c.id === channelId)
@@ -86,7 +92,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   const soundBlocked = useSoundBlocked()
 
   useEffect(() => {
-    const instance = new Playback(video.current!)
+    const instance = new Playback(video.current!, true)
     setPlayback(instance)
     return () => instance.stop()
   }, [])
@@ -390,6 +396,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
               onIndexChange={setListIndex}
               onSelect={(c) => {
                 closeList()
+                setZapRecents(prefs.recents)
                 if (c.id !== channelId) tune(c, browseGroup)
                 else setListId(browseGroup)
               }}

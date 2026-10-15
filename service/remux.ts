@@ -70,6 +70,9 @@ export class Job {
   private reader?: Reader
   private cues: SubtitleCue[] = []
 
+  /** `headers`: request headers the movie needs (its playlist's User-Agent or Referer). */
+  constructor(private readonly headers: Record<string, string> = {}) {}
+
   addCues(cues: SubtitleCue[]): void {
     this.cues = this.cues.concat(cues)
     if (this.cues.length > MAX_PENDING_CUES) this.cues = this.cues.slice(this.cues.length - MAX_PENDING_CUES)
@@ -86,7 +89,7 @@ export class Job {
   async open(url: string, from: number): Promise<Reader> {
     if (this.reader) this.reader.destroy()
     this.reader = undefined
-    const reader = new Reader(await get(url, from), from)
+    const reader = new Reader(await get(url, from, this.headers), from)
     if (this.closed) reader.destroy()
     else this.reader = reader
     return reader

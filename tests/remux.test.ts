@@ -94,12 +94,15 @@ let asked: string[] = []
  * connection halfway through the file, or stops after a few bytes of any request past byte 0.
  */
 let misbehave: 'ignoreRange' | 'drop' | 'stall' | undefined
+/** The User-Agent of the last request. */
+let userAgent: string | undefined
 
 beforeAll(async () => {
   // Like an IPTV server: movie links redirect to a stream server, which sends the file with byte
   // ranges. Counts open connections.
   server = createServer((req, res) => {
     asked.push(req.url!)
+    userAgent = req.headers['user-agent']
     if (req.url!.startsWith('/movie/')) {
       res.writeHead(302, { Location: req.url!.replace('/movie/', '/stream/') })
       res.end()
@@ -276,6 +279,11 @@ describe('remux', () => {
     await expect(first).rejects.toThrow()
     misbehave = undefined
     expect((await info(url, 15, new Job())).start).toBe(10)
+  })
+
+  it('sends the request headers the movie needs, past redirects', async () => {
+    await info(newUrl(), 15, new Job({ 'User-Agent': 'Kodi' }))
+    expect(userAgent).toBe('Kodi')
   })
 
   it('passes another audio track through untouched when it is chosen', async () => {

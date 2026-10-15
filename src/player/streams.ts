@@ -128,12 +128,13 @@ export function playbackAttempts(urls: string[], mse: { hls: boolean; mpegts: bo
   const attempts: Attempt[] = []
   for (const full of urls) {
     const { url, headers } = splitHeaders(full)
-    // The other engines can't send the headers; the stream may still play without them.
-    if (remux && headers) attempts.push({ url: full, engine: 'proxy' })
+    // The remux engine sends a movie's request headers itself, through the service.
     if (remux && isMatroska(url)) {
-      attempts.push({ url, engine: 'remux' })
+      attempts.push({ url: full, engine: 'remux' })
       continue
     }
+    // The other engines can't send the headers; the stream may still play without them.
+    if (remux && headers) attempts.push({ url: full, engine: 'proxy' })
     const kind = streamKind(url)
     const tsLike = kind === 'ts' || kind === 'unknown'
     const nativeLast = tsLike && !nativeMpegTs && mse.mpegts

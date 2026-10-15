@@ -32,7 +32,13 @@ export class Playback {
   private timer: ReturnType<typeof setTimeout> | undefined
   private readonly listeners = new Set<() => void>()
 
-  constructor(private readonly video: HTMLVideoElement) {}
+  /** `live`: the stream has no end, so one that ends (the server closed it) is retried like a failure. */
+  constructor(
+    private readonly video: HTMLVideoElement,
+    live = false,
+  ) {
+    if (live) video.addEventListener('ended', () => this.engine && this.fail(this.token, new PlaybackError('network', 'The stream ended')))
+  }
 
   getStatus = (): PlaybackStatus => this.status
 

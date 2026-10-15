@@ -1,12 +1,13 @@
-import { savePlaylist } from './db'
+import { getPlaylistMeta, getVodChunk, savePlaylist } from './db'
 import { fetchBytes, fetchJson, LoadError } from './http'
 import { parseM3u } from './m3u'
-import type { Playlist, Source } from './models'
+import type { Category, Movie, Playlist, Series, Source } from './models'
 import { m3uToPlaylist } from './playlist'
 import { decodeText } from './text'
 import {
   apiUrl,
   parseAccount,
+  vodUrl,
   xtreamToPlaylist,
   xtreamVod,
   XtreamAuthError,
@@ -37,10 +38,16 @@ export async function ingest(source: Source, progress: (p: IngestProgress) => vo
   } else {
     const account = parseAccount(await fetchJson<XtreamLogin>(apiUrl(source)))
     progress({ stage: 'download' })
+    const failed = new Set<string>()
     const list = <T>(action: string, required: boolean): Promise<T[]> => {
       const request = fetchJson<T[]>(apiUrl(source, { action })).then((items) => (Array.isArray(items) ? items : []))
       // Movies and series are extras: a server that can't list them still gives its live channels.
-      return required ? request : request.catch(() => [])
+      return required
+        ? request
+        : request.catch(() => {
+            failed.add(action)
+            return []
+          })
     }
     const [categories, streams, vodCategories, vodStreams, seriesCategories, seriesList] = await Promise.all([
       list<XtreamCategory>('get_live_categories', true),
@@ -52,7 +59,24 @@ export async function ingest(source: Source, progress: (p: IngestProgress) => vo
     ])
     progress({ stage: 'parse' })
     const live = xtreamToPlaylist(source, account, categories, streams)
-    const vod = xtreamVod(source, vodCategories, vodStreams, seriesCategories, seriesList)
+    let vod = xtreamVod(source, vodCategories, vodStreams, seriesCategories, seriesList)
+    // A list that couldn't be had this time (a timeout, say) is kept from the last refresh.
+    const lostMovies = failed.has('get_vod_categories') || failed.has('get_vod_streams')
+    const lostSeries = failed.has('get_series_categories') || failed.has('get_series')
+    if (lostMovies || lostSeries) {
+      const old = await storedVod(source.id)
+      const lost = (c: Category) => (c.kind === 'movie' ? lostMovies : lostSeries)
+      // Their addresses again, with the login and server as they are now (the source may have been edited).
+      const relink = (movie: Movie) => {
+        const extension = /\.(\w+)$/.exec(movie.urls[0] ?? '')
+        return movie.vodId === undefined ? movie : { ...movie, urls: [vodUrl(source, 'movie', movie.vodId, extension?.[1])] }
+      }
+      vod = {
+        categories: [...vod.categories.filter((c) => !lost(c)), ...old.categories.filter(lost)],
+        movies: lostMovies ? old.movies.map(relink) : vod.movies,
+        series: lostSeries ? old.series : vod.series,
+      }
+    }
     playlist = { ...live, categories: [...live.categories, ...vod.categories], movies: vod.movies, series: vod.series }
     saved = { ...source, refreshedAt: saved.refreshedAt, account }
   }
@@ -67,6 +91,19 @@ export async function ingest(source: Source, progress: (p: IngestProgress) => vo
     series: playlist.series.length,
     categories: playlist.categories.length,
   }
+}
+
+/** The movies and series stored for a source, with their categories. */
+async function storedVod(sourceId: string): Promise<Pick<Playlist, 'categories' | 'movies' | 'series'>> {
+  const meta = await getPlaylistMeta(sourceId)
+  const movies: Movie[] = []
+  const series: Series[] = []
+  for (let i = 0; i < (meta?.vodChunks ?? 0); i++) {
+    const chunk = await getVodChunk(sourceId, i)
+    for (const movie of chunk.movies ?? []) movies.push(movie)
+    for (const show of chunk.series ?? []) series.push(show)
+  }
+  return { categories: (meta?.categories ?? []).filter((c) => c.kind), movies, series }
 }
 
 export function toLoadError(error: unknown): LoadError {

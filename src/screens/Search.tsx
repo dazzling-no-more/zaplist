@@ -100,6 +100,7 @@ export function SearchScreen({ entry }: ScreenProps<'search'>) {
           onRowAction={(r) => {
             if (r.kind === 'channel') toggleFavorite(r.item.id)
           }}
+          hasRowAction={(r) => r.kind === 'channel'}
           renderRow={(r, _, focused, action) =>
             r.kind === 'channel' ? (
               <ChannelRow

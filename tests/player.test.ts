@@ -103,6 +103,8 @@ describe('playbackAttempts', () => {
       { url: 'm.mp4', engine: 'native' },
     ])
     expect(playbackAttempts(['m.mkv'], all, true, false).map((a) => a.engine)).toEqual(['native'])
+    // The remux engine sends a movie's request headers through the service itself.
+    expect(playbackAttempts(['m.mkv|User-Agent=Kodi'], all, true, true)).toEqual([{ url: 'm.mkv|User-Agent=Kodi', engine: 'remux' }])
   })
 
   it('tries streams that need headers through the service first on the TV, then without them', () => {
@@ -230,6 +232,19 @@ describe('Playback', () => {
     playback.current()!.onFatal!(new PlaybackError('timeout', 'stalled'))
     expect(playback.getStatus()).toMatchObject({ state: 'retrying', retry: 1 })
     expect(created[1].engine.destroyed).toBe(true)
+  })
+
+  it('retries a live stream that ends', async () => {
+    outcomes.native = [ok, ok]
+    const element = new EventTarget() as HTMLVideoElement
+    const playback = new Playback(element, true)
+    playback.play(['channel.ts'])
+    await flush()
+    element.dispatchEvent(new Event('ended'))
+    expect(playback.getStatus()).toMatchObject({ state: 'retrying', retry: 1, error: { code: 'network' } })
+    vi.advanceTimersByTime(RETRY_DELAYS_MS[0])
+    await flush()
+    expect(playback.getStatus()).toEqual({ state: 'playing' })
   })
 
   it('stops an engine that is still starting when the channel changes', async () => {

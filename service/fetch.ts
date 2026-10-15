@@ -11,20 +11,20 @@ let redirected: { [url: string]: string } = {}
 let remembered = 0
 
 /**
- * GETs `url` from byte `from` on, following redirects; rejects unless the server sends those bytes.
- * Later requests for `url` go straight to where it redirected (a round trip less for each seek), and
- * through `url` again if that fails.
+ * GETs `url` from byte `from` on with `headers` (a movie's own User-Agent or Referer), following
+ * redirects; rejects unless the server sends those bytes. Later requests for `url` go straight to
+ * where it redirected (a round trip less for each seek), and through `url` again if that fails.
  */
-export async function get(url: string, from = 0): Promise<http.IncomingMessage> {
+export async function get(url: string, from = 0, headers: Record<string, string> = {}): Promise<http.IncomingMessage> {
   const target = redirected[url]
   if (target) {
     try {
-      return await request(target, from, 0)
+      return await request(target, from, headers, 0)
     } catch {
       delete redirected[url]
     }
   }
-  return request(url, from, MAX_REDIRECTS, (final) => {
+  return request(url, from, headers, MAX_REDIRECTS, (final) => {
     if (final === url) return
     if (++remembered > MAX_REMEMBERED) {
       redirected = {}
@@ -34,14 +34,14 @@ export async function get(url: string, from = 0): Promise<http.IncomingMessage> 
   })
 }
 
-function request(url: string, from: number, redirects: number, onFinal?: (url: string) => void): Promise<http.IncomingMessage> {
-  const headers: Record<string, string> = { 'User-Agent': USER_AGENT }
+function request(url: string, from: number, extra: Record<string, string>, redirects: number, onFinal?: (url: string) => void): Promise<http.IncomingMessage> {
+  const headers: Record<string, string> = Object.assign({ 'User-Agent': USER_AGENT }, extra)
   if (from > 0) headers.Range = `bytes=${from}-`
   return send(url, headers).then((response) => {
     const status = response.statusCode || 0
     if (status >= 300 && status < 400 && response.headers.location && redirects > 0) {
       response.resume()
-      return request(new URL(response.headers.location, url).toString(), from, redirects - 1, onFinal)
+      return request(new URL(response.headers.location, url).toString(), from, extra, redirects - 1, onFinal)
     }
     if (status === 206 || (status === 200 && from === 0)) {
       if (onFinal) onFinal(url)
