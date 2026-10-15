@@ -1,15 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import appinfo from '../../../appinfo.json'
 import { guide, useGuideStatus } from '../../data/guide'
 import { library, useLibrary } from '../../data/library'
 import { parsingMode } from '../../data/worker'
 import { t } from '../../i18n'
+import { storageUse, type StorageUse } from '../../platform/storage'
 import { deviceInfo, isWebOS } from '../../platform/webos'
 import { diagnostics } from '../../player/diagnostics'
 import { Button } from '../../ui/Button'
 import { formatTime } from '../../ui/clock'
 import { Dialog } from '../../ui/Dialog'
-import { formatCount, formatDate } from '../../ui/format'
+import { formatBytes, formatCount, formatDate } from '../../ui/format'
 import { clearLogoCache } from '../../ui/Logo'
 import { Region } from '../../ui/Region'
 
@@ -18,7 +19,12 @@ export function AboutSection() {
   const guideStatus = useGuideStatus()
   const [confirm, setConfirm] = useState(false)
   const [clearing, setClearing] = useState<string>()
+  const [storage, setStorage] = useState<StorageUse>()
   const device = deviceInfo()
+  const measure = () => storageUse().then(setStorage, () => undefined)
+  useEffect(() => {
+    void measure()
+  }, [])
   const engine = /Chrome\/(\d+)/.exec(navigator.userAgent)?.[1]
 
   const rows: [string, string][] = [
@@ -40,6 +46,7 @@ export function AboutSection() {
         programmes: formatCount(guideStatus.programmes ?? 0),
       }),
     ],
+    [t('about.storage'), storage ? t('about.storageValue', { used: formatBytes(storage.usage), quota: formatBytes(storage.quota) }) : '—'],
   ]
 
   const clear = async () => {
@@ -48,7 +55,8 @@ export function AboutSection() {
     clearLogoCache()
     const failed = await library.clearCache()
     guide.invalidate()
-    void guide.refresh()
+    void guide.refresh().then(measure)
+    void measure()
     setClearing(failed ? t('about.clearedSomeFailed', { count: failed }) : t('about.cleared'))
   }
 

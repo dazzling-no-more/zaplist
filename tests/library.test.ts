@@ -7,7 +7,7 @@ const db = vi.hoisted(() => ({
   getChannelChunk: vi.fn(),
   getSecretSettings: vi.fn(),
   putSecretSettings: vi.fn(),
-  clearCache: vi.fn(),
+  rebuildDatabase: vi.fn(),
   deleteSource: vi.fn(),
 }))
 const ingestSource = vi.hoisted(() => vi.fn())

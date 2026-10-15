@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { clearCache, deleteSource, getChannelChunk, getPlaylistMeta, getSources, getVodChunk } from './db'
+import { deleteSource, getChannelChunk, getPlaylistMeta, getSources, getVodChunk, rebuildDatabase } from './db'
 import { fetchJson } from './http'
 import type { Category, Channel, Episode, Movie, MovieDetails, Series, Source } from './models'
 import { loadSecretPrefs } from './prefs'
@@ -173,10 +173,13 @@ class Library {
     }
   }
 
-  /** Deletes cached channels and the guide, then downloads every source again. Returns how many failed. */
+  /**
+   * Deletes cached channels, movies, series and the guide, and frees the storage space they held, then
+   * downloads every source again. Returns how many failed.
+   */
   async clearCache(): Promise<number> {
     await this.init()
-    await clearCache()
+    await rebuildDatabase()
     this.data.clear()
     const { sources } = this.state
     this.set(this.combine(sources))

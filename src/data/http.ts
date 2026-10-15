@@ -1,6 +1,6 @@
 // Network helpers shared by the worker and the main thread.
 
-export type LoadErrorCode = 'network' | 'http' | 'timeout' | 'auth' | 'empty' | 'format'
+export type LoadErrorCode = 'network' | 'http' | 'timeout' | 'auth' | 'empty' | 'format' | 'storage'
 
 /** A failure the UI can explain; `detail` is extra technical context (status code, server message). */
 export class LoadError extends Error {

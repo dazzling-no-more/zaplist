@@ -1,6 +1,6 @@
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { Category, Channel, Movie, Playlist, Programme, Series, Source } from './models'
-import { canSeal, newVaultKey, seal, unseal, type Sealed } from './vault'
+import { canSeal, newVaultKey, pack, seal, unpack, unseal, type Sealed } from './vault'
 
 const NAME = 'iptv-player'
 
@@ -19,10 +19,12 @@ export interface PlaylistMeta {
 /** A chunk of movies or of series. A series counts as one item plus one per episode it carries. */
 export type VodChunk = { movies: Movie[]; series?: undefined } | { series: Series[]; movies?: undefined }
 
+/** One channel's programmes, deflated (vault.ts `pack`); versions before 1.1 stored them as they are. */
 export interface GuideRecord {
   /** Guide channel key: lower-cased XMLTV id, or `name:` + normalized display name. */
   key: string
-  programmes: Programme[]
+  packed?: Uint8Array
+  programmes?: Programme[]
 }
 
 // Anything that can carry a login (sources, stream and guide URLs, the PIN) is stored encrypted, see
@@ -76,6 +78,13 @@ export function db(): Promise<Db> {
         }
       }
     },
+    // Another connection (the worker's, another tab's) wants to delete the database: step aside, and
+    // start over with a fresh connection and the new vault key on next use.
+    blocking(_current, _blocked, event) {
+      ;(event.target as IDBDatabase).close()
+      opening = undefined
+      vaultKey = undefined
+    },
   })
   return opening
 }
@@ -84,11 +93,25 @@ export function db(): Promise<Db> {
 export async function deleteDatabase(): Promise<void> {
   const current = opening
   opening = undefined
+  vaultKey = undefined
   await current?.then(
     (database) => database.close(),
     () => undefined,
   )
   await deleteDB(NAME)
+}
+
+/**
+ * Clear cache: deletes the whole database and writes back only the sources and the secret settings.
+ * Unlike emptying the stores, deleting frees the space IndexedDB still counts for removed data and for
+ * writes that failed half-way, which on a TV's small quota can block every later save.
+ */
+export async function rebuildDatabase(): Promise<void> {
+  const sources = await getSources()
+  const secrets = await getSecretSettings<unknown>()
+  await deleteDatabase()
+  for (const source of sources) await putSource(source)
+  if (secrets !== undefined) await putSecretSettings(secrets)
 }
 
 const chunkRange = (sourceId: string) => IDBKeyRange.bound([sourceId, 0], [sourceId, Infinity])
@@ -228,24 +251,12 @@ export async function saveGuide(programmes: Map<string, Programme[]>): Promise<v
   const entries = Array.from(programmes)
   for (let i = 0; i < entries.length; i += 1000) {
     const tx = database.transaction('guide', 'readwrite')
-    const writes = entries.slice(i, i + 1000).map(([key, list]) => tx.store.put({ key, programmes: list }))
+    const writes = entries.slice(i, i + 1000).map(([key, list]) => tx.store.put({ key, packed: pack(list) }))
     await Promise.all([...writes, tx.done])
   }
 }
 
 export async function getGuide(key: string): Promise<Programme[] | undefined> {
-  return (await (await db()).get('guide', key))?.programmes
-}
-
-/** Removes cached playlists and the guide; sources stay and download again on refresh. */
-export async function clearCache(): Promise<void> {
-  const tx = (await db()).transaction(['playlists', 'channelChunks', 'vodChunks', 'guide', 'meta'], 'readwrite')
-  await Promise.all([
-    tx.objectStore('playlists').clear(),
-    tx.objectStore('channelChunks').clear(),
-    tx.objectStore('vodChunks').clear(),
-    tx.objectStore('guide').clear(),
-    tx.objectStore('meta').clear(),
-    tx.done,
-  ])
+  const record = await (await db()).get('guide', key)
+  return record?.packed ? unpack<Programme[]>(record.packed) : record?.programmes
 }

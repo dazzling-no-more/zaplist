@@ -72,5 +72,7 @@ export async function ingest(source: Source, progress: (p: IngestProgress) => vo
 export function toLoadError(error: unknown): LoadError {
   if (error instanceof LoadError) return error
   if (error instanceof XtreamAuthError) return new LoadError('auth', error.message)
+  // IndexedDB is full: TVs give an app tens of megabytes, which a big playlist can fill.
+  if ((error as Error)?.name === 'QuotaExceededError') return new LoadError('storage', (error as Error).message)
   return new LoadError('format', String((error as Error)?.message ?? error))
 }
