@@ -113,13 +113,19 @@ export function xmltvUrl(source: Credentials): string {
   return `${normalizeHost(source.host)}/xmltv.php?username=${enc(source.username)}&password=${enc(source.password)}`
 }
 
-/** HLS first when the server allows it, MPEG-TS as the fallback. */
+/**
+ * MPEG-TS first when the server allows it, HLS as the fallback. Xtream servers send MPEG-TS on one
+ * connection from the first byte (the TV's player starts it in a second or two); their HLS can take
+ * ten seconds to start there, or stall, still holding a login's only connection, so that the server
+ * refuses every address tried after it.
+ */
 export function liveUrls(source: Credentials, streamId: number, outputFormats: string[]): string[] {
   const base = `${normalizeHost(source.host)}/live/${enc(source.username)}/${enc(source.password)}/${streamId}`
   const allowed = (format: string) => !outputFormats.length || outputFormats.indexOf(format) >= 0
   const urls: string[] = []
+  if (allowed('ts')) urls.push(`${base}.ts`)
   if (allowed('m3u8')) urls.push(`${base}.m3u8`)
-  if (allowed('ts') || !urls.length) urls.push(`${base}.ts`)
+  if (!urls.length) urls.push(`${base}.ts`) // only formats the app can't play (RTMP): MPEG-TS may still work
   return urls
 }
 

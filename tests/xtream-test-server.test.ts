@@ -30,12 +30,12 @@ describe('Xtream test server', () => {
   })
 
   it('redirects each stream URL the app builds to the test stream that has that format', async () => {
-    const [hls, ts] = liveUrls(source, 101, ['m3u8', 'ts'])
-    const first = await get(hls)
-    expect(first.status).toBe(302)
-    expect(first.headers.get('location')).toBe('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')
-    expect(first.headers.get('access-control-allow-origin')).toBe('*')
+    const [ts, hls] = liveUrls(source, 101, ['m3u8', 'ts'])
     expect((await get(ts)).status).toBe(404) // an HLS-only stream: the app moves on to the next URL
+    const second = await get(hls)
+    expect(second.status).toBe(302)
+    expect(second.headers.get('location')).toBe('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')
+    expect(second.headers.get('access-control-allow-origin')).toBe('*')
     expect((await get(liveUrls(source, 105, ['ts'])[0])).headers.get('location')).toMatch(/\.ts$/)
     expect((await get(liveUrls({ ...source, password: 'nope' }, 101, ['m3u8'])[0])).status).toBe(403)
   })

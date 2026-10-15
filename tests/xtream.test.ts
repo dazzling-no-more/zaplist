@@ -49,11 +49,12 @@ describe('URLs', () => {
     expect(xmltvUrl(source)).toBe('http://example.com:8080/xmltv.php?username=demo&password=p%40ss%20word')
   })
 
-  it('prefers HLS and falls back to MPEG-TS, within the allowed formats', () => {
+  it('prefers MPEG-TS and falls back to HLS, within the allowed formats', () => {
     const base = 'http://example.com:8080/live/demo/p%40ss%20word/5'
-    expect(liveUrls(source, 5, ['m3u8', 'ts', 'rtmp'])).toEqual([`${base}.m3u8`, `${base}.ts`])
-    expect(liveUrls(source, 5, [])).toEqual([`${base}.m3u8`, `${base}.ts`])
+    expect(liveUrls(source, 5, ['m3u8', 'ts', 'rtmp'])).toEqual([`${base}.ts`, `${base}.m3u8`])
+    expect(liveUrls(source, 5, [])).toEqual([`${base}.ts`, `${base}.m3u8`])
     expect(liveUrls(source, 5, ['ts'])).toEqual([`${base}.ts`])
+    expect(liveUrls(source, 5, ['m3u8'])).toEqual([`${base}.m3u8`])
     expect(liveUrls(source, 5, ['rtmp'])).toEqual([`${base}.ts`])
   })
 })
