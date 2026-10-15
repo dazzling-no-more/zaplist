@@ -25,7 +25,8 @@ beforeAll(async () => {
       res.writeHead(302, { Location: '/cdn/master.m3u8' })
       res.end()
     } else if (req.url === '/cdn/master.m3u8') {
-      res.writeHead(200, { 'Content-Type': 'text/plain' }) // labelled wrongly: told by its content
+      // Labelled wrongly (told by its content), and a part when asked from byte 0 on, as the TV's player does.
+      res.writeHead(req.headers.range ? 206 : 200, { 'Content-Type': 'text/plain' })
       res.end('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nvariant/index.m3u8\n')
     } else if (req.url === '/cdn/variant/index.m3u8') {
       res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl' })
@@ -51,8 +52,9 @@ const addresses = (text: string) => text.split(/\r?\n/).map((line) => (line.star
 describe('proxy', () => {
   it('fetches a stream with its headers, and points its playlists back at itself', async () => {
     agents = []
-    const master = await (await fetch(through(`${origin}/live/channel.m3u8`))).text()
-    const [variant] = addresses(master)
+    const answer = await fetch(through(`${origin}/live/channel.m3u8`), { headers: { Range: 'bytes=0-' } })
+    expect(answer.status).toBe(200)
+    const [variant] = addresses(await answer.text())
     expect(variant).toBe(`/proxy?u=${encodeURIComponent(`${origin}/cdn/variant/index.m3u8`)}&h=${encodeURIComponent(HEADERS)}`)
 
     const media = await fetch(proxy + variant)

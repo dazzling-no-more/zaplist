@@ -35,11 +35,12 @@ export function proxy(url: string, headers: string, req: http.IncomingMessage, r
         res.writeHead(status, answer)
         res.end()
       }
-      // A playlist is told by its first bytes: servers label them in many ways.
+      // A playlist is told by its first bytes: servers label them in many ways. The TV's player asks
+      // for them from byte 0 on, which some servers answer as a part (206): it is the whole.
       response.once('data', (first: Buffer) => {
         response.removeListener('end', empty)
         response.pause()
-        if (status === 200 && /^\uFEFF?\s*#EXTM3U/.test(first.slice(0, 64).toString('utf8'))) return playlist(response, first, final, headers, res)
+        if ((status === 200 || status === 206) && /^\uFEFF?\s*#EXTM3U/.test(first.slice(0, 64).toString('utf8'))) return playlist(response, first, final, headers, res)
         res.writeHead(status, answer)
         res.write(first)
         response.pipe(res)

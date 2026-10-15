@@ -2,7 +2,7 @@ import type { ErrorData } from 'hls.js'
 import type Mpegts from 'mpegts.js'
 import { id as appId } from '../../appinfo.json'
 import { proxied } from '../data/http'
-import { deviceInfo, isWebOS } from '../platform/webos'
+import { isWebOS } from '../platform/webos'
 import { playWithSound } from './autoplay'
 import { subtitleKind, TRACK_AUDIO, TRACK_SUBTITLE } from './ebml'
 import { readTracks, trackLabel } from './matroska'
@@ -379,11 +379,12 @@ const SUBTITLE_POLL_MS = 1000
 
 /**
  * The remux and proxy engines need the app's service: on a TV with webOS 5 or newer, whose Node.js
- * runs it (webOS 4 has Node.js 0.12). There Matroska files go to the TV's player as they are.
+ * runs it (webOS 4 has Node.js 0.12; there Matroska files go to the TV's player as they are). Told
+ * by the web engine, Chromium 68 from webOS 5 on: the version the system reports is the firmware's.
  */
 export function remuxSupport(): boolean {
-  const major = parseInt(deviceInfo()?.platformVersion ?? '', 10)
-  return isWebOS() && !(major < 5)
+  const chromium = /Chrome\/(\d+)/.exec(navigator.userAgent)
+  return isWebOS() && !(chromium && Number(chromium[1]) < 68)
 }
 
 /** A warm-up of the service still going (warmService). */

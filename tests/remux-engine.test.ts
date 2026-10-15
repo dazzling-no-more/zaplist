@@ -4,8 +4,7 @@ import { SPU, VOBSUB_IDX } from './fixtures/vobsub'
 
 // The remux engine against a fake <video>, a fake webOS service bridge and a fake fetch that plays
 // both the IPTV server (the movie's first bytes) and the app's service (/info, /subs).
-const device = vi.hoisted(() => ({ platformVersion: undefined as string | undefined }))
-vi.mock('../src/platform/webos', () => ({ isWebOS: () => true, deviceInfo: () => device }))
+vi.mock('../src/platform/webos', () => ({ isWebOS: () => true }))
 vi.mock('../src/data/http', () => ({ proxied: (url: string) => url }))
 
 const { createEngine, remuxSupport, warmService } = await import('../src/player/engines')
@@ -204,12 +203,11 @@ describe('remux engine', () => {
 })
 
 describe('remuxSupport', () => {
-  it('leaves the service out on webOS 4, whose Node.js can’t run it', () => {
-    device.platformVersion = '4.9.0'
+  it('leaves the service out on webOS 4 (Chromium 53), whose Node.js can’t run it', () => {
+    const agent = (chromium: string) => `Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromium} Safari/537.36`
+    vi.stubGlobal('navigator', { userAgent: agent('53.0.2785.34') })
     expect(remuxSupport()).toBe(false)
-    device.platformVersion = '5.4.0'
-    expect(remuxSupport()).toBe(true)
-    device.platformVersion = undefined // not said: tried
+    vi.stubGlobal('navigator', { userAgent: agent('68.0.3440.106') }) // webOS 5, firmware 04.64.00
     expect(remuxSupport()).toBe(true)
   })
 })

@@ -134,11 +134,11 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
 ## Known limits
 
 - **Tested on one TV only.** Playback (4K HLS channels, MP4 and MKV movies, Opus audio through the
-  service, MKV subtitles, seeking and resuming) was tested on an LG OLED65GX (2020, webOS 5). DTS
-  audio, DVD subtitles, request headers, the early service start and the tracks kept for the next
-  episode were tested on the service's Node.js version (8.12) and against FFmpeg's output, not yet on
-  a TV. The rest was checked in desktop Chrome (dev server and the `file://` build) with keyboard and
-  simulated remote events. webOS 4.x and webOS 6 or newer haven't been tried.
+  service, DTS audio, MKV subtitles including DVD ones, streams that need a Referer, seeking and
+  resuming, the tracks kept for the next episode) was tested on an LG OLED65GX (2020, webOS 5), with
+  public samples where the provider had none. The rest was checked in desktop Chrome (dev server and
+  the `file://` build) with keyboard and simulated remote events. webOS 4.x and webOS 6 or newer
+  haven't been tried.
 - Request headers (`User-Agent`, `Referer`) from `#EXTVLCOPT`, `#KODIPROP` and `url|…` apply on the TV
   only (webOS 5 and newer, through the service): web apps can't set them, so in a desktop browser the
   streams are tried without. Other options are stored but not applied, and DRM (Widevine/PlayReady)
@@ -156,6 +156,9 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
   own DTS decoder (2022 models on). The service runs while such a movie plays, and for a minute from a
   movie's page or after playing; LG advises against services that run for long, which a review may
   question.
+- The service's Node.js 8 has OpenSSL 1.0.2, which some HTTPS servers with newer TLS settings refuse
+  (FFmpeg's sample server, for one). Movies and streams there fail where they need the service (Opus
+  or DTS audio, MKV subtitles, request headers); the TV's player itself still reaches them.
 - Subtitles inside MKV files, drawn by the app, need webOS 5 or newer like the service. ASS/SSA
   subtitles show as plain text at the bottom (no styling or positions); PGS and DVD pictures are placed
   for the Fit picture shape. The chosen subtitles and audio track stay while a movie restarts (after an
