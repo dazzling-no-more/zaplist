@@ -155,6 +155,38 @@ describe('remux engine', () => {
     engine.destroy()
   })
 
+  it('reads and streams a movie or a channel through the service and the user’s SOCKS5 proxy', async () => {
+    const via = 'socks5://zaplist:secret@203.0.113.10:18080'
+    const p = `&p=${encodeURIComponent(via)}`
+    const play = async (video: FakeVideo, engineName: 'remux' | 'proxy', url = MOVIE) => {
+      const engine = createEngine({ url, engine: engineName, via }, video as unknown as HTMLVideoElement)
+      const started = engine.start(0)
+      await until(() => video.src !== '')
+      video.dispatchEvent(new Event('playing'))
+      await started
+      return engine
+    }
+    head = movieHead('A_OPUS')
+    const remuxed = new FakeVideo()
+    const remux = await play(remuxed, 'remux')
+    expect(requests).toContain(`/proxy?u=MOVIE&h=${p}`) // the header read
+    expect(requests).toContain(`/info?u=MOVIE${p}&t=0`)
+    expect(remuxed.src).toBe(`${SERVICE}/remux?u=${encodeURIComponent(MOVIE)}${p}&t=0&a=2&s=3`)
+    remux.destroy()
+
+    head = movieHead('A_AC3') // the TV plays it as it is, still through the proxy
+    const direct = new FakeVideo()
+    const movie = await play(direct, 'remux')
+    expect(direct.src).toBe(`${SERVICE}/proxy?u=${encodeURIComponent(MOVIE)}&h=${p}`)
+    movie.destroy()
+
+    const CHANNEL = 'http://iptv.example/live/u/p/1.ts'
+    const live = new FakeVideo()
+    const channel = await play(live, 'proxy', CHANNEL)
+    expect(live.src).toBe(`${SERVICE}/proxy?u=${encodeURIComponent(CHANNEL)}&h=${p}`)
+    channel.destroy()
+  })
+
   it('plays the audio track the file marks as its default, which the TV doesn’t start on', async () => {
     head = movieHead('A_AC3', 'A_EAC3')
     const listed = () => [

@@ -3,7 +3,8 @@ import type { Subtitle } from './subtitles'
 
 /**
  * `remux`: the native player fed by the app's service, for movies with audio the TV can't decode;
- * `proxy`: the native player fetching through the service, for streams that need request headers.
+ * `proxy`: the native player fetching through the service, for streams that need request headers or
+ * the user's SOCKS5 proxy.
  */
 export type EngineName = 'native' | 'hls.js' | 'mpegts.js' | 'remux' | 'proxy'
 export type PlaybackErrorCode = 'network' | 'format' | 'timeout'
@@ -114,6 +115,8 @@ export function withHeaders(urls: string[], options: Record<string, string> = {}
 export interface Attempt {
   url: string
   engine: EngineName
+  /** The SOCKS5 proxy (socks5://user:password@host:port) the service fetches the stream through. */
+  via?: string
 }
 
 /**
@@ -123,14 +126,22 @@ export interface Attempt {
  * play MPEG-TS (desktop browsers, which take seconds to fail), it goes last for those URLs. With
  * `remux` (the TV, which has the app's service), Matroska files play through the remux engine, and
  * streams that need request headers through the service's proxy first, both with the native player.
+ *
+ * With `proxy` (the user's SOCKS5 proxy, also on the TV only), each URL is tried once more through it
+ * after it failed directly, before the next URL: when a server can't be reached from the TV's
+ * connection, the URL's other formats are on the same server.
  */
-export function playbackAttempts(urls: string[], mse: { hls: boolean; mpegts: boolean }, nativeMpegTs = true, remux = false): Attempt[] {
+export function playbackAttempts(urls: string[], mse: { hls: boolean; mpegts: boolean }, nativeMpegTs = true, remux = false, proxy?: string): Attempt[] {
   const attempts: Attempt[] = []
   for (const full of urls) {
     const { url, headers } = splitHeaders(full)
+    const viaProxy = () => {
+      if (remux && proxy) attempts.push({ url: full, engine: isMatroska(url) ? 'remux' : 'proxy', via: proxy })
+    }
     // The remux engine sends a movie's request headers itself, through the service.
     if (remux && isMatroska(url)) {
       attempts.push({ url: full, engine: 'remux' })
+      viaProxy()
       continue
     }
     // The other engines can't send the headers; the stream may still play without them.
@@ -142,8 +153,15 @@ export function playbackAttempts(urls: string[], mse: { hls: boolean; mpegts: bo
     if (tsLike && mse.mpegts) attempts.push({ url, engine: 'mpegts.js' })
     if ((kind === 'hls' || kind === 'unknown') && mse.hls) attempts.push({ url, engine: 'hls.js' })
     if (nativeLast) attempts.push({ url, engine: 'native' })
+    viaProxy()
   }
   return attempts
+}
+
+/** The address of a SOCKS5 proxy, user name and password included, as the service takes it. */
+export function socksUrl({ host, port, user, password }: { host: string; port: number; user?: string; password?: string }): string {
+  const login = user ? `${encodeURIComponent(user)}:${encodeURIComponent(password ?? '')}@` : ''
+  return `socks5://${login}${host}:${port}`
 }
 
 export interface Failure {

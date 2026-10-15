@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { chosenTrack, playbackAttempts, PlaybackError, splitHeaders, streamKind, summarizeFailures, withHeaders, type Attempt, type Engine, type TrackChoices } from '../src/player/streams'
+import { chosenTrack, playbackAttempts, PlaybackError, socksUrl, splitHeaders, streamKind, summarizeFailures, withHeaders, type Attempt, type Engine, type TrackChoices } from '../src/player/streams'
 
 // Fake engines: each attempt's outcome comes from `outcomes` (keyed by engine name), in order.
 const outcomes: Record<string, (() => Promise<void>)[]> = {}
@@ -117,6 +117,34 @@ describe('playbackAttempts', () => {
       { url: 'a.m3u8', engine: 'native' },
       { url: 'a.m3u8', engine: 'hls.js' },
     ])
+  })
+})
+
+describe('playbackAttempts with a SOCKS5 proxy', () => {
+  const all = { hls: true, mpegts: true }
+  const proxy = 'socks5://u:p@203.0.113.10:18080'
+
+  it('tries each URL once more through the proxy after it failed directly, before the next URL', () => {
+    expect(playbackAttempts(['a.ts', 'a.m3u8', 'm.mkv'], all, true, true, proxy)).toEqual([
+      { url: 'a.ts', engine: 'native' },
+      { url: 'a.ts', engine: 'mpegts.js' },
+      { url: 'a.ts', engine: 'proxy', via: proxy },
+      { url: 'a.m3u8', engine: 'native' },
+      { url: 'a.m3u8', engine: 'hls.js' },
+      { url: 'a.m3u8', engine: 'proxy', via: proxy },
+      { url: 'm.mkv', engine: 'remux' },
+      { url: 'm.mkv', engine: 'remux', via: proxy },
+    ])
+  })
+
+  it('keeps a stream’s request headers through the proxy, and needs the TV’s service', () => {
+    expect(playbackAttempts(['a.m3u8|Referer=x'], all, true, true, proxy).filter((a) => a.via)).toEqual([{ url: 'a.m3u8|Referer=x', engine: 'proxy', via: proxy }])
+    expect(playbackAttempts(['a.ts'], all, false, false, proxy).some((a) => a.via)).toBe(false)
+  })
+
+  it('writes the proxy’s address with its login', () => {
+    expect(socksUrl({ host: '203.0.113.10', port: 18080, user: 'zap list', password: 'p@ss:w/rd' })).toBe('socks5://zap%20list:p%40ss%3Aw%2Frd@203.0.113.10:18080')
+    expect(socksUrl({ host: 'proxy.example', port: 1080 })).toBe('socks5://proxy.example:1080')
   })
 })
 

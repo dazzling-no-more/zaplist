@@ -526,6 +526,20 @@ class ServiceEngine extends NativeEngine {
   /** The service's address, once it runs. */
   protected base = ''
 
+  /** `via`: the SOCKS5 proxy the service fetches the stream through (Attempt.via). */
+  constructor(
+    video: HTMLVideoElement,
+    url: string,
+    protected readonly via?: string,
+  ) {
+    super(video, url)
+  }
+
+  /** The proxy as the service's addresses take it; empty without one. */
+  protected viaParam(): string {
+    return this.via ? `&p=${encodeURIComponent(this.via)}` : ''
+  }
+
   /** Starts the service once; it stays up (an open subscription) until destroy. */
   protected async connect(): Promise<void> {
     if (!this.base) this.base = await Promise.race([this.startService(), this.cancellation.promise])
@@ -598,9 +612,10 @@ class RemuxEngine extends ServiceEngine {
   async start(position = 0, choices: TrackChoices = {}): Promise<void> {
     stopWarming()
     const { url, headers } = splitHeaders(this.url)
-    // A movie that needs request headers is read through the service, which sends them.
-    if (headers) await this.connect()
-    const head = await Promise.race([readHead(headers ? this.proxyUrl() : url), this.cancellation.promise])
+    // A movie that needs request headers, or the user's proxy, is read through the service.
+    const throughService = !!headers || !!this.via
+    if (throughService) await this.connect()
+    const head = await Promise.race([readHead(throughService ? this.proxyUrl() : url), this.cancellation.promise])
     const tracks = head && readTracks(head)
     if (tracks) {
       this.audios = tracks.filter((t) => t.type === TRACK_AUDIO)
@@ -630,11 +645,11 @@ class RemuxEngine extends ServiceEngine {
     }
   }
 
-  /** The TV's player plays the file as it is (through the service's proxy if it needs request headers). */
+  /** The TV's player plays the file as it is (through the service's proxy for request headers or the user's proxy). */
   private async playItself(position: number, choices: TrackChoices): Promise<void> {
     const labels = choices.labels || {}
     const audio = { audio: choices.audio, labels: { audio: labels.audio } }
-    if (splitHeaders(this.url).headers) {
+    if (splitHeaders(this.url).headers || this.via) {
       await this.load(this.proxyUrl())
       resume(this, position, audio)
     } else await super.start(position, audio)
@@ -645,16 +660,16 @@ class RemuxEngine extends ServiceEngine {
     if (preferred > 0 && listed.length === this.audios.length && chosenTrack(listed, choices.audio, labels.audio) === undefined) this.setAudioTrack(preferred)
   }
 
-  /** The movie fetched with its request headers by the service (once connected). */
+  /** The movie fetched by the service with its request headers, through the user's proxy if any (once connected). */
   private proxyUrl(): string {
     const { url, headers } = splitHeaders(this.url)
-    return `${this.base}/proxy?u=${encodeURIComponent(url)}&h=${encodeURIComponent(headers)}`
+    return `${this.base}/proxy?u=${encodeURIComponent(url)}&h=${encodeURIComponent(headers)}${this.viaParam()}`
   }
 
-  /** The movie and its request headers as /info and /remux take them. */
+  /** The movie, its request headers and the user's proxy as /info and /remux take them. */
   private source(): string {
     const { url, headers } = splitHeaders(this.url)
-    return serviceSource(url, headers)
+    return serviceSource(url, headers) + this.viaParam()
   }
 
   /** Plays a new stream from the cue at or before `position`. */
@@ -827,7 +842,8 @@ class RemuxEngine extends ServiceEngine {
 
 /**
  * Streams that need request headers web code can't set (a playlist's User-Agent or Referer, after
- * the URL's `|`): the native player fetches them through the app's service, which sends them.
+ * the URL's `|`), or the user's SOCKS5 proxy: the native player fetches them through the app's
+ * service, which sends the headers and goes through the proxy.
  */
 class ProxyEngine extends ServiceEngine {
   name: EngineName = 'proxy'
@@ -835,7 +851,7 @@ class ProxyEngine extends ServiceEngine {
   async start(position = 0, choices: TrackChoices = {}): Promise<void> {
     const { url, headers } = splitHeaders(this.url)
     await this.connect()
-    await this.load(`${this.base}/proxy?u=${encodeURIComponent(url)}&h=${encodeURIComponent(headers)}`)
+    await this.load(`${this.base}/proxy?u=${encodeURIComponent(url)}&h=${encodeURIComponent(headers)}${this.viaParam()}`)
     resume(this, position, choices)
   }
 }
@@ -843,9 +859,9 @@ class ProxyEngine extends ServiceEngine {
 export function createEngine(attempt: Attempt, video: HTMLVideoElement): Engine {
   switch (attempt.engine) {
     case 'remux':
-      return new RemuxEngine(video, attempt.url)
+      return new RemuxEngine(video, attempt.url, attempt.via)
     case 'proxy':
-      return new ProxyEngine(video, attempt.url)
+      return new ProxyEngine(video, attempt.url, attempt.via)
     case 'native':
       return new NativeEngine(video, attempt.url)
     case 'hls.js':

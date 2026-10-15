@@ -61,6 +61,28 @@ describe('parental control settings', () => {
   })
 })
 
+describe('proxy settings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    failLocal = false
+    db.putSecretSettings.mockResolvedValue(undefined)
+  })
+
+  it('keeps the proxy and its login in encrypted storage, never in localStorage', async () => {
+    const prefs = await load()
+    const proxy = { host: '203.0.113.10', port: 18080, user: 'zaplist', password: 'secret' }
+    prefs.updatePrefs({ proxy })
+    expect(db.putSecretSettings).toHaveBeenCalledWith({ pin: undefined, epgUrl: undefined, proxy })
+    expect(stored[KEY]).not.toContain('secret')
+    expect(stored[KEY]).not.toContain('203.0.113.10')
+
+    const restarted = await load(JSON.parse(stored[KEY]))
+    db.getSecretSettings.mockResolvedValue({ proxy })
+    await restarted.loadSecretPrefs()
+    expect(restarted.getPrefs().proxy).toEqual(proxy)
+  })
+})
+
 describe('moveFavorite', () => {
   it('moves past the next favorite on screen, leaving hidden ones where they are', async () => {
     const prefs = await load({ favorites: ['a', 'locked', 'b', 'c'] })

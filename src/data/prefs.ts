@@ -4,9 +4,17 @@ import { getSecretSettings, putSecretSettings } from './db'
 export const ASPECTS = ['fit', 'zoom', 'fill', '16:9', '4:3'] as const
 export type Aspect = (typeof ASPECTS)[number]
 
+/** A SOCKS5 proxy for streams the TV's own connection can't reach. */
+export interface ProxySettings {
+  host: string
+  port: number
+  user?: string
+  password?: string
+}
+
 /**
- * Small user settings, kept in localStorage except the secrets (PIN, guide URL), which are stored
- * encrypted in IndexedDB and read by `loadSecretPrefs`. Playlists and the guide live in IndexedDB.
+ * Small user settings, kept in localStorage except the secrets (PIN, guide URL, proxy), which are
+ * stored encrypted in IndexedDB and read by `loadSecretPrefs`. Playlists and the guide live in IndexedDB.
  */
 export interface Prefs {
   /** Channel ids in the user's order. */
@@ -30,6 +38,8 @@ export interface Prefs {
   watchlist: string[]
   /** Categories left out of every list (not parental control: no PIN undoes it, Settings does). */
   hiddenCategories: string[]
+  /** Streams that fail directly are tried again through it (on the TV, by the app's service). */
+  proxy?: ProxySettings
 }
 
 export const MAX_RECENTS = 20
@@ -51,12 +61,12 @@ const listeners = new Set<() => void>()
 
 export const getPrefs = (): Prefs => prefs
 
-/** Settings that can grant access (a guide URL may carry a login): never written to localStorage. */
-type Secrets = Pick<Prefs, 'pin' | 'epgUrl'>
-const secretsOf = ({ pin, epgUrl }: Prefs): Secrets => ({ pin, epgUrl })
+/** Settings that can grant access (a guide URL may carry a login, a proxy has one): never written to localStorage. */
+type Secrets = Pick<Prefs, 'pin' | 'epgUrl' | 'proxy'>
+const secretsOf = ({ pin, epgUrl, proxy }: Prefs): Secrets => ({ pin, epgUrl, proxy })
 
 function writeLocal(value: Prefs): void {
-  const { pin: _pin, epgUrl: _epgUrl, ...rest } = value
+  const { pin: _pin, epgUrl: _epgUrl, proxy: _proxy, ...rest } = value
   localStorage.setItem(KEY, JSON.stringify(rest))
 }
 
@@ -75,7 +85,7 @@ type ParentalPrefs = Pick<Prefs, 'pin' | 'lockedCategories'>
 export function updatePrefs(patch: Partial<Omit<Prefs, keyof ParentalPrefs>>): void {
   prefs = { ...prefs, ...patch }
   saveLocal()
-  if ('epgUrl' in patch) void putSecretSettings(secretsOf(prefs)).catch(() => undefined)
+  if ('epgUrl' in patch || 'proxy' in patch) void putSecretSettings(secretsOf(prefs)).catch(() => undefined)
   listeners.forEach((listener) => listener())
 }
 
@@ -98,10 +108,10 @@ export async function saveParental(patch: Partial<ParentalPrefs>): Promise<void>
   listeners.forEach((listener) => listener())
 }
 
-/** Reads the PIN and guide URL from encrypted storage, moving them there from localStorage (older versions). */
+/** Reads the PIN, guide URL and proxy from encrypted storage, moving them there from localStorage (older versions). */
 export async function loadSecretPrefs(): Promise<void> {
   const stored = await getSecretSettings<Secrets>()
-  if (stored) prefs = { ...prefs, pin: stored.pin, epgUrl: stored.epgUrl }
+  if (stored) prefs = { ...prefs, pin: stored.pin, epgUrl: stored.epgUrl, proxy: stored.proxy }
   else if (prefs.pin !== undefined || prefs.epgUrl !== undefined) {
     await putSecretSettings(secretsOf(prefs))
     saveLocal()

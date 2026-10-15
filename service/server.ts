@@ -12,6 +12,7 @@ import { info, Job, remux } from './remux'
 //   (/info and /remux also take &h=<headers, Name=value&…>: request headers the movie needs)
 //   /subs                                          JSON { cues }: subtitle cues of /remux read since the last call
 //   /proxy?u=<stream URL>&h=<headers, Name=value&…> the stream fetched with those headers
+//   (all of them also take &p=<socks5://user:password@host:port>: a SOCKS5 proxy to fetch through)
 // /info and /remux stop the stream before them (a seek or another movie): one connection to the IPTV server.
 // Every path starts with /<TOKEN>.
 
@@ -62,7 +63,8 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse): void {
   const pathname = path.slice(TOKEN.length + 1)
   if (pathname === '/subs') return send(res, 200, { cues: current ? current.takeCues() : [] })
   const url = query.get('u')
-  if (pathname === '/proxy' && url) return proxy(`/${TOKEN}`, url, query.get('h') || '', req, res)
+  const via = query.get('p') || undefined
+  if (pathname === '/proxy' && url) return proxy(`/${TOKEN}`, url, query.get('h') || '', via, req, res)
   if ((pathname !== '/info' && pathname !== '/remux') || !url) {
     res.writeHead(404)
     res.end()
@@ -78,7 +80,7 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse): void {
   stopPlayback()
   const headers: Record<string, string> = {}
   new URLSearchParams(query.get('h') || '').forEach((value, name) => (headers[name] = value))
-  const job = (current = new Job(headers))
+  const job = (current = new Job(headers, via))
   res.on('close', () => job.stop())
   const start = Number(query.get('t')) || 0
   if (pathname === '/info') {

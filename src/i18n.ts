@@ -75,6 +75,7 @@ const en = {
   'settings.categories': 'Categories',
   'settings.guide': 'TV guide',
   'settings.parental': 'Parental control',
+  'settings.proxy': 'Proxy',
   'settings.about': 'About',
 
   'categories.detail': 'Hidden categories leave the channel lists, the movies and series, the guide and search. OK hides or shows one.',
@@ -218,6 +219,19 @@ const en = {
   'guideSettings.hours': '{hours} hours',
   'guideSettings.earlier': '−30 min',
   'guideSettings.later': '+30 min',
+
+  'proxy.intro':
+    'A channel or movie that can’t be played over the TV’s own connection (a network that blocks your provider’s stream servers) is tried again through this SOCKS5 proxy. Streams that play directly don’t use it.',
+  'proxy.unsupported': 'The proxy works on LG TVs with webOS 5 or newer only.',
+  'proxy.host': 'Proxy address',
+  'proxy.port': 'Port',
+  'proxy.user': 'User name (optional)',
+  'proxy.password': 'Password',
+  'proxy.save': 'Save',
+  'proxy.remove': 'Remove proxy',
+  'proxy.saved': 'Saved. It is used for streams that fail directly.',
+  'proxy.removed': 'Proxy removed.',
+  'proxy.invalid': 'Enter the proxy’s address and a port between 1 and 65535.',
 
   'about.version': 'App',
   'about.model': 'TV model',

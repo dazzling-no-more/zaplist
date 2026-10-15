@@ -70,8 +70,14 @@ export class Job {
   private reader?: Reader
   private cues: SubtitleCue[] = []
 
-  /** `headers`: request headers the movie needs (its playlist's User-Agent or Referer). */
-  constructor(private readonly headers: Record<string, string> = {}) {}
+  /**
+   * `headers`: request headers the movie needs (its playlist's User-Agent or Referer); `via`: the
+   * SOCKS5 proxy to fetch it through (one the user set, for servers the TV's connection can't reach).
+   */
+  constructor(
+    private readonly headers: Record<string, string> = {},
+    private readonly via?: string,
+  ) {}
 
   addCues(cues: SubtitleCue[]): void {
     this.cues = this.cues.concat(cues)
@@ -89,7 +95,7 @@ export class Job {
   async open(url: string, from: number): Promise<Reader> {
     if (this.reader) this.reader.destroy()
     this.reader = undefined
-    const reader = new Reader(await get(url, from, this.headers), from)
+    const reader = new Reader(await get(url, from, this.headers, this.via), from)
     if (this.closed) reader.destroy()
     else this.reader = reader
     return reader

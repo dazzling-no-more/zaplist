@@ -253,10 +253,12 @@ reviewers too (in the appendix, or the submission's notes): the TV's player can'
 (nor DTS, on LG's TVs of 2020 and 2021) or show the subtitles inside MKV files, so for those movies
 the service streams the file to the player with the audio turned into PCM and reads the subtitles for
 the app to draw. It also fetches the live streams whose playlist asks for a User-Agent or Referer,
-which web apps can't send. It starts when an MKV movie's page opens (to read the movie's header before
-Play) or when such a movie or stream plays, runs while it plays and for a minute after, listens on the
-TV's loopback address (127.0.0.1) only, and opens no connection but those to the stream's own server.
-The test playlist has no such movie or stream, so the reviewers won't see it run.
+which web apps can't send, and, when the user has set a SOCKS5 proxy in Settings > Proxy, the streams
+that failed over the TV's own connection, through that proxy. It starts when an MKV movie's page
+opens (to read the movie's header before Play) or when such a movie or stream plays, runs while it
+plays and for a minute after, listens on the TV's loopback address (127.0.0.1) only, and opens no
+connection but those to the stream's own server or the user's proxy. The test playlist has no such
+movie or stream and no proxy is set, so the reviewers won't see it run.
 
 ## Sources
 

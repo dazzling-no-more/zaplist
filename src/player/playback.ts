@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react'
+import { getPrefs } from '../data/prefs'
 import { diagnostics, recordError } from './diagnostics'
 import { createEngine, mseSupport, nativePlaysMpegTs, releaseVideo, remuxSupport } from './engines'
-import { playbackAttempts, PlaybackError, summarizeFailures, type Engine, type Failure, type TrackChoices, type TrackLabels } from './streams'
+import { playbackAttempts, PlaybackError, socksUrl, summarizeFailures, type Engine, type Failure, type TrackChoices, type TrackLabels } from './streams'
 
 /** Waits before each retry of a failed stream; after the last one playback gives up. */
 export const RETRY_DELAYS_MS = [1000, 2000, 4000]
@@ -127,7 +128,8 @@ export class Playback {
   private async load(token: number): Promise<void> {
     this.set({ state: 'loading' })
     const failures: Failure[] = []
-    for (const attempt of playbackAttempts(this.urls, mseSupport(), nativePlaysMpegTs(), remuxSupport())) {
+    const proxy = getPrefs().proxy
+    for (const attempt of playbackAttempts(this.urls, mseSupport(), nativePlaysMpegTs(), remuxSupport(), proxy && socksUrl(proxy))) {
       if (token !== this.token) return
       const engine = createEngine(attempt, this.video)
       this.starting = engine

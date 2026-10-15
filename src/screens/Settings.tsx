@@ -8,11 +8,12 @@ import { AboutSection } from './settings/About'
 import { CategoriesSection } from './settings/Categories'
 import { GuideSection } from './settings/Guide'
 import { ParentalSection } from './settings/Parental'
+import { ProxySection } from './settings/Proxy'
 import { SourcesSection } from './settings/Sources'
 
-const SECTIONS = ['sources', 'categories', 'guide', 'parental', 'about'] as const
+const SECTIONS = ['sources', 'categories', 'guide', 'parental', 'proxy', 'about'] as const
 type Section = (typeof SECTIONS)[number]
-const ICONS: Record<Section, IconName> = { sources: 'playlist', categories: 'folder', guide: 'guide', parental: 'lock', about: 'info' }
+const ICONS: Record<Section, IconName> = { sources: 'playlist', categories: 'folder', guide: 'guide', parental: 'lock', proxy: 'globe', about: 'info' }
 
 export function SettingsScreen({ entry }: ScreenProps<'settings'>) {
   const [section, setSection] = useState<Section>((entry.memo.section as Section) ?? 'sources')
@@ -37,6 +38,7 @@ export function SettingsScreen({ entry }: ScreenProps<'settings'>) {
       {section === 'categories' && <CategoriesSection />}
       {section === 'guide' && <GuideSection />}
       {section === 'parental' && <ParentalSection />}
+      {section === 'proxy' && <ProxySection />}
       {section === 'about' && <AboutSection />}
     </div>
   )

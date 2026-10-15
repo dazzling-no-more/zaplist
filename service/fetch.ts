@@ -1,6 +1,9 @@
 import * as http from 'http'
 import * as https from 'https'
+import type * as net from 'net'
+import * as tls from 'tls'
 import { URL } from 'url' // not a global in Node 8
+import { socksConnect } from './socks'
 
 const USER_AGENT = 'Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36'
 const MAX_REDIRECTS = 5
@@ -12,36 +15,39 @@ let remembered = 0
 
 /**
  * GETs `url` from byte `from` on with `headers` (a movie's own User-Agent or Referer), following
- * redirects; rejects unless the server sends those bytes. Later requests for `url` go straight to
- * where it redirected (a round trip less for each seek), and through `url` again if that fails.
+ * redirects; rejects unless the server sends those bytes. `via`: a SOCKS5 proxy to go through. Later
+ * requests for `url` go straight to where it redirected (a round trip less for each seek), and
+ * through `url` again if that fails.
  */
-export async function get(url: string, from = 0, headers: Record<string, string> = {}): Promise<http.IncomingMessage> {
-  const target = redirected[url]
+export async function get(url: string, from = 0, headers: Record<string, string> = {}, via?: string): Promise<http.IncomingMessage> {
+  // Apart for each proxy: a redirect the server gave the proxy's address may not work from the TV's.
+  const key = `${via || ''} ${url}`
+  const target = redirected[key]
   if (target) {
     try {
-      return await request(target, from, headers, 0)
+      return await request(target, from, headers, 0, via)
     } catch {
-      delete redirected[url]
+      delete redirected[key]
     }
   }
-  return request(url, from, headers, MAX_REDIRECTS, (final) => {
+  return request(url, from, headers, MAX_REDIRECTS, via, (final) => {
     if (final === url) return
     if (++remembered > MAX_REMEMBERED) {
       redirected = {}
       remembered = 1
     }
-    redirected[url] = final
+    redirected[key] = final
   })
 }
 
-function request(url: string, from: number, extra: Record<string, string>, redirects: number, onFinal?: (url: string) => void): Promise<http.IncomingMessage> {
+function request(url: string, from: number, extra: Record<string, string>, redirects: number, via?: string, onFinal?: (url: string) => void): Promise<http.IncomingMessage> {
   const headers: Record<string, string> = Object.assign({ 'User-Agent': USER_AGENT }, extra)
   if (from > 0) headers.Range = `bytes=${from}-`
-  return send(url, headers).then((response) => {
+  return send(url, headers, via).then((response) => {
     const status = response.statusCode || 0
     if (status >= 300 && status < 400 && response.headers.location && redirects > 0) {
       response.resume()
-      return request(new URL(response.headers.location, url).toString(), from, extra, redirects - 1, onFinal)
+      return request(new URL(response.headers.location, url).toString(), from, extra, redirects - 1, via, onFinal)
     }
     if (status === 206 || (status === 200 && from === 0)) {
       if (onFinal) onFinal(url)
@@ -55,12 +61,12 @@ function request(url: string, from: number, extra: Record<string, string>, redir
 }
 
 /**
- * GETs `url` with `headers` (a stream's own User-Agent or Referer), following redirects; resolves
- * with the last answer, whatever its status, and its address.
+ * GETs `url` with `headers` (a stream's own User-Agent or Referer), following redirects, through the
+ * SOCKS5 proxy `via` if given; resolves with the last answer, whatever its status, and its address.
  */
-export async function open(url: string, headers: Record<string, string>): Promise<{ response: http.IncomingMessage; url: string }> {
+export async function open(url: string, headers: Record<string, string>, via?: string): Promise<{ response: http.IncomingMessage; url: string }> {
   for (let redirects = MAX_REDIRECTS; ; redirects--) {
-    const response = await send(url, Object.assign({ 'User-Agent': USER_AGENT }, headers))
+    const response = await send(url, Object.assign({ 'User-Agent': USER_AGENT }, headers), via)
     const status = response.statusCode || 0
     const location = response.headers.location
     if (status < 300 || status >= 400 || !location || !redirects) return { response, url }
@@ -69,13 +75,22 @@ export async function open(url: string, headers: Record<string, string>): Promis
   }
 }
 
-/** One GET; the answer whatever its status. */
-function send(url: string, headers: Record<string, string>): Promise<http.IncomingMessage> {
+/** One GET, through the SOCKS5 proxy `via` if given; the answer whatever its status. */
+function send(url: string, headers: Record<string, string>, via?: string): Promise<http.IncomingMessage> {
   return new Promise((resolve, reject) => {
     const target = new URL(url)
-    // Node 8 (webOS 5 and 6) takes no URL and options together.
-    const options = { protocol: target.protocol, hostname: target.hostname, port: target.port, path: target.pathname + target.search, headers }
-    const sent = (target.protocol === 'https:' ? https : http).get(options, resolve)
-    sent.on('error', reject)
+    const secure = target.protocol === 'https:'
+    const get = (connection?: net.Socket) => {
+      // Node 8 (webOS 5 and 6) takes no URL and options together.
+      const options: https.RequestOptions = { protocol: target.protocol, hostname: target.hostname, port: target.port, path: target.pathname + target.search, headers }
+      if (connection) options.createConnection = () => connection
+      const sent = (secure ? https : http).get(options, resolve)
+      sent.on('error', reject)
+    }
+    if (!via) return get()
+    socksConnect(via, target.hostname, Number(target.port) || (secure ? 443 : 80)).then(
+      (socket) => get(secure ? tls.connect({ socket, servername: target.hostname }) : socket),
+      reject,
+    )
   })
 }

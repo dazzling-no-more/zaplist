@@ -31,6 +31,9 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
   when the app starts. Streams whose playlist asks for a User-Agent or Referer (`#EXTVLCOPT`, Kodi's
   `url|User-Agent=…` and `#KODIPROP` stream headers), which web apps can't send, are fetched through
   the app's service with them on the TV.
+- **Proxy**: a SOCKS5 proxy (Settings > Proxy) for networks that block the provider's stream servers. A
+  channel or movie that fails over the TV's own connection is tried again through it, by the app's
+  service; streams that play directly don't use it.
 - **Movies and series**: from Xtream Codes servers (VOD and series lists, episodes and details on
   request) and from M3U playlists (`/movie/` and `/series/` links, video files, `S01E02` names grouped
   into series). Poster grids by category, details, seasons and episodes; the player seeks, resumes where
@@ -169,6 +172,10 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
 - The service's Node.js 8 has OpenSSL 1.0.2, which some HTTPS servers with newer TLS settings refuse
   (FFmpeg's sample server, for one). Movies and streams there fail where they need the service (Opus
   or DTS audio, MKV subtitles, request headers); the TV's player itself still reaches them.
+- The proxy is SOCKS5 only (no HTTP proxies), works on webOS 5 and newer through the service, and is
+  used only once a stream has failed directly, so those channels start a few seconds later. SOCKS5
+  doesn't encrypt: it gets past networks that block servers by address, not ones that inspect the
+  traffic. Every stream it carries goes through the proxy's server and counts against its data.
 - Subtitles inside MKV files, drawn by the app, need webOS 5 or newer like the service. ASS/SSA
   subtitles show as plain text at the bottom (no styling or positions); PGS and DVD pictures are placed
   for the Fit picture shape. The chosen subtitles and audio track stay while a movie restarts (after an
