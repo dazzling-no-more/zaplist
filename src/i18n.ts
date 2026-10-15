@@ -204,6 +204,7 @@ const en = {
   'about.model': 'TV model',
   'about.notWebOS': 'Not a webOS TV',
   'about.webosVersion': 'webOS version',
+  'about.firmware': 'Firmware',
   'about.browser': 'Web engine',
   'about.playback': 'Playback engine',
   'about.notYet': 'Nothing played yet',

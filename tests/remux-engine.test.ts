@@ -32,13 +32,17 @@ class FakeVideo extends EventTarget {
   load(): void {}
 }
 
-/** The start of a Matroska movie: video, one audio track of `audioCodec`, an English text subtitle track. */
-function movieHead(audioCodec: string): Uint8Array<ArrayBuffer> {
+/**
+ * The start of a Matroska movie: video, one audio track of `audioCodec`, an English text subtitle
+ * track; with `defaultAudio`, a second audio track of that codec (track 4) marked as the default.
+ */
+function movieHead(audioCodec: string, defaultAudio?: string): Uint8Array<ArrayBuffer> {
   const text = (id: number, value: string) => element(id, [Buffer.from(value)])
   const tracks = element(ID.Tracks, [
     element(ID.TrackEntry, [uintElement(ID.TrackNumber, 1), uintElement(ID.TrackType, 1), text(ID.CodecID, 'V_AV1')]),
-    element(ID.TrackEntry, [uintElement(ID.TrackNumber, 2), uintElement(ID.TrackType, 2), text(ID.CodecID, audioCodec)]),
+    element(ID.TrackEntry, [uintElement(ID.TrackNumber, 2), uintElement(ID.TrackType, 2), text(ID.CodecID, audioCodec)].concat(defaultAudio ? [uintElement(ID.FlagDefault, 0)] : [])),
     element(ID.TrackEntry, [uintElement(ID.TrackNumber, 3), uintElement(ID.TrackType, 17), text(ID.CodecID, 'S_TEXT/UTF8')]),
+    ...(defaultAudio ? [element(ID.TrackEntry, [uintElement(ID.TrackNumber, 4), uintElement(ID.TrackType, 2), text(ID.CodecID, defaultAudio)])] : []),
   ])
   const segment = Buffer.from([0x18, 0x53, 0x80, 0x67, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])
   return new Uint8Array(Buffer.concat([element(ID.EBML, [text(0x4282, 'matroska')]), segment, tracks, Buffer.from([0x1f, 0x43, 0xb6, 0x75, 0x80])]))
@@ -119,6 +123,25 @@ describe('remux engine', () => {
     video.currentTime = 7 // the TV's player counts from the start of the stream
     expect(engine.currentTime()).toBe(97)
     engine.destroy()
+  })
+
+  it('plays the audio track the file marks as its default, which the TV doesn’t start on', async () => {
+    head = movieHead('A_AC3', 'A_EAC3')
+    const listed = () => [
+      { label: '', language: 'ro', enabled: true },
+      { label: '', language: 'ro', enabled: false },
+    ]
+    const video = new FakeVideo()
+    const tracks = listed()
+    Object.assign(video, { audioTracks: Object.assign({ length: 2 }, tracks) })
+    expect((await start(video)).name).toBe('native')
+    expect(tracks.map((t) => t.enabled)).toEqual([false, true])
+
+    const chosen = new FakeVideo() // the viewer's choice stays
+    const kept = listed()
+    Object.assign(chosen, { audioTracks: Object.assign({ length: 2 }, kept) })
+    await start(chosen, 0, { audio: 0 })
+    expect(kept.map((t) => t.enabled)).toEqual([true, false])
   })
 
   it('streams a DTS movie through the service too', async () => {

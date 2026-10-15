@@ -161,6 +161,15 @@ describe('summarizeFailures', () => {
     expect(error.detail).toBe('mpegts.js: HttpStatusCodeInvalid (HTTP 403) · hls.js: manifestParsingError · native: format')
   })
 
+  it('passes over the proxy, which the TV’s player plays: a refused stream is a network error', () => {
+    const error = summarizeFailures([
+      { engine: 'proxy', error: new PlaybackError('format', 'MediaError 4') },
+      { engine: 'native', error: new PlaybackError('format', 'MediaError 4') },
+      { engine: 'hls.js', error: new PlaybackError('network', 'manifestLoadError (HTTP 403)') },
+    ])
+    expect(error.code).toBe('network')
+  })
+
   it('uses the native error when it was the only engine', () => {
     expect(summarizeFailures([{ engine: 'native', error: new PlaybackError('network', 'x') }])).toMatchObject({ code: 'network', detail: 'native: x' })
     expect(summarizeFailures([]).code).toBe('format')

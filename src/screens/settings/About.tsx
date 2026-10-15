@@ -5,7 +5,7 @@ import { library, useLibrary } from '../../data/library'
 import { parsingMode } from '../../data/worker'
 import { t } from '../../i18n'
 import { storageUse, type StorageUse } from '../../platform/storage'
-import { deviceInfo, isWebOS } from '../../platform/webos'
+import { deviceInfo, isWebOS, webOSVersion } from '../../platform/webos'
 import { diagnostics } from '../../player/diagnostics'
 import { Button } from '../../ui/Button'
 import { formatTime } from '../../ui/clock'
@@ -20,17 +20,20 @@ export function AboutSection() {
   const [confirm, setConfirm] = useState(false)
   const [clearing, setClearing] = useState<string>()
   const [storage, setStorage] = useState<StorageUse>()
+  const [webOS, setWebOS] = useState<string>()
   const device = deviceInfo()
   const measure = () => storageUse().then(setStorage, () => undefined)
   useEffect(() => {
     void measure()
+    void webOSVersion().then(setWebOS)
   }, [])
   const engine = /Chrome\/(\d+)/.exec(navigator.userAgent)?.[1]
 
   const rows: [string, string][] = [
     [t('about.version'), `${appinfo.title} ${appinfo.version}`],
     [t('about.model'), device?.modelName ?? (isWebOS() ? '—' : t('about.notWebOS'))],
-    [t('about.webosVersion'), device?.platformVersion ?? '—'],
+    [t('about.webosVersion'), webOS ?? '—'],
+    [t('about.firmware'), device?.platformVersion ?? '—'],
     [t('about.browser'), engine ? `Chromium ${engine}` : '—'],
     [t('about.playback'), diagnostics.engine ?? t('about.notYet')],
     [

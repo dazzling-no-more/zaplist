@@ -152,11 +152,12 @@ export interface Failure {
 
 /**
  * One error for a stream that no engine could play. The headline comes from the first MSE engine
- * tried, which knows the stream type best (the native player reports nearly everything as a format
- * error); the detail lists every engine's reason.
+ * tried, which knows the stream type best (the native player, which the proxy and remux engines feed
+ * too, reports nearly everything as a format error, a server's refusal included); the detail lists
+ * every engine's reason.
  */
 export function summarizeFailures(failures: Failure[]): PlaybackError {
   if (!failures.length) return new PlaybackError('format', 'No playable stream')
-  const main = failures.find((f) => f.engine !== 'native') ?? failures[failures.length - 1]
+  const main = failures.find((f) => f.engine === 'hls.js' || f.engine === 'mpegts.js') ?? failures[failures.length - 1]
   return new PlaybackError(main.error.code, failures.map((f) => `${f.engine}: ${f.error.detail ?? f.error.code}`).join(' · '))
 }

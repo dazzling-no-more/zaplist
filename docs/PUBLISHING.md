@@ -112,7 +112,8 @@ for Full HD TVs. Both hold the same app, which scales itself to the screen; the 
 ## 5. Test on your TV
 
 Playback has been tested on one TV, an LG OLED65GX (2020, webOS 5): 4K HLS channels, MP4 and MKV
-movies (Opus audio through the JS service, MKV subtitles), seeking and resuming. The rest of the app
+movies (Opus and DTS audio through the JS service, MKV subtitles including DVD ones), streams that
+need a Referer, seeking and resuming, and the tracks kept for the next episode. The rest of the app
 was tested in desktop Chrome. LG tests on real TVs, and the Self Checklist states results for a TV,
 so go through it on one first; a rejection costs a review round.
 

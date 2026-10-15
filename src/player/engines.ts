@@ -589,7 +589,15 @@ class RemuxEngine extends ServiceEngine {
     // Subtitles chosen before a restart need the service's stream too: go there straight away.
     const subtitleId = chosenTrack(this.subtitleTracks(), choices.subtitle, labels.subtitle)
     const subtitle = subtitleId !== undefined ? this.subtitles[subtitleId] : undefined
-    if (!convert && !subtitle) return super.start(position, { audio: choices.audio, labels: { audio: labels.audio } })
+    if (!convert && !subtitle) {
+      await super.start(position, { audio: choices.audio, labels: { audio: labels.audio } })
+      // The TV's player starts on the first audio track, whatever the file marks as its default.
+      // It lists them in the file's order.
+      const preferred = this.audios.findIndex((t) => t.default)
+      const listed = this.audioTracks()
+      if (preferred > 0 && listed.length === this.audios.length && chosenTrack(listed, choices.audio, labels.audio) === undefined) this.setAudioTrack(preferred)
+      return
+    }
     const audioId = chosenTrack(this.serviceAudioTracks(), choices.audio, labels.audio)
     const audio = audioId !== undefined ? this.audios[audioId] : undefined
     if (audio) this.audio = audio.number

@@ -13,6 +13,8 @@ interface LunaRequestOptions<T> {
 interface WebOSTV {
   platformBack(): void
   service: { request<T>(uri: string, options: LunaRequestOptions<T>): { cancel(): void } }
+  /** webOSTV.js's system info; `sdkVersion` is the webOS version (5.6.2). */
+  deviceInfo?(callback: (info: { sdkVersion?: string }) => void): void
 }
 
 interface WebOSSystem {
@@ -47,10 +49,11 @@ export function cursorVisible(): boolean {
 
 export interface DeviceInfo {
   modelName?: string
+  /** The firmware's version (04.64.00), not webOS's: see webOSVersion. */
   platformVersion?: string
 }
 
-/** Model and webOS version, read without a Luna call (so no extra permissions). Undefined off-TV. */
+/** Model and firmware version, read without a Luna call (so no extra permissions). Undefined off-TV. */
 export function deviceInfo(): DeviceInfo | undefined {
   const raw = (window.webOSSystem ?? window.PalmSystem)?.deviceInfo
   if (!raw) return undefined
@@ -59,6 +62,13 @@ export function deviceInfo(): DeviceInfo | undefined {
   } catch {
     return undefined
   }
+}
+
+/** The webOS version (5.6.2), as webOSTV.js asks the system for it; undefined off-TV or unanswered. */
+export function webOSVersion(): Promise<string | undefined> {
+  const webOS = window.webOS
+  if (!isWebOS() || !webOS?.deviceInfo) return Promise.resolve(undefined)
+  return new Promise((resolve) => webOS.deviceInfo!((info) => resolve(info.sdkVersion)))
 }
 
 /** Brings the app to the foreground. */
