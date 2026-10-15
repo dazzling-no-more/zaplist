@@ -2,7 +2,7 @@ import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { deleteDatabase } from '../data/db'
 import { library, useLibrary } from '../data/library'
-import { ALL, buildGroups, channelsByCategory, channelsForGroup, FAVORITES, type ChannelGroup } from '../data/lists'
+import { ALL, buildGroups, channelsByCategory, channelsForGroup, FAVORITES, OVERVIEW, type ChannelGroup } from '../data/lists'
 import type { Channel } from '../data/models'
 import { unlock, useUnlocked } from '../data/parental'
 import { clearPrefs, moveFavorite, toggleFavorite, usePrefs } from '../data/prefs'
@@ -23,6 +23,7 @@ import { playChannel } from '../ui/play'
 import { Region } from '../ui/Region'
 import { clampIndex } from '../ui/scroll'
 import { VirtualList } from '../ui/VirtualList'
+import { HomeOverview, isOverviewEmpty, overviewFocusKey, useOverview } from './HomeOverview'
 
 const GROUP_ROW = 60
 const GROUP_LIST_HEIGHT = 576
@@ -31,6 +32,8 @@ const NAV_BUTTON = 85
 /** Room for the 76 px favorite star (LG recommends click targets of at least 75 x 75 px). */
 const CHANNEL_ROW = 86
 const CHANNEL_LIST_HEIGHT = 860
+/** The content column while the sidebar is a rail: 1728 minus the 112 px rail and its 64 px margin. */
+const OVERVIEW_WIDTH = 1552
 /** Moving through the sidebar shows a category after it stays focused this long. */
 const GROUP_SELECT_DELAY_MS = 150
 
@@ -40,7 +43,12 @@ interface HomeMemo {
   channelIndex?: number
   /** The last played channel when Home was last shown; a different one means the player was used since. */
   lastPlayed?: string
+  /** The overview's focused card per shelf. */
+  overview?: Record<string, number>
 }
+
+/** Focus keys in Home's content column; the sidebar is a rail while one of them has focus. */
+const isContentKey = (key: string): boolean => key === 'home-channels' || key === 'home-unlock' || key.indexOf('overview-') === 0
 
 export function HomeScreen({ entry }: ScreenProps<'home'>) {
   const { ready, sources, error } = useLibrary()
@@ -120,17 +128,19 @@ function Browse({ entry }: ScreenProps<'home'>) {
   const memo = entry.memo as HomeMemo
 
   const groups = useMemo(
-    () => buildGroups(categories, sources, prefs, groupLabels()),
+    () => [{ id: OVERVIEW, name: t('home.overview'), locked: false }, ...buildGroups(categories, sources, prefs, groupLabels())],
     [categories, sources, prefs.pin, prefs.lockedCategories],
   )
   const byCategory = useMemo(() => channelsByCategory(channels), [channels])
+  const overview = useOverview()
+  const overviewEmpty = isOverviewEmpty(overview)
   // Open the group of the last played channel on the first visit and after the player was used (it can
-  // switch groups); otherwise keep the group the user left Home on.
+  // switch groups); otherwise keep the group the user left Home on, and the overview always.
   const [groupId, setGroupId] = useState(() => {
     const lastList = groups.some((g) => g.id === prefs.lastListId) ? prefs.lastListId : undefined
     const playedSince = memo.lastPlayed !== prefs.lastChannelId
-    if (memo.groupId && !(playedSince && lastList)) return memo.groupId
-    return lastList ?? ALL
+    if (memo.groupId && (memo.groupId === OVERVIEW || !(playedSince && lastList))) return memo.groupId
+    return lastList ?? (overviewEmpty ? ALL : OVERVIEW)
   })
   const [groupIndex, setGroupIndex] = useState(() =>
     clampIndex(
@@ -146,21 +156,43 @@ function Browse({ entry }: ScreenProps<'home'>) {
     () => channelsForGroup(groupId, channels, (id) => library.channel(id), byCategory, prefs, unlocked),
     [groupId, channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked],
   )
+  /** The channel played since Home was last shown (by zapping, it may not be the one picked here). */
+  const [played] = useState(() => (memo.lastPlayed !== prefs.lastChannelId ? prefs.lastChannelId : undefined))
   // Coming back from the player: show the channel watched last (it may have changed by zapping).
   const [channelIndex, setChannelIndex] = useState(() => {
-    const played = memo.lastPlayed !== prefs.lastChannelId ? list.findIndex((c) => c.id === prefs.lastChannelId) : -1
-    return played >= 0 ? played : (memo.channelIndex ?? 0)
+    const at = played ? list.findIndex((c) => c.id === played) : -1
+    return at >= 0 ? at : (memo.channelIndex ?? 0)
   })
   const groupCounts = useMemo(
-    () => new Map(groups.map((g) => [g.id, channelsForGroup(g.id, channels, (id) => library.channel(id), byCategory, prefs, unlocked).length])),
+    () =>
+      new Map(
+        groups
+          .filter((g) => g.id !== OVERVIEW)
+          .map((g) => [g.id, channelsForGroup(g.id, channels, (id) => library.channel(id), byCategory, prefs, unlocked).length]),
+      ),
     [groups, channels, byCategory, prefs.favorites, prefs.recents, prefs.pin, prefs.lockedCategories, unlocked],
   )
   const group: ChannelGroup | undefined = groups.find((g) => g.id === groupId)
   const index = clampIndex(channelIndex, list.length)
   const locked = !!group?.locked && !unlocked
-  Object.assign(memo, { groupIndex, groupId, channelIndex: index, lastPlayed: prefs.lastChannelId })
+  const isOverview = groupId === OVERVIEW
+  const contentKey = isOverview ? overviewFocusKey(overview) : 'home-channels'
+  const hasContent = isOverview ? !overviewEmpty : list.length > 0
+  Object.assign(memo, { groupIndex, groupId, channelIndex: index })
+  // After rendering rather than during it: `played` must see the previous value even when React renders
+  // twice (development mode).
+  useEffect(() => {
+    memo.lastPlayed = prefs.lastChannelId
+  })
 
-  useScreenFocus(entry, list.length ? 'home-channels' : 'home-groups')
+  useScreenFocus(entry, hasContent ? contentKey : 'home-groups')
+  // The sidebar is a rail of icons while the content has focus; moving into it opens the full panel.
+  const [rail, setRail] = useState(() => isContentKey(entry.focusKey ?? (hasContent ? contentKey : 'home-groups')))
+  // OK on a group focuses its channels (or the overview) once they're rendered.
+  const [contentFocus, setContentFocus] = useState(0)
+  useEffect(() => {
+    if (contentFocus && hasContent) setFocus(contentKey)
+  }, [contentFocus])
 
   const showGroup = (id: string) => {
     if (id === groupId) return
@@ -190,17 +222,17 @@ function Browse({ entry }: ScreenProps<'home'>) {
 
   return (
     <div className="screen">
-      <Region focusKey="home-sidebar" className="sidebar panel" preferredChild="home-groups">
+      <Region focusKey="home-sidebar" className={`sidebar panel${rail ? ' rail' : ''}`} preferredChild="home-groups" onFocusWithin={() => setRail(false)}>
         <h1 className="brand">
           <span className="brand-mark">
             <Icon name="logo" />
           </span>
-          {t('appName')}
+          <span className="brand-name">{t('appName')}</span>
         </h1>
         <Button focusKey="home-search" className="nav" icon="search" onPress={() => navigate({ name: 'search' })}>
           {t('home.search')}
         </Button>
-        <Button focusKey="home-guide" className="nav" icon="guide" onPress={() => navigate({ name: 'guide', listId: groupId })}>
+        <Button focusKey="home-guide" className="nav" icon="guide" onPress={() => navigate({ name: 'guide', listId: isOverview ? ALL : groupId })}>
           {t('guide.title')}
         </Button>
         {movies.length > 0 && (
@@ -228,19 +260,25 @@ function Browse({ entry }: ScreenProps<'home'>) {
           onSelect={(g) => {
             showGroup(g.id)
             if (g.locked && !unlocked) setAskPin(true)
-            else if (g.id === groupId ? list.length : true) setFocus('home-channels')
+            else setContentFocus((n) => n + 1)
           }}
           renderRow={(g, _, focused) => (
             <GroupRow group={g} focused={focused} selected={g.id === groupId} unlocked={unlocked} count={groupCounts.get(g.id)} />
           )}
         />
       </Region>
-      <Region focusKey="home-content" className="content" focusable={locked || list.length > 0}>
+      <Region focusKey="home-content" className="content" focusable={locked || hasContent} onFocusWithin={() => setRail(true)}>
         <div className="content-header">
           <h2>{group?.name ?? ''}</h2>
-          {!locked && list.length > 0 && <span className="dim">{t('sources.channels', { count: formatCount(list.length) })}</span>}
+          {!isOverview && !locked && list.length > 0 && <span className="dim">{t('sources.channels', { count: formatCount(list.length) })}</span>}
         </div>
-        {locked ? (
+        {isOverview ? (
+          overviewEmpty ? (
+            <p className="dim empty">{t('home.overviewEmpty')}</p>
+          ) : (
+            <HomeOverview overview={overview} memo={memo} played={played} width={OVERVIEW_WIDTH} height={CHANNEL_LIST_HEIGHT} />
+          )
+        ) : locked ? (
           <div className="empty">
             <p className="dim">{t('home.locked')}</p>
             <Button focusKey="home-unlock" className="inline" onPress={() => setAskPin(true)}>
@@ -285,7 +323,12 @@ function Browse({ entry }: ScreenProps<'home'>) {
             empty={empty}
           />
         )}
-        {!locked && list.length > 0 && (
+        {isOverview && !overviewEmpty && (
+          <div className="hints">
+            <Hint keys={<Key>{t('key.ok')}</Key>} label={t('hint.watch')} />
+          </div>
+        )}
+        {!isOverview && !locked && list.length > 0 && (
           <div className="hints">
             {moving ? (
               <>

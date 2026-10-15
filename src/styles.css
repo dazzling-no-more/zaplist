@@ -490,7 +490,7 @@ h3 {
 .channel-row.focused {
   background: var(--focus-bg);
   color: var(--focus-text);
-  transform: scale(1.015);
+  transform: scale(1.01);
 }
 
 .group-row.focused .group-detail {
@@ -952,6 +952,7 @@ h3 {
 
 /* Digits that line up in columns and don't shift as they change. */
 .channel-number,
+.tile-number,
 .osd-number,
 .osd-clock,
 .osd-times,
@@ -1247,6 +1248,126 @@ h3 {
 
 .button.nav.focused {
   background: var(--focus-bg);
+}
+
+/* The labels and categories fade in whenever they show (the rail below hides them). */
+.brand-name,
+.button.nav .button-label,
+.group-list {
+  animation: fade-in 0.2s var(--ease);
+}
+
+/* Home's sidebar while the content has focus: a rail of icons, 76 px each. Its width switches without
+   animation (only transform and opacity animate on webOS 4). */
+.sidebar.rail {
+  width: 112px;
+}
+
+.sidebar.rail .brand {
+  justify-content: center;
+  margin-left: 0;
+}
+
+.sidebar.rail .brand-mark {
+  margin-right: 0;
+}
+
+.sidebar.rail .brand-name,
+.sidebar.rail .button-label,
+.sidebar.rail .group-list {
+  display: none;
+}
+
+.sidebar.rail .button.nav {
+  justify-content: center;
+  padding: 18px 0;
+}
+
+.sidebar.rail .button.nav .icon {
+  margin-right: 0;
+}
+
+/* Home's overview: a shelf of cards per row; the rows scroll up as focus moves down. */
+.overview {
+  position: relative;
+  overflow: hidden;
+}
+
+.overview-inner {
+  transition: transform 0.2s var(--ease);
+}
+
+.shelf-title {
+  box-sizing: border-box;
+  height: 52px;
+  margin: 0;
+  padding: 6px 0 0 8px;
+  font-size: 30px;
+}
+
+.shelf {
+  position: relative;
+  overflow: hidden;
+}
+
+.shelf-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+}
+
+.shelf-cell {
+  position: absolute;
+  top: 0;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 10px 8px;
+}
+
+/* A channel in a shelf */
+.tile .logo {
+  width: 208px;
+  height: 117px;
+  border-radius: 12px;
+  font-size: 40px;
+  line-height: 117px;
+  transition: transform 0.16s var(--ease);
+}
+
+.tile .logo img {
+  box-sizing: border-box;
+  padding: 14px 24px;
+}
+
+.tile.focused .logo {
+  box-shadow: 0 0 0 5px var(--focus-bg);
+  transform: scale(1.06);
+}
+
+.tile-name {
+  margin-top: 12px;
+  overflow: hidden;
+  font-size: 26px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tile-number {
+  margin-right: 10px;
+  color: var(--text-dim);
+}
+
+.tile .now-line,
+.tile .now-title {
+  display: block;
+}
+
+.tile .progress {
+  display: block;
+  width: 100%;
+  margin: 8px 0 0;
 }
 
 .group-row .icon {

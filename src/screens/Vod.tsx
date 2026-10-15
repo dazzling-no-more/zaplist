@@ -11,9 +11,9 @@ import { Button } from '../ui/Button'
 import { formatCount } from '../ui/format'
 import { GroupRow } from '../ui/GroupRow'
 import { Icon } from '../ui/Icon'
-import { Poster } from '../ui/Logo'
 import { navigate, useScreenFocus, type ScreenProps } from '../ui/navigation'
 import { PinDialog } from '../ui/PinDialog'
+import { POSTER_CELL_HEIGHT, POSTER_CELL_WIDTH, PosterCell } from '../ui/PosterCell'
 import { Region } from '../ui/Region'
 import { clampIndex } from '../ui/scroll'
 import { VirtualGrid } from '../ui/VirtualGrid'
@@ -21,10 +21,8 @@ import { VirtualList } from '../ui/VirtualList'
 
 const GROUP_ROW = 60
 const GROUP_LIST_HEIGHT = 780
-/** 6 posters (188 x 282) across the 1224 px content column. */
+/** 6 posters across the 1224 px content column. */
 const COLUMNS = 6
-const CELL_WIDTH = 204
-const CELL_HEIGHT = 384
 const GRID_HEIGHT = 858
 const GROUP_SELECT_DELAY_MS = 150
 
@@ -131,8 +129,8 @@ export function VodScreen({ entry }: ScreenProps<'vod'>) {
             items={list}
             itemKey={(item) => item.id}
             columns={COLUMNS}
-            cellWidth={CELL_WIDTH}
-            rowHeight={CELL_HEIGHT}
+            cellWidth={POSTER_CELL_WIDTH}
+            rowHeight={POSTER_CELL_HEIGHT}
             height={GRID_HEIGHT}
             index={index}
             onIndexChange={setItemIndex}
@@ -152,21 +150,6 @@ export function VodScreen({ entry }: ScreenProps<'vod'>) {
           onCancel={() => setAskPin(false)}
         />
       )}
-    </div>
-  )
-}
-
-function PosterCell({ item, focused, progress }: { item: VodItem; focused: boolean; progress?: { position: number; duration: number } }) {
-  const fraction = progress && progress.duration > 0 ? Math.min(1, progress.position / progress.duration) : 0
-  return (
-    <div className={`poster-cell${focused ? ' focused' : ''}`}>
-      <Poster url={item.poster} name={item.name} />
-      {fraction > 0 && (
-        <div className="poster-progress">
-          <div style={{ width: `${fraction * 100}%` }} />
-        </div>
-      )}
-      <div className="poster-title">{item.name}</div>
     </div>
   )
 }

@@ -8,6 +8,8 @@ const en = {
 
   'home.favorites': 'Favorites',
   'home.recent': 'Recent',
+  'home.overview': 'Home',
+  'home.overviewEmpty': 'Your favorite and recent channels, and the movies and series you started, show up here.',
   'home.all': 'All channels',
   'home.welcome': 'Add a playlist to start watching.',
   'home.welcomeDetail': 'This app includes no channels. Use an M3U playlist URL or an Xtream Codes login from your TV provider.',

@@ -5,6 +5,8 @@ import { normalizeName } from './text'
 export const FAVORITES = 'favorites'
 export const RECENT = 'recent'
 export const ALL = 'all'
+/** Home's overview (continue watching, favorites, recent): a group of Home's sidebar, not a channel list. */
+export const OVERVIEW = 'overview'
 
 /** A sidebar entry: Favorites, Recent, All channels, or one playlist category. */
 export interface ChannelGroup {

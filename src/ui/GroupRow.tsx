@@ -1,4 +1,4 @@
-import { ALL, FAVORITES, RECENT, type ChannelGroup, type GroupLabels } from '../data/lists'
+import { ALL, FAVORITES, OVERVIEW, RECENT, type ChannelGroup, type GroupLabels } from '../data/lists'
 import { t } from '../i18n'
 import { formatCount } from './format'
 import { Icon, type IconName } from './Icon'
@@ -11,7 +11,7 @@ export function emptyListText(groupId: string, locked: boolean): string {
   return t(groupId === FAVORITES ? 'home.noFavorites' : groupId === RECENT ? 'home.noRecents' : 'home.noChannels')
 }
 
-const ICONS: Record<string, IconName> = { [FAVORITES]: 'star', [RECENT]: 'recent', [ALL]: 'all' }
+const ICONS: Record<string, IconName> = { [OVERVIEW]: 'home', [FAVORITES]: 'star', [RECENT]: 'recent', [ALL]: 'all' }
 
 interface Props {
   group: ChannelGroup
