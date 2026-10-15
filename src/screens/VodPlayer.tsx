@@ -259,7 +259,8 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
   const latest = useRef({ seekBy, togglePause, showOsd, hideOsd, close, osd, modal: false })
   // The sleep timer's warning is a dialog over the player too: keys go to it.
   const sleepWarning = useSleep().warning
-  latest.current = { seekBy, togglePause, showOsd, hideOsd, close, osd, modal: !!picker || sleepWarning }
+  const modal = !!picker || sleepWarning
+  latest.current = { seekBy, togglePause, showOsd, hideOsd, close, osd, modal }
 
   // With nothing on screen, Left/Right seek and OK pauses; Up or Down shows the controls.
   const { ref: surface } = useFocusable<object, HTMLDivElement>({
@@ -304,10 +305,12 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
     })
   }, [])
 
+  // The error panel takes focus when playback gives up, but not from a dialog: it takes it once that closes.
   useEffect(() => {
-    if (status.state === 'failed') setFocus('player-retry')
-    else if (getCurrentFocusKey() === 'player-retry' || getCurrentFocusKey() === 'player-back') setFocus('player-surface')
-  }, [status.state])
+    if (status.state === 'failed') {
+      if (!modal) setFocus('player-retry')
+    } else if (getCurrentFocusKey() === 'player-retry' || getCurrentFocusKey() === 'player-back') setFocus('player-surface')
+  }, [status.state, modal])
 
   useBackHandler(() => {
     hideOsd()

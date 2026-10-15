@@ -261,7 +261,8 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
   const latest = useRef({ zap, previous, openList, showOsd, hideOsd, favorite, cycleAspect, osd, numberDigits, modal: false })
   // The sleep timer's warning is a dialog over the player too: keys go to it.
   const sleepWarning = useSleep().warning
-  latest.current = { zap, previous, openList, showOsd, hideOsd, favorite, cycleAspect, osd, numberDigits, modal: miniList || !!picker || sleepWarning }
+  const modal = miniList || !!picker || sleepWarning
+  latest.current = { zap, previous, openList, showOsd, hideOsd, favorite, cycleAspect, osd, numberDigits, modal }
 
   const { ref: surface } = useFocusable<object, HTMLDivElement>({
     focusKey: 'player-surface',
@@ -294,11 +295,14 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
     })
   }, [])
 
-  // The error panel takes focus when playback gives up.
+  // The error panel takes focus when playback gives up, but not from the channel list or a dialog: it
+  // takes it once they close. Not when a channel picked from the list is loading already, though this
+  // render still has the failure (the stream restarts in an effect above).
   useEffect(() => {
-    if (status.state === 'failed') setFocus('player-retry')
-    else if (getCurrentFocusKey() === 'player-retry' || getCurrentFocusKey() === 'player-next') setFocus('player-surface')
-  }, [status.state])
+    if (status.state === 'failed' && playback?.getStatus().state === 'failed') {
+      if (!modal) setFocus('player-retry')
+    } else if (getCurrentFocusKey() === 'player-retry' || getCurrentFocusKey() === 'player-next') setFocus('player-surface')
+  }, [status.state, modal])
 
   useBackHandler(() => {
     hideOsd()
@@ -384,7 +388,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
       {!online && <div className="banner">{t('player.offline')}</div>}
       {online && soundBlocked && <div className="toast">{t('player.soundBlocked')}</div>}
 
-      {status.state === 'failed' && channel && (
+      {status.state === 'failed' && channel && !miniList && (
         <Region focusKey="player-error" className="player-error" isFocusBoundary>
           <h2>{t('player.failed', { name: channel.name })}</h2>
           <p className="dim">{describeError(status.error)}</p>
