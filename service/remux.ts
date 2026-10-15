@@ -1,11 +1,14 @@
 import type { Writable } from 'stream'
-import { child, children, element, encodeId, encodeSize, floatElement, ID, readVint, TRACK_AUDIO, TRACK_VIDEO, uint, uintElement, UNKNOWN, UNKNOWN_SIZE } from './ebml'
+import { inflateSync } from 'zlib'
+import { child, children, element, encodeId, encodeSize, floatElement, ID, readVint, subtitleKind, trackLanguage, TRACK_AUDIO, TRACK_SUBTITLE, TRACK_VIDEO, uint, uintElement, UNKNOWN, UNKNOWN_SIZE } from './ebml'
 import { get } from './fetch'
 import { OpusToPcm, parseOpusHead, SAMPLE_RATE } from './opus'
 import { Reader, type ElementHeader } from './reader'
 
 // A WebAssembly module the engine can't compile leaves the decoder's `ready` pending forever.
 const DECODER_TIMEOUT_MS = 10000
+/** Subtitle cues kept for the app at most; it fetches them every second, so only if it stopped asking. */
+const MAX_PENDING_CUES = 5000
 
 interface Track {
   body: Buffer
@@ -13,13 +16,31 @@ interface Track {
   type: number
   codec: string
   isDefault: boolean
-  label: string
+  name: string
+  language: string
+  /** Undoes the track's content encoding (contentDecoder), for frames read here. */
+  frames: (frame: Buffer) => Buffer
 }
 
-export interface AudioTrack {
+export interface TrackInfo {
   number: number
-  label: string
+  name: string
+  language: string
+  codec: string
   default: boolean
+}
+
+/** A subtitle as the TV's player can't show it: the app draws it (src/player/subtitles.ts). */
+export interface SubtitleCue {
+  track: number
+  /** Seconds into the movie. */
+  start: number
+  /** Absent when the block has no duration (PGS: the next picture of the track replaces it). */
+  end?: number
+  /** Text tracks: the block's text (for ASS, the event line). */
+  text?: string
+  /** PGS tracks: the display set, base64. */
+  data?: string
 }
 
 /** What comes before the first cluster, plus the cue index once it has been read. */
@@ -43,6 +64,19 @@ let cached: { url: string; movie: Movie } | undefined
 export class Job {
   closed = false
   private reader?: Reader
+  private cues: SubtitleCue[] = []
+
+  addCues(cues: SubtitleCue[]): void {
+    this.cues = this.cues.concat(cues)
+    if (this.cues.length > MAX_PENDING_CUES) this.cues = this.cues.slice(this.cues.length - MAX_PENDING_CUES)
+  }
+
+  /** The subtitle cues read since the last call. */
+  takeCues(): SubtitleCue[] {
+    const cues = this.cues
+    this.cues = []
+    return cues
+  }
 
   /** Reads `url` from byte `from`, after closing the job's previous connection: IPTV logins often allow one. */
   async open(url: string, from: number): Promise<Reader> {
@@ -69,12 +103,16 @@ async function open(url: string, job: Job): Promise<{ movie: Movie; pending?: { 
   return { movie, pending: { reader, cluster } }
 }
 
-/** The movie's audio tracks, and where a stream asked to start at `seconds` really starts. */
-export async function info(url: string, seconds: number, job: Job): Promise<{ start: number; audio: AudioTrack[] }> {
+/** The movie's audio and subtitle tracks, and where a stream asked to start at `seconds` really starts. */
+export async function info(url: string, seconds: number, job: Job): Promise<{ start: number; audio: TrackInfo[]; subtitles: TrackInfo[] }> {
   const { movie } = await open(url, job)
   const [start] = await cueAt(url, movie, seconds, job)
-  const audio = movie.tracks.filter((t) => t.type === TRACK_AUDIO).map((t) => ({ number: t.number, label: t.label, default: t.isDefault }))
-  return { start, audio }
+  const list = (tracks: Track[]) => tracks.map((t) => ({ number: t.number, name: t.name, language: t.language, codec: t.codec, default: t.isDefault }))
+  return {
+    start,
+    audio: list(movie.tracks.filter((t) => t.type === TRACK_AUDIO)),
+    subtitles: list(movie.tracks.filter((t) => t.type === TRACK_SUBTITLE && subtitleKind(t.codec))),
+  }
 }
 
 export interface RemuxOptions {
@@ -83,6 +121,8 @@ export interface RemuxOptions {
   start: number
   /** Track number of the audio to play; the default track if absent. */
   audio?: number
+  /** Subtitle tracks whose cues the job collects for the app. */
+  subtitles?: number[]
 }
 
 /**
@@ -115,6 +155,12 @@ export async function remux(options: RemuxOptions, out: Writable, job: Job): Pro
       const [, from] = await cueAt(options.url, movie, options.start, job)
       reader = await job.open(options.url, from)
     }
+    const subtitles: Selection['subtitles'] = {}
+    for (const t of movie.tracks) {
+      const kind = subtitleKind(t.codec)
+      if (t.type === TRACK_SUBTITLE && kind && (options.subtitles || []).indexOf(t.number) >= 0) subtitles[t.number] = { kind, frames: t.frames }
+    }
+    const selection: Selection = { video: video.number, audio: audio && audio.number, audioFrames: audio && audio.frames, converter, subtitles, scale: timecodeScale(movie) }
     await write(out, Buffer.concat([movie.ebml, encodeId(ID.Segment), UNKNOWN_SIZE, element(ID.Info, [movie.info]), element(ID.Tracks, entries)]))
     while (!job.closed) {
       const next = head || (await reader.header())
@@ -122,7 +168,11 @@ export async function remux(options: RemuxOptions, out: Writable, job: Job): Pro
       if (!next || next.size === UNKNOWN) break
       const body = await reader.read(next.size)
       if (!body) break
-      if (next.id === ID.Cluster) await write(out, cluster(body, video.number, audio && audio.number, converter))
+      if (next.id !== ID.Cluster) continue
+      const cues: SubtitleCue[] = []
+      const data = cluster(body, selection, cues)
+      job.addCues(cues)
+      await write(out, data)
     }
   } finally {
     if (reader) reader.destroy()
@@ -176,24 +226,41 @@ async function readMovie(reader: Reader): Promise<{ movie: Movie; cluster: Eleme
 }
 
 function track(body: Buffer): Track {
-  const text = (id: number) => {
-    const data = child(body, id)
-    return data ? data.toString('utf8').replace(/\0+$/, '') : ''
-  }
-  const language = text(ID.Language)
+  const text = (data: Buffer | undefined) => (data ? data.toString('utf8').replace(/\0+$/, '') : '')
   return {
     body,
     number: uint(child(body, ID.TrackNumber)),
     type: uint(child(body, ID.TrackType)),
-    codec: text(ID.CodecID),
+    codec: text(child(body, ID.CodecID)),
     isDefault: uint(child(body, ID.FlagDefault), 1) === 1,
-    label: text(ID.Name) || (language !== 'und' ? language : ''),
+    name: text(child(body, ID.Name)),
+    language: trackLanguage(body, text),
+    frames: contentDecoder(body),
   }
+}
+
+const unchanged = (frame: Buffer) => frame
+
+/**
+ * Undoes a track's content compression: zlib (mkvmerge's default for subtitles) or header stripping
+ * (bytes every frame starts with, kept once in the track entry). The TV's player undoes it for the
+ * tracks passed through; this is for those read here. Encrypted tracks are left as they are.
+ */
+export function contentDecoder(body: Buffer): (frame: Buffer) => Buffer {
+  const encodings = child(body, ID.ContentEncodings)
+  const encoding = encodings && child(encodings, ID.ContentEncoding)
+  const compression = encoding && uint(child(encoding, ID.ContentEncodingType)) === 0 ? child(encoding, ID.ContentCompression) : undefined
+  if (!compression) return unchanged
+  const algorithm = uint(child(compression, ID.ContentCompAlgo))
+  const settings = child(compression, ID.ContentCompSettings)
+  if (algorithm === 3 && settings) return (frame) => Buffer.concat([settings, frame])
+  if (algorithm === 0) return (frame) => inflateSync(frame) // small frames; a corrupt one throws
+  return unchanged
 }
 
 /** The track entry with Opus swapped for 16-bit PCM. */
 export function pcmTrack(body: Buffer, channels: number): Buffer {
-  const dropped = [ID.CodecID, ID.CodecPrivate, ID.CodecDelay, ID.SeekPreRoll, ID.DefaultDuration, ID.Audio]
+  const dropped = [ID.CodecID, ID.CodecPrivate, ID.CodecDelay, ID.SeekPreRoll, ID.DefaultDuration, ID.Audio, ID.ContentEncodings]
   const parts = children(body)
     .filter((c) => dropped.indexOf(c.id) < 0)
     .map((c) => element(c.id, [c.data]))
@@ -219,30 +286,71 @@ async function cueAt(url: string, movie: Movie, seconds: number, job: Job): Prom
   return found
 }
 
+/** Seconds per unit of Matroska time. */
+const timecodeScale = (movie: { info: Buffer }) => uint(child(movie.info, ID.TimecodeScale), 1000000) / 1e9
+const toMilliseconds = (seconds: number) => Math.round(seconds * 1000) / 1000
+
 export function parseCues(body: Buffer, movie: { info: Buffer; segmentStart: number }): Array<[number, number]> {
-  const scale = uint(child(movie.info, ID.TimecodeScale), 1000000) / 1e9
+  const scale = timecodeScale(movie)
   const cues: Array<[number, number]> = []
   for (const point of children(body)) {
     const positions = point.id === ID.CuePoint ? child(point.data, ID.CueTrackPositions) : undefined
-    const seconds = Math.round(uint(child(point.data, ID.CueTime)) * scale * 1000) / 1000
-    if (positions) cues.push([seconds, movie.segmentStart + uint(child(positions, ID.CueClusterPosition))])
+    if (positions) cues.push([toMilliseconds(uint(child(point.data, ID.CueTime)) * scale), movie.segmentStart + uint(child(positions, ID.CueClusterPosition))])
   }
   return cues.sort((a, b) => a[0] - b[0])
 }
 
-/** A cluster with only the video and the chosen audio; Opus blocks become PCM. One copy of the data. */
-export function cluster(body: Buffer, video: number, audio: number | undefined, converter: OpusToPcm | undefined): Buffer {
+export interface Selection {
+  video: number
+  audio?: number
+  /** Turns the audio into PCM (Opus); without it, the audio passes through. */
+  converter?: OpusToPcm
+  /** Undoes the audio's content encoding before the converter. */
+  audioFrames?: (frame: Buffer) => Buffer
+  /** The subtitle tracks whose cues are collected: how the app shows them, how to undo their encoding. */
+  subtitles: { [track: number]: { kind: 'text' | 'pgs'; frames: (frame: Buffer) => Buffer } }
+  /** Seconds per unit of Matroska time. */
+  scale: number
+}
+
+/**
+ * A cluster with only the video and the chosen audio (Opus blocks become PCM), in one copy of the
+ * data. Blocks of the selected subtitle tracks go to `cues` instead.
+ */
+export function cluster(body: Buffer, selection: Selection, cues: SubtitleCue[]): Buffer {
+  const { video, audio, converter, subtitles, scale } = selection
   const parts: Buffer[] = []
+  let time = 0
   for (const c of children(body)) {
-    if (c.id === ID.Timecode) parts.push(element(c.id, [c.data]))
+    if (c.id === ID.Timecode) {
+      time = uint(c.data)
+      parts.push(element(c.id, [c.data]))
+    }
     if (c.id !== ID.SimpleBlock && c.id !== ID.BlockGroup) continue
     const block = c.id === ID.SimpleBlock ? c.data : child(c.data, ID.Block)
     const track = block && readVint(block, 0)
     if (!block || !track) continue
-    if (track[0] === video || (track[0] === audio && !converter)) parts.push(encodeId(c.id), encodeSize(c.data.length), c.data)
-    else if (track[0] === audio && converter) {
-      const pcm = pcmBlock(block, track[1], converter)
+    const number = track[0]
+    if (number === video || (number === audio && !converter)) parts.push(encodeId(c.id), encodeSize(c.data.length), c.data)
+    else if (number === audio && converter) {
+      const frames = unlace(block, track[1] + 2).map(selection.audioFrames || ((frame: Buffer) => frame))
+      const pcm = pcmBlock(block, track[1], converter.decode(frames))
       parts.push(encodeId(ID.SimpleBlock), encodeSize(pcm.length), pcm)
+    } else if (subtitles[number]) {
+      // Subtitle blocks have no lacing: after the track number, the time (2 bytes) and flags (1).
+      const start = (time + block.readInt16BE(track[1])) * scale
+      const duration = c.id === ID.BlockGroup ? child(c.data, ID.BlockDuration) : undefined
+      let payload: Buffer
+      try {
+        payload = subtitles[number].frames(block.slice(track[1] + 3))
+      } catch {
+        continue // a corrupt compressed block: one subtitle missing
+      }
+      const cue: SubtitleCue = { track: number, start: toMilliseconds(start) }
+      if (duration) cue.end = toMilliseconds(start + uint(duration) * scale)
+      if (subtitles[number].kind === 'text') cue.text = payload.toString('utf8')
+      else cue.data = payload.toString('base64')
+      cues.push(cue)
     }
   }
   let length = 0
@@ -250,12 +358,12 @@ export function cluster(body: Buffer, video: number, audio: number | undefined, 
   return Buffer.concat([encodeId(ID.Cluster), encodeSize(length)].concat(parts))
 }
 
-/** An Opus block as a PCM SimpleBlock: same track and time, frames decoded, no lacing. */
-function pcmBlock(block: Buffer, trackLength: number, converter: OpusToPcm): Buffer {
+/** A SimpleBlock with the Opus block's track and time, holding its frames decoded to PCM (no lacing). */
+function pcmBlock(block: Buffer, trackLength: number, pcm: Buffer): Buffer {
   const head = Buffer.alloc(trackLength + 3)
   block.copy(head, 0, 0, trackLength + 2) // track number and time
   head[trackLength + 2] = 0x80 // keyframe
-  return Buffer.concat([head, converter.decode(unlace(block, trackLength + 2))])
+  return Buffer.concat([head, pcm])
 }
 
 /** The frames of a Matroska block (`flagsAt`: offset of its flags byte). */

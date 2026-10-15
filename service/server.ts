@@ -4,9 +4,11 @@ import { URL } from 'url' // not a global in Node 8
 import { info, Job, remux } from './remux'
 
 // The TV's player streams movies through this server, on the TV's loopback address only:
-//   /info?u=<movie URL>&t=<seconds>             JSON { start, audio: [{ number, label, default }] }
-//   /remux?u=<movie URL>&t=<start>&a=<track>    the movie as Matroska with PCM audio
-// A new request stops the one before (a seek or another movie): one connection to the IPTV server.
+//   /info?u=<movie URL>&t=<seconds>                JSON { start, audio, subtitles: [{ number, label, codec, default }] }
+//   /remux?u=<movie URL>&t=<start>&a=<track>&s=<subtitle tracks, comma-separated>
+//                                                  the movie as Matroska with PCM audio
+//   /subs                                          JSON { cues }: subtitle cues of /remux read since the last call
+// /info and /remux stop the stream before them (a seek or another movie): one connection to the IPTV server.
 
 let listening: Promise<number> | undefined
 let current: Job | undefined
@@ -31,6 +33,7 @@ export function stopPlayback(): void {
 
 function handle(req: http.IncomingMessage, res: http.ServerResponse): void {
   const { pathname, searchParams: query } = new URL(req.url || '', 'http://127.0.0.1')
+  if (pathname === '/subs') return send(res, 200, { cues: current ? current.takeCues() : [] })
   const url = query.get('u')
   if ((pathname !== '/info' && pathname !== '/remux') || !url) {
     res.writeHead(404)
@@ -58,7 +61,8 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse): void {
     return
   }
   res.writeHead(200, { 'Content-Type': 'video/x-matroska', 'Cache-Control': 'no-cache' })
-  remux({ url, start, audio: Number(query.get('a')) || undefined }, res, job).then(
+  const subtitles = (query.get('s') || '').split(',').map(Number).filter(Boolean)
+  remux({ url, start, audio: Number(query.get('a')) || undefined, subtitles }, res, job).then(
     () => res.end(),
     () => res.destroy(), // the player sees the stream break and reports it
   )

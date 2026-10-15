@@ -1,4 +1,5 @@
 // Stream types, attempt order and the engine contract. No engine code here, so tests can import it.
+import type { Subtitle } from './subtitles'
 
 /** `remux`: the native player fed by the app's service, for movies with audio the TV can't decode. */
 export type EngineName = 'native' | 'hls.js' | 'mpegts.js' | 'remux'
@@ -37,6 +38,8 @@ export interface Engine {
   /** -1 when subtitles are off. */
   selectedSubtitle(): number
   setSubtitleTrack(id: number): void
+  /** Subtitles the app draws at `seconds`, for engines whose player can't show them (remux). */
+  subtitleAt?(seconds: number): Subtitle | undefined
   /** Stops and releases the decoder. */
   destroy(): void
 }

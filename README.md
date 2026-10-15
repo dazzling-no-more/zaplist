@@ -31,7 +31,10 @@ streams or credentials, and has no ads, accounts or telemetry. Credentials stay 
   you stopped and goes on to the next episode; Continue watching lists what you started. Movie and
   series categories can be locked with the parental PIN like channel categories. MKV and WebM movies
   with Opus audio, which the TV's player can't decode, stream through the app's service (`service/`),
-  which turns the audio into PCM on the TV (webOS 5 and newer).
+  which turns the audio into PCM on the TV (webOS 5 and newer). The TV's player doesn't show the
+  subtitles inside MKV files either: the service reads them while it streams and the app draws them,
+  text (SRT, ASS/SSA, WebVTT) and Blu-ray pictures (PGS). Choosing subtitles for an MKV the TV plays
+  itself moves it to the service's stream.
 - **TV guide**: XMLTV (plain or gzipped) from the playlist, the Xtream server or a URL you enter; the
   Xtream short EPG as a fallback. Grid guide, time offset, automatic refresh every 6/12/24 hours.
 - **Parental control**: a 4-digit PIN locks the categories you choose until it is entered.
@@ -137,7 +140,11 @@ CSS must work on Chromium 53 too: no CSS grid, no flexbox `gap`, no `inset`. Ani
 - Movies with Opus audio need webOS 5 or newer: the service decodes it with WebAssembly, which the
   Node.js of webOS 4 lacks. There they end with a format error. The service runs only while such a
   movie plays; LG advises against services that run for long, which a review may question.
-- Subtitles inside MKV files aren't shown: the TV's player doesn't pass them to apps.
+- Subtitles inside MKV files, drawn by the app, need webOS 5 or newer like the service. ASS/SSA
+  subtitles show as plain text at the bottom (no styling or positions); PGS pictures are placed for
+  the Fit picture shape. DVD (VobSub) subtitles aren't supported. The choice of subtitles (and of an
+  audio track) resets when the stream restarts after an error or when the app returns from the
+  background.
 - Catch-up/timeshift, VOD and series (Xtream) are not implemented yet.
 - Sources, cached channel lists, guide addresses, the PIN and the extra guide URL are encrypted with a
   key kept on the TV (AES-GCM, non-extractable, in IndexedDB). That protects a copied database, not a
@@ -152,8 +159,10 @@ scripts/               bundle checker, webOS CLI wrapper, large-playlist generat
 src/platform/          remote keys, back stack, webOS wrappers, lifecycle, network status
 src/data/              models, M3U/Xtream/XMLTV parsers, IndexedDB, library, guide, preferences
 src/workers/           parse worker and its message protocol
-src/player/            engines (native, hls.js, mpegts.js, remux), retries, vendor script loading
-service/               JS service: streams movies with Opus audio to the TV's player as PCM (Matroska remux)
+src/player/            engines (native, hls.js, mpegts.js, remux), retries, vendor script loading,
+                       Matroska track list, MKV subtitles (text, PGS)
+service/               JS service: streams movies to the TV's player with Opus audio as PCM (Matroska
+                       remux) and reads their subtitles for the app
 src/ui/                focus, navigation, virtual list, dialogs, PIN pad, channel rows, formatting
 src/screens/           Home, Search, Player, Guide, Settings (sources, guide, parental, about), source form
 src/i18n.ts            every user-facing string

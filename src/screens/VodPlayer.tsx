@@ -15,6 +15,7 @@ import { Button } from '../ui/Button'
 import { formatClock } from '../ui/format'
 import { backStack, useBackHandler, type ScreenProps } from '../ui/navigation'
 import { Region } from '../ui/Region'
+import { Subtitles } from '../ui/Subtitles'
 import { TrackDialog } from '../ui/TrackDialog'
 import { episodeLabel } from './SeriesDetails'
 
@@ -293,6 +294,7 @@ export function VodPlayerScreen({ entry }: ScreenProps<'vodPlayer'>) {
     <div className="player">
       <video ref={video} className={`player-video ${ASPECT_CLASS[aspect]}`} />
       <div ref={surface} className="player-surface" onClick={() => showOsd(true)} onDoubleClick={toggleFullscreen} />
+      <Subtitles playback={playback} raised={osd || status.state !== 'playing' || paused} />
 
       {(osd || status.state !== 'playing' || paused) && (
         <div className="osd" onMouseMove={() => osd && armOsd()}>

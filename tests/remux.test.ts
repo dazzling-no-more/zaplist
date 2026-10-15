@@ -1,9 +1,10 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { PassThrough } from 'node:stream'
+import { deflateSync } from 'node:zlib'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { child, children, element, encodeId, floatElement, ID, readVint, uint, uintElement } from '../service/ebml'
-import { info, Job, remux, unlace } from '../service/remux'
+import { contentDecoder, info, Job, remux, unlace } from '../service/remux'
 
 // A small Matroska movie: video (track 1), Opus audio (2, default), AC-3 audio (3), subtitles (4);
 // three clusters 10 s apart, a cue index at the end, the SeekHead pointing to it.
@@ -49,7 +50,7 @@ function movie(): Buffer {
       block(ID.SimpleBlock, 1, 0x80, videoFrame(i)),
       lacedOpus(),
       block(ID.SimpleBlock, 3, 0x80, Buffer.from('ac3 frame')),
-      element(ID.BlockGroup, [block(ID.Block, 4, 0, Buffer.from('subtitle'))]),
+      element(ID.BlockGroup, [block(ID.Block, 4, 0, Buffer.from(`subtitle ${i}`)), uintElement(ID.BlockDuration, 2500)]),
     ]),
   )
   // The SeekHead's position fields have a fixed width, so its size doesn't depend on them.
@@ -94,11 +95,12 @@ afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())))
 let movieNumber = 0
 const newUrl = () => `${base}/movie/u/p/${++movieNumber}.mkv`
 
-async function run(url: string, start: number, audio?: number): Promise<{ tracks: Buffer[]; clusters: Buffer[] }> {
+async function run(url: string, start: number, audio?: number, subtitles?: number[]) {
   const out = new PassThrough()
   const chunks: Buffer[] = []
   out.on('data', (chunk: Buffer) => chunks.push(chunk))
-  await remux({ url, start, audio }, out, new Job())
+  const job = new Job()
+  await remux({ url, start, audio, subtitles }, out, job)
   const output = Buffer.concat(chunks)
   // EBML header, then a Segment of unknown size (4-byte ID, 8-byte size) holding the rest.
   const ebml = children(output)[0]
@@ -107,6 +109,7 @@ async function run(url: string, start: number, audio?: number): Promise<{ tracks
   return {
     tracks: children(elements.find((e) => e.id === ID.Tracks)!.data).map((e) => e.data),
     clusters: elements.filter((e) => e.id === ID.Cluster).map((e) => e.data),
+    cues: job.takeCues(),
   }
 }
 
@@ -122,14 +125,15 @@ function blocks(cluster: Buffer): [number, Buffer][] {
 }
 
 describe('remux', () => {
-  it('lists the audio tracks and finds the cue before a position', async () => {
+  it('lists the audio and subtitle tracks and finds the cue before a position', async () => {
     const url = newUrl()
     expect(await info(url, 0, new Job())).toEqual({
       start: 0,
       audio: [
-        { number: 2, label: 'English', default: true },
-        { number: 3, label: 'deu', default: false },
+        { number: 2, name: 'English', language: 'eng', codec: 'A_OPUS', default: true },
+        { number: 3, name: '', language: 'deu', codec: 'A_AC3', default: false },
       ],
+      subtitles: [{ number: 4, name: '', language: 'eng', codec: 'S_TEXT/UTF8', default: true }],
     })
     expect((await info(url, 15, new Job())).start).toBe(10)
     expect((await info(url, 25, new Job())).start).toBe(20)
@@ -152,6 +156,16 @@ describe('remux', () => {
     })
   })
 
+  it('collects the cues of the chosen subtitle tracks, in movie time', async () => {
+    expect((await run(newUrl(), 0)).cues).toEqual([])
+    const { cues, clusters } = await run(newUrl(), 15, undefined, [4])
+    expect(cues).toEqual([
+      { track: 4, start: 10, end: 12.5, text: 'subtitle 1' },
+      { track: 4, start: 20, end: 22.5, text: 'subtitle 2' },
+    ])
+    expect(blocks(clusters[0]).map(([track]) => track)).toEqual([1, 2]) // not in the stream itself
+  })
+
   it('starts at the cue before the position, over one connection at a time', async () => {
     mostOpen = 0
     const { clusters } = await run(newUrl(), 15)
@@ -166,6 +180,20 @@ describe('remux', () => {
       [1, videoFrame(0)],
       [3, Buffer.from('ac3 frame')],
     ])
+  })
+})
+
+describe('contentDecoder', () => {
+  const entry = (algorithm: number, settings?: Buffer) =>
+    Buffer.concat([
+      uintElement(ID.TrackNumber, 5),
+      element(ID.ContentEncodings, [element(ID.ContentEncoding, [element(ID.ContentCompression, [uintElement(ID.ContentCompAlgo, algorithm), ...(settings ? [element(ID.ContentCompSettings, [settings])] : [])])])]),
+    ])
+
+  it('inflates zlib frames, puts stripped headers back, and leaves plain tracks alone', () => {
+    expect(contentDecoder(entry(0))(deflateSync(Buffer.from('subtitle'))).toString()).toBe('subtitle')
+    expect(contentDecoder(entry(3, Buffer.from('PG')))(Buffer.from('rest')).toString()).toBe('PGrest')
+    expect(contentDecoder(uintElement(ID.TrackNumber, 1))(Buffer.from('as is')).toString()).toBe('as is')
   })
 })
 
