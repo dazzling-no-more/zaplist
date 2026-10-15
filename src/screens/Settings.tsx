@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { t } from '../i18n'
 import { Button } from '../ui/Button'
+import type { IconName } from '../ui/Icon'
 import { useScreenFocus, type ScreenProps } from '../ui/navigation'
 import { Region } from '../ui/Region'
 import { AboutSection } from './settings/About'
@@ -10,6 +11,7 @@ import { SourcesSection } from './settings/Sources'
 
 const SECTIONS = ['sources', 'guide', 'parental', 'about'] as const
 type Section = (typeof SECTIONS)[number]
+const ICONS: Record<Section, IconName> = { sources: 'playlist', guide: 'guide', parental: 'lock', about: 'info' }
 
 export function SettingsScreen({ entry }: ScreenProps<'settings'>) {
   const [section, setSection] = useState<Section>((entry.memo.section as Section) ?? 'sources')
@@ -25,7 +27,7 @@ export function SettingsScreen({ entry }: ScreenProps<'settings'>) {
       <Region focusKey="settings-menu" className="sidebar">
         <h1>{t('settings.title')}</h1>
         {SECTIONS.map((s) => (
-          <Button key={s} focusKey={`settings-${s}`} selected={s === section} onPress={() => select(s)} onFocus={() => select(s)}>
+          <Button key={s} focusKey={`settings-${s}`} icon={ICONS[s]} selected={s === section} onPress={() => select(s)} onFocus={() => select(s)}>
             {t(`settings.${s}`)}
           </Button>
         ))}

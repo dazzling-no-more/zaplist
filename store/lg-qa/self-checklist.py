@@ -31,7 +31,7 @@ ITEMS = {
     4: ('NA', 'No advertisements.'),
     5: ('Pass', 'Designed for 1920x1080 (appinfo.json resolution), 16:9.'),
     6: ('Pass', 'Long channel, category and programme names end with an ellipsis; long lists scroll.'),
-    7: ('Pass', 'The focused item is shown inverted (white); the selected category has a blue mark; hovering with the pointer moves the focus.'),
+    7: ('Pass', 'The focused item is shown inverted (white); the selected category has a purple mark; hovering with the pointer moves the focus.'),
     8: ('Pass', ''),
     9: ('Pass', 'Video fills the screen in Fit mode; Zoom, Fill, 16:9 and 4:3 are on the Picture button and the yellow key.'),
     10: ('Pass', 'All buttons work as described in the UX scenario.'),

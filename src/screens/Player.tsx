@@ -31,7 +31,7 @@ const DIGIT_TIMEOUT_MS = 1500
 const TOAST_MS = 2500
 const GROUP_SELECT_DELAY_MS = 150
 /** Channel list overlay: 1080 minus the safe area, panel padding and column header. */
-const MINI_LIST_HEIGHT = 884
+const MINI_LIST_HEIGHT = 860
 
 function describeError(error: PlaybackError): string {
   return t(`player.error.${error.code}`)
@@ -281,6 +281,11 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
       <div ref={surface} className="player-surface" onClick={() => showOsd(true)} onDoubleClick={toggleFullscreen} />
 
       {channel && (osd || status.state !== 'playing') && !miniList && (
+        <div className="osd-top">
+          <Clock />
+        </div>
+      )}
+      {channel && (osd || status.state !== 'playing') && !miniList && (
         <div className="osd" onMouseMove={() => osd && armOsd()}>
           <div className="osd-info">
             <span className="osd-number">{channel.number}</span>
@@ -289,7 +294,6 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
               <div className="osd-name">{channel.name}</div>
               {loadingText ? <div className="osd-status">{loadingText}</div> : <NowNext channel={channel} />}
             </div>
-            <Clock />
           </div>
           {osd && (
             <Region focusKey="osd-buttons" className="osd-buttons">
@@ -380,7 +384,7 @@ export function PlayerScreen({ entry }: ScreenProps<'player'>) {
               focusKey="player-list"
               items={browseList}
               itemKey={(c) => c.id}
-              rowHeight={76}
+              rowHeight={86}
               height={MINI_LIST_HEIGHT}
               index={listIndex}
               onIndexChange={setListIndex}

@@ -83,6 +83,14 @@ export function Logo({ url, name }: { url?: string; name: string }) {
   )
 }
 
+/**
+ * A details page's background, edge to edge behind a gradient: the backdrop, or the poster stretched
+ * and dimmer (`soft`). Stretching softens it for free; `filter: blur` would be slow on webOS 4.
+ */
+export function Backdrop({ url, soft }: { url?: string; soft?: boolean }) {
+  return <div className={`backdrop${soft ? ' soft' : ''}`}>{url && <LazyImage key={url} url={url} onState={() => undefined} />}</div>
+}
+
 /** Movie or series poster (2:3), with the title as the placeholder. */
 export function Poster({ url, name, className }: { url?: string; name: string; className?: string }) {
   const [shown, setShown] = useState(false)

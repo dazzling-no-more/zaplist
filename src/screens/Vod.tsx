@@ -21,10 +21,10 @@ import { VirtualList } from '../ui/VirtualList'
 
 const GROUP_ROW = 60
 const GROUP_LIST_HEIGHT = 780
-/** 7 posters across the 1224 px content column. */
-const COLUMNS = 7
-const CELL_WIDTH = 174
-const CELL_HEIGHT = 330
+/** 6 posters (188 x 282) across the 1224 px content column. */
+const COLUMNS = 6
+const CELL_WIDTH = 204
+const CELL_HEIGHT = 384
 const GRID_HEIGHT = 858
 const GROUP_SELECT_DELAY_MS = 150
 

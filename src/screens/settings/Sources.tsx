@@ -87,7 +87,7 @@ export function SourcesSection() {
           )
         })}
       </div>
-      <Button focusKey="sources-add" className="inline" onPress={() => navigate({ name: 'sourceEdit' })}>
+      <Button focusKey="sources-add" className="inline" icon="add" onPress={() => navigate({ name: 'sourceEdit' })}>
         {t('sources.add')}
       </Button>
       {deleting && (

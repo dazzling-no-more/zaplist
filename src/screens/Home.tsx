@@ -6,15 +6,18 @@ import { ALL, buildGroups, channelsByCategory, channelsForGroup, FAVORITES, type
 import type { Channel } from '../data/models'
 import { unlock, useUnlocked } from '../data/parental'
 import { clearPrefs, moveFavorite, toggleFavorite, usePrefs } from '../data/prefs'
+import { canPair } from '../data/relay'
 import { clearWatch } from '../data/watch'
 import { t } from '../i18n'
 import { Button } from '../ui/Button'
 import { ChannelRow } from '../ui/ChannelRow'
 import { Dialog } from '../ui/Dialog'
+import { Hint, Key } from '../ui/Hint'
 import { formatCount } from '../ui/format'
 import { emptyListText, groupLabels, GroupRow } from '../ui/GroupRow'
 import { Icon } from '../ui/Icon'
 import { navigate, useBackHandler, useScreenFocus, type ScreenProps } from '../ui/navigation'
+import { PhonePanel } from '../ui/PhonePanel'
 import { PinDialog } from '../ui/PinDialog'
 import { playChannel } from '../ui/play'
 import { Region } from '../ui/Region'
@@ -22,11 +25,12 @@ import { clampIndex } from '../ui/scroll'
 import { VirtualList } from '../ui/VirtualList'
 
 const GROUP_ROW = 60
-const GROUP_LIST_HEIGHT = 600
+const GROUP_LIST_HEIGHT = 576
 /** A sidebar button (Movies, Series), which the category list makes room for. */
-const NAV_BUTTON = 70
-const CHANNEL_ROW = 78
-const CHANNEL_LIST_HEIGHT = 858
+const NAV_BUTTON = 85
+/** Room for the 76 px favorite star (LG recommends click targets of at least 75 x 75 px). */
+const CHANNEL_ROW = 86
+const CHANNEL_LIST_HEIGHT = 860
 /** Moving through the sidebar shows a category after it stays focused this long. */
 const GROUP_SELECT_DELAY_MS = 150
 
@@ -46,17 +50,25 @@ export function HomeScreen({ entry }: ScreenProps<'home'>) {
   return <Browse entry={entry} />
 }
 
+/** First launch: add a playlist on the TV, or scan the QR code and type it on a phone. */
 function Welcome({ entry }: ScreenProps<'home'>) {
   useScreenFocus(entry, 'home-add-source')
   return (
-    <Region focusKey="home-welcome" className="welcome">
-      <img className="welcome-logo" src="largeIcon.png" alt="" />
-      <h1>{t('appName')}</h1>
-      <h2>{t('home.welcome')}</h2>
-      <p className="dim">{t('home.welcomeDetail')}</p>
-      <Button focusKey="home-add-source" className="inline primary" onPress={() => navigate({ name: 'sourceEdit' })}>
-        {t('home.addSource')}
-      </Button>
+    <Region focusKey="home-welcome" className="welcome welcome-split">
+      <div className="welcome-main">
+        <img className="welcome-logo" src="largeIcon.png" alt="" />
+        <h1>{t('appName')}</h1>
+        <h2>{t('home.welcome')}</h2>
+        <p className="dim">{t('home.welcomeDetail')}</p>
+        <Button focusKey="home-add-source" className="inline primary" icon="add" onPress={() => navigate({ name: 'sourceEdit' })}>
+          {t('home.addSource')}
+        </Button>
+      </div>
+      {canPair() && (
+        <div className="welcome-phone">
+          <PhonePanel qrSize={380} onReceive={(phone) => navigate({ name: 'sourceEdit', phone })} />
+        </div>
+      )}
     </Region>
   )
 }
@@ -180,7 +192,9 @@ function Browse({ entry }: ScreenProps<'home'>) {
     <div className="screen">
       <Region focusKey="home-sidebar" className="sidebar panel" preferredChild="home-groups">
         <h1 className="brand">
-          <Icon name="tv" />
+          <span className="brand-mark">
+            <Icon name="logo" />
+          </span>
           {t('appName')}
         </h1>
         <Button focusKey="home-search" className="nav" icon="search" onPress={() => navigate({ name: 'search' })}>
@@ -274,16 +288,38 @@ function Browse({ entry }: ScreenProps<'home'>) {
         {!locked && list.length > 0 && (
           <div className="hints">
             {moving ? (
-              t('hint.moving')
+              <>
+                <Hint
+                  keys={
+                    <>
+                      <Key>
+                        <Icon name="up" />
+                      </Key>
+                      <Key>
+                        <Icon name="down" />
+                      </Key>
+                    </>
+                  }
+                  label={t('hint.move')}
+                />
+                <Hint keys={<Key>{t('key.ok')}</Key>} label={t('hint.done')} />
+              </>
             ) : (
               <>
-                <span>{t('hint.watch')}</span>
-                <span>
-                  <Icon name="star" className="hint-star" />
-                  {t('hint.favoriteRight')}
-                </span>
-                <span>{t('hint.more')}</span>
-                {groupId === FAVORITES && <span>{t('hint.moveMenu')}</span>}
+                <Hint keys={<Key>{t('key.ok')}</Key>} label={t('hint.watch')} />
+                <Hint
+                  keys={
+                    <>
+                      <Key>
+                        <Icon name="right" />
+                      </Key>
+                      <Key color="red" />
+                    </>
+                  }
+                  label={t('hint.favorite')}
+                />
+                <Hint keys={<Key>{t('key.holdOk')}</Key>} label={t('hint.more')} />
+                {groupId === FAVORITES && <Hint keys={<Key color="yellow" />} label={t('hint.move')} />}
               </>
             )}
           </div>

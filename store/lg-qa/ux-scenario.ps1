@@ -337,7 +337,7 @@ try {
 
   Write-Screen (& $s 10) $sub '2. Channel list (OK in the player)' (Join-Path $shots '3-channel-list.png') `
     @(@(75, 48, 145, 34), @(224, 48, 147, 34), @(78, 88, 290, 485), @(398, 46, 582, 34), @(393, 86, 592, 590), @(928, 140, 44, 40)) `
-    @('Search', 'TV guide', 'Categories with channel counts', 'Category and position in the list', 'Channels; the blue mark shows the channel playing now', 'Favorite star: Right, then OK') `
+    @('Search', 'TV guide', 'Categories with channel counts', 'Category and position in the list', 'Channels; the purple mark shows the channel playing now', 'Favorite star: Right, then OK') `
     @(
       'Opens over the video on the current channel. Left/Right move between categories and channels.',
       'OK on a channel switches to it and closes the list. Back closes the list.'

@@ -1,4 +1,4 @@
-import type { Category, Channel, Episode, Movie, MovieDetails, Playlist, Programme, Series, XtreamAccount, XtreamSource } from './models'
+import type { Category, Channel, Episode, Movie, MovieDetails, Playlist, Programme, Series, SeriesDetails, XtreamAccount, XtreamSource } from './models'
 import { assignNumbers, byEpisode, uniqueId } from './playlist'
 
 // Xtream Codes player_api.php responses. Panels differ, so every field is optional and loosely typed.
@@ -60,7 +60,7 @@ export interface XtreamEpisode {
 }
 
 export interface XtreamSeriesInfo {
-  info?: { plot?: string; cover?: string }
+  info?: { plot?: string; cover?: string; backdrop_path?: string[] | string; rating?: string | number } | unknown[]
   /** Episodes by season number. */
   episodes?: Record<string, XtreamEpisode[]> | XtreamEpisode[][]
 }
@@ -76,6 +76,8 @@ export interface XtreamVodInfo {
     cast?: string
     actors?: string
     director?: string
+    backdrop_path?: string[] | string
+    rating?: string | number
   }
 }
 
@@ -295,6 +297,18 @@ export function parseSeriesInfo(source: Credentials & { id: string }, response: 
   return episodes.sort(byEpisode)
 }
 
+/** The first image of a `backdrop_path`, which servers send as a list or as one URL. */
+function firstImage(value: unknown): string | undefined {
+  const first = Array.isArray(value) ? value[0] : value
+  return typeof first === 'string' && first ? first : undefined
+}
+
+/** A rating out of 10; servers send 0, '' or text when they have none. */
+function toRating(value: unknown): number | undefined {
+  const rating = parseFloat(String(value))
+  return rating > 0 && rating <= 10 ? Math.round(rating * 10) / 10 : undefined
+}
+
 export function parseVodInfo(response: XtreamVodInfo): MovieDetails {
   const info = response.info ?? {}
   return {
@@ -304,7 +318,15 @@ export function parseVodInfo(response: XtreamVodInfo): MovieDetails {
     genre: info.genre || undefined,
     cast: info.cast || info.actors || undefined,
     director: info.director || undefined,
+    backdrop: firstImage(info.backdrop_path),
+    rating: toRating(info.rating),
   }
+}
+
+/** A series' backdrop and rating from get_series_info, which also lists its episodes. */
+export function parseSeriesDetails(response: XtreamSeriesInfo): SeriesDetails {
+  const info = response.info && !Array.isArray(response.info) ? response.info : {}
+  return { backdrop: firstImage(info.backdrop_path), rating: toRating(info.rating) }
 }
 
 /** Base64 (UTF-8) as used by get_short_epg titles and descriptions. */

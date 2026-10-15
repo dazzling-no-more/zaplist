@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from 'react'
 import { deleteSource, getChannelChunk, getPlaylistMeta, getSources, getVodChunk, rebuildDatabase } from './db'
 import { fetchJson } from './http'
-import type { Category, Channel, Episode, Movie, MovieDetails, Series, Source } from './models'
+import type { Category, Channel, Episode, Movie, MovieDetails, Series, SeriesDetails, Source } from './models'
 import { loadSecretPrefs } from './prefs'
 import { ingestSource } from './worker'
-import { apiUrl, parseSeriesInfo, parseVodInfo, type XtreamSeriesInfo, type XtreamVodInfo } from './xtream'
+import { apiUrl, parseSeriesDetails, parseSeriesInfo, parseVodInfo, type XtreamSeriesInfo, type XtreamVodInfo } from './xtream'
 import type { IngestProgress } from '../workers/protocol'
 
 interface SourceData {
@@ -38,8 +38,8 @@ class Library {
   private byId = new Map<string, Channel>()
   private moviesById = new Map<string, Movie>()
   private seriesById = new Map<string, Series>()
-  /** Xtream episode lists and movie details, fetched when first opened. */
-  private readonly episodeLists = new Map<string, Promise<Episode[]>>()
+  /** Xtream series (episodes and details) and movie details, fetched when first opened. */
+  private readonly seriesInfo = new Map<string, Promise<{ episodes: Episode[]; details: SeriesDetails }>>()
   private readonly details = new Map<string, Promise<MovieDetails>>()
   private readonly listeners = new Set<() => void>()
   private initializing: Promise<void> | undefined
@@ -72,15 +72,26 @@ class Library {
   /** A series' episodes: from the playlist (M3U), or asked from the Xtream server the first time. */
   episodes(series: Series): Promise<Episode[]> {
     if (series.episodes) return Promise.resolve(series.episodes)
+    return this.xtreamSeries(series).then((info) => info.episodes)
+  }
+
+  /** Backdrop and rating of an Xtream series, from the same request as its episodes; empty for M3U series. */
+  seriesDetails(series: Series): Promise<SeriesDetails> {
+    if (series.episodes) return Promise.resolve({})
+    return this.xtreamSeries(series).then((info) => info.details)
+  }
+
+  private xtreamSeries(series: Series): Promise<{ episodes: Episode[]; details: SeriesDetails }> {
     const source = this.state.sources.find((s) => s.id === series.sourceId)
-    if (!source || source.kind !== 'xtream' || series.seriesId === undefined) return Promise.resolve([])
-    let request = this.episodeLists.get(series.id)
+    if (!source || source.kind !== 'xtream' || series.seriesId === undefined) return Promise.resolve({ episodes: [], details: {} })
+    let request = this.seriesInfo.get(series.id)
     if (!request) {
-      request = fetchJson<XtreamSeriesInfo>(apiUrl(source, { action: 'get_series_info', series_id: series.seriesId })).then((info) =>
-        parseSeriesInfo(source, info),
-      )
-      this.episodeLists.set(series.id, request)
-      request.catch(() => this.episodeLists.delete(series.id)) // try again next time
+      request = fetchJson<XtreamSeriesInfo>(apiUrl(source, { action: 'get_series_info', series_id: series.seriesId })).then((info) => ({
+        episodes: parseSeriesInfo(source, info),
+        details: parseSeriesDetails(info),
+      }))
+      this.seriesInfo.set(series.id, request)
+      request.catch(() => this.seriesInfo.delete(series.id)) // try again next time
     }
     return request
   }
@@ -214,7 +225,7 @@ class Library {
     }
     this.data.set(source.id, { categories: meta?.categories ?? [], channels, movies, series, epgUrls: meta?.epgUrls ?? [] })
     // A refresh can change a series' episodes or a movie's details.
-    for (const show of series) this.episodeLists.delete(show.id)
+    for (const show of series) this.seriesInfo.delete(show.id)
     for (const movie of movies) this.details.delete(movie.id)
     return !!meta
   }

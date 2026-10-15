@@ -27,7 +27,7 @@ export function Button({ focusKey, selected, className, onPress, onFocus, icon, 
   return (
     <div ref={ref} className={classes} onMouseEnter={hoverToFocus(focusSelf)} onClick={onPress}>
       {icon && <Icon name={icon} />}
-      {children}
+      <span className="button-label">{children}</span>
     </div>
   )
 }

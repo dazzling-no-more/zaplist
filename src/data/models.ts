@@ -135,7 +135,14 @@ export interface MovieDetails {
   genre?: string
   cast?: string
   director?: string
+  /** A wide image for the page's background. */
+  backdrop?: string
+  /** Out of 10. */
+  rating?: number
 }
+
+/** Details servers can give about a series beyond the list (Xtream get_series_info). */
+export type SeriesDetails = Pick<MovieDetails, 'backdrop' | 'rating'>
 
 /** One source's channels, movies and series after parsing and mapping. */
 export interface Playlist {

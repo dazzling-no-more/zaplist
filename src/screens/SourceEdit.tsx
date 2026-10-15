@@ -1,5 +1,5 @@
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { guide } from '../data/guide'
 import { library, newSourceId, useLibrary } from '../data/library'
 import type { Source } from '../data/models'
@@ -34,7 +34,7 @@ export function SourceEditScreen({ entry }: ScreenProps<'sourceEdit'>) {
   const [epgUrl, setEpgUrl] = useState(existing?.epgUrl ?? '')
   const [message, setMessage] = useState<{ text: string; error: boolean }>()
   const saving = progress[id]
-  useScreenFocus(entry, existing ? 'source-name' : 'source-m3u')
+  useScreenFocus(entry, entry.phone ? 'source-save' : existing ? 'source-name' : 'source-m3u')
 
   const missing = (): StringKey | undefined => {
     if (kind === 'm3u') return url.trim() ? undefined : 'source.url'
@@ -82,6 +82,13 @@ export function SourceEditScreen({ entry }: ScreenProps<'sourceEdit'>) {
     setMessage({ text: t('phone.received'), error: false })
     setFocus('source-save')
   }
+
+  // Once: coming back to the form must not undo what the user changed since.
+  useEffect(() => {
+    if (!entry.phone || entry.memo.phoneFilled) return
+    entry.memo.phoneFilled = true
+    fill(entry.phone)
+  }, [])
 
   const status = saving ? { text: describeProgress(saving), error: false } : message
   const count = useMemo(() => library.getState().channels.filter((c) => c.sourceId === id).length, [sources])

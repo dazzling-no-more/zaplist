@@ -12,6 +12,8 @@ import { onRemoteKey } from '../platform/keys'
 import { formatTime, useNow } from '../ui/clock'
 import { Dialog } from '../ui/Dialog'
 import { canHover, isPointerVisible } from '../ui/focus'
+import { Hint, Key } from '../ui/Hint'
+import { Logo } from '../ui/Logo'
 import { useScreenFocus, type ScreenProps } from '../ui/navigation'
 import { playChannel } from '../ui/play'
 import { clampIndex, scrollToKeepVisible, visibleRange } from '../ui/scroll'
@@ -19,11 +21,14 @@ import { clampIndex, scrollToKeepVisible, visibleRange } from '../ui/scroll'
 const MINUTE = 60_000
 const SLOT = 30 * MINUTE
 const VIEW = 3 * 60 * MINUTE
-const CHANNEL_COLUMN = 360
+const CHANNEL_COLUMN = 420
 const GRID_WIDTH = 1728 - CHANNEL_COLUMN
 const PX_PER_MS = GRID_WIDTH / VIEW
 const ROW = 84
 const BODY_HEIGHT = 672
+/** Widths (px, 12-hour times) of the time-now label's half and of a slot label, so they don't overlap. */
+const NOW_LABEL_HALF = 72
+const SLOT_LABEL = 140
 
 const floorSlot = (time: number) => Math.floor(time / SLOT) * SLOT
 
@@ -133,6 +138,7 @@ export function GuideScreen({ entry }: ScreenProps<'guide'>) {
   const slots: number[] = []
   for (let s = viewStart; s < viewStart + VIEW; s += SLOT) slots.push(s)
   const nowLeft = (now - viewStart) * PX_PER_MS
+  const nowShown = nowLeft >= 0 && nowLeft <= GRID_WIDTH
 
   const rows = []
   for (let i = first; i <= last; i++) {
@@ -142,6 +148,7 @@ export function GuideScreen({ entry }: ScreenProps<'guide'>) {
         channel={list[i]}
         top={i * ROW - top.current}
         viewStart={viewStart}
+        now={now}
         offsetMinutes={prefs.epgOffsetMinutes}
         focusTime={gridFocused && i === current ? focusTime : undefined}
         onPointer={(time, select, programme) => {
@@ -168,17 +175,30 @@ export function GuideScreen({ entry }: ScreenProps<'guide'>) {
       </div>
       <div className="guide-header">
         <span className="guide-header-day">{new Date(viewStart).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</span>
-        {slots.map((s) => (
-          <span key={s} className="guide-slot" style={{ left: CHANNEL_COLUMN + (s - viewStart) * PX_PER_MS }}>
-            {formatTime(s)}
+        {slots.map((s) => {
+          const left = (s - viewStart) * PX_PER_MS
+          // The time-now label takes the place of a slot label it would cover.
+          if (nowShown && nowLeft > left - NOW_LABEL_HALF && nowLeft < left + SLOT_LABEL + NOW_LABEL_HALF) return null
+          return (
+            <span key={s} className="guide-slot" style={{ left: CHANNEL_COLUMN + left }}>
+              {formatTime(s)}
+            </span>
+          )
+        })}
+        {nowShown && (
+          <span className="guide-now-time" style={{ left: CHANNEL_COLUMN + nowLeft }}>
+            {formatTime(now)}
           </span>
-        ))}
+        )}
       </div>
       <div ref={ref} className="guide-body" style={{ height: BODY_HEIGHT }} onWheel={(e) => latest.current.vertical(e.deltaY > 0 ? 3 : -3)}>
         {rows}
-        {nowLeft >= 0 && nowLeft <= GRID_WIDTH && <div className="guide-now" style={{ left: CHANNEL_COLUMN + nowLeft }} />}
+        {nowShown && <div className="guide-now" style={{ left: CHANNEL_COLUMN + nowLeft }} />}
       </div>
-      <div className="hints">{t('guide.hints')}</div>
+      <div className="hints">
+        <Hint keys={<Key>{t('key.ok')}</Key>} label={t('guide.hintWatch')} />
+        <Hint keys={<Key>{t('key.channel')}</Key>} label={t('guide.hintPage')} />
+      </div>
       {details && (
         <Dialog
           title={details.programme.title}
@@ -196,6 +216,8 @@ interface RowProps {
   channel: Channel
   top: number
   viewStart: number
+  /** Programmes before it are dimmed, the one on air is marked. */
+  now: number
   offsetMinutes: number
   /** Set on the focused row: the time whose programme is highlighted. */
   focusTime?: number
@@ -203,7 +225,7 @@ interface RowProps {
   onPointer: (time: number, select: boolean, programme?: Programme) => void
 }
 
-const GuideRow = memo(function GuideRow({ channel, top, viewStart, offsetMinutes, focusTime, onPointer }: RowProps) {
+const GuideRow = memo(function GuideRow({ channel, top, viewStart, now, offsetMinutes, focusTime, onPointer }: RowProps) {
   const programmes = useShownProgrammes(channel, offsetMinutes)
   const viewEnd = viewStart + VIEW
   const cells = []
@@ -214,10 +236,11 @@ const GuideRow = memo(function GuideRow({ channel, top, viewStart, offsetMinutes
     const width = (Math.min(p.stop, viewEnd) - Math.max(p.start, viewStart)) * PX_PER_MS
     const isFocused = focusTime !== undefined && p.start <= focusTime && focusTime < p.stop
     const time = Math.max(p.start, viewStart)
+    const when = p.stop <= now ? ' past' : p.start <= now ? ' live' : ''
     cells.push(
       <div
         key={p.start}
-        className={`guide-cell${isFocused ? ' focused' : ''}`}
+        className={`guide-cell${when}${isFocused ? ' focused' : ''}`}
         style={{ left, width: Math.max(0, width - 4) }}
         onMouseEnter={() => onPointer(time, false, p)}
         onClick={() => onPointer(time, true, p)}
@@ -244,6 +267,7 @@ const GuideRow = memo(function GuideRow({ channel, top, viewStart, offsetMinutes
     <div className="guide-row" style={{ transform: `translate3d(0, ${top}px, 0)` }}>
       <div className={`guide-channel${focusTime !== undefined ? ' focused-row' : ''}`}>
         <span className="channel-number">{channel.number}</span>
+        <Logo url={channel.logo} name={channel.name} />
         <span className="guide-channel-name">{channel.name}</span>
       </div>
       <div className="guide-cells">{cells}</div>

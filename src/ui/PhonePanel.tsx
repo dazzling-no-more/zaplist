@@ -9,7 +9,7 @@ const POLL_MS = 3000
 const ACTIVE_MS = 15 * 60_000
 
 /** A QR code that opens the relay's page on a phone; what the user enters there arrives in `onReceive`. */
-export function PhonePanel({ onReceive }: { onReceive: (entry: PhoneEntry) => void }) {
+export function PhonePanel({ onReceive, qrSize = 300 }: { onReceive: (entry: PhoneEntry) => void; qrSize?: number }) {
   const [pairing, setPairing] = useState<Pairing>()
   const [expired, setExpired] = useState(false)
   const latest = useRef(onReceive)
@@ -60,7 +60,7 @@ export function PhonePanel({ onReceive }: { onReceive: (entry: PhoneEntry) => vo
       ) : (
         pairing && (
           <>
-            <QrCode text={pairing.link} size={300} />
+            <QrCode text={pairing.link} size={qrSize} />
             <p className="dim">{t('phone.scan')}</p>
           </>
         )

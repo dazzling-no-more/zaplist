@@ -26,11 +26,14 @@ const en = {
   'storage.resetTitle': 'Reset the app’s data?',
   'storage.resetMessage': 'This deletes your playlists, favorites and settings on this TV.',
 
-  'hint.watch': 'OK: watch',
-  'hint.more': 'Hold OK: more',
-  'hint.favoriteRight': 'Right: favorite',
-  'hint.moveMenu': 'Hold OK: move',
-  'hint.moving': 'Up/Down or the arrows: move · OK: done',
+  'key.ok': 'OK',
+  'key.holdOk': 'Hold OK',
+  'key.channel': 'CH +/−',
+  'hint.watch': 'Watch',
+  'hint.more': 'More',
+  'hint.favorite': 'Favorite',
+  'hint.move': 'Move',
+  'hint.done': 'Done',
 
   'menu.addFavorite': 'Add to favorites',
   'menu.removeFavorite': 'Remove from favorites',
@@ -101,7 +104,7 @@ const en = {
   'source.saved': 'Saved: {count} channel.|Saved: {count} channels.',
 
   'phone.title': 'Or use your phone',
-  'phone.scan': 'Scan the code with your phone’s camera and enter the playlist there. It appears in this form, ready to save.',
+  'phone.scan': 'Scan the code with your phone’s camera and enter the playlist there. It appears on the TV, ready to save.',
   'phone.received': 'Received from your phone. Check it, then press “Check and save”.',
   'phone.expired': 'The code has expired.',
   'phone.newCode': 'New code',
@@ -178,7 +181,8 @@ const en = {
   'guide.noInfo': 'No programme information',
   'guide.next': 'Next: {title}',
   'guide.empty': 'No channels in this list.',
-  'guide.hints': 'OK: watch the programme on air, or see details · Channel +/−: page',
+  'guide.hintWatch': 'Watch the programme on air, or see details',
+  'guide.hintPage': 'Page',
 
   'guideSettings.never': 'The guide hasn’t been downloaded yet.',
   'guideSettings.updated': 'Updated {date}. Programmes: {programmes} · Channels: {channels}',

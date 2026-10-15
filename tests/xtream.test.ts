@@ -6,6 +6,7 @@ import {
   liveUrls,
   normalizeHost,
   parseAccount,
+  parseSeriesDetails,
   parseSeriesInfo,
   parseShortEpg,
   parseVodInfo,
@@ -200,5 +201,20 @@ describe('movies and series', () => {
       cast: 'A, B',
       director: undefined,
     })
+  })
+
+  it('reads backdrops and ratings, which servers send in several forms', () => {
+    expect(parseVodInfo({ info: { backdrop_path: ['http://img/b1.jpg', 'http://img/b2.jpg'], rating: '7.4' } })).toMatchObject({
+      backdrop: 'http://img/b1.jpg',
+      rating: 7.4,
+    })
+    expect(parseVodInfo({ info: { backdrop_path: 'http://img/b.jpg', rating: 8 } })).toMatchObject({ backdrop: 'http://img/b.jpg', rating: 8 })
+    for (const info of [{ backdrop_path: [], rating: '0' }, { backdrop_path: [''], rating: 'N/A' }, { rating: '' }]) {
+      const details = parseVodInfo({ info })
+      expect([details.backdrop, details.rating]).toEqual([undefined, undefined])
+    }
+    expect(parseSeriesDetails({ info: { backdrop_path: ['http://img/s.jpg'], rating: '6.25' } })).toEqual({ backdrop: 'http://img/s.jpg', rating: 6.3 })
+    expect(parseSeriesDetails({ info: [] })).toEqual({})
+    expect(parseSeriesDetails({})).toEqual({})
   })
 })

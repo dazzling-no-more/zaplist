@@ -1,13 +1,15 @@
 import { doesFocusableExist, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { BackStack, type ScreenEntry } from '../platform/backStack'
+import type { PhoneEntry } from '../data/relay'
 import { platformBack } from '../platform/webos'
 
 export type Route =
   | { name: 'home' }
   | { name: 'search' }
   | { name: 'settings' }
-  | { name: 'sourceEdit'; sourceId?: string }
+  /** phone: entered on a phone from the welcome screen, to fill the form with. */
+  | { name: 'sourceEdit'; sourceId?: string; phone?: PhoneEntry }
   /** listId: the group the channel was picked from (Favorites, a category, ...), for zapping. */
   | { name: 'player'; channelId: string; listId: string }
   | { name: 'guide'; listId: string }

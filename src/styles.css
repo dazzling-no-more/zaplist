@@ -4,13 +4,19 @@
  */
 :root {
   --bg: #0b0d12;
-  --surface: #171b24;
+  --surface: rgba(255, 255, 255, 0.06);
   --surface-raised: #222836;
+  /* Hairline edge of panels and cards; drawn with an inset box-shadow so it takes no room. */
+  --edge: rgba(255, 255, 255, 0.08);
   --text: #f2f4f8;
   --text-dim: #a7afbf;
-  --accent: #4c9bff;
+  /* The app icon's purple: fills behind white text (5.9:1). As text on the background it needs the
+     lighter tint (7.5:1). */
+  --accent: #7b2ff7;
+  --accent-text: #b18cff;
   --focus-bg: #ffffff;
   --focus-text: #0b0d12;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
 html {
@@ -27,7 +33,11 @@ body {
   height: 1080px;
   overflow: hidden;
   transform-origin: 0 0;
-  background: var(--bg);
+  /* A still glow in the brand color; painted once, nothing animates it. */
+  background:
+    radial-gradient(1400px 900px at 0 0, rgba(123, 47, 247, 0.16), rgba(123, 47, 247, 0) 70%),
+    radial-gradient(1200px 800px at 100% 100%, rgba(123, 47, 247, 0.07), rgba(123, 47, 247, 0) 70%),
+    var(--bg);
   color: var(--text);
   font-family: 'LG Smart UI', 'Museo Sans', Roboto, Arial, sans-serif;
   font-size: 28px;
@@ -48,11 +58,13 @@ body {
 h1 {
   margin: 0 0 40px;
   font-size: 44px;
+  font-weight: 700;
 }
 
 h2 {
   margin: 0 0 24px;
   font-size: 38px;
+  font-weight: 700;
 }
 
 p {
@@ -63,10 +75,32 @@ p {
   color: var(--text-dim);
 }
 
+/* Screens fade in when they open; the player doesn't (see .player). */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+}
+
 .screen {
   display: flex;
   width: 100%;
   height: 100%;
+  animation: fade-in 0.2s var(--ease);
 }
 
 .sidebar {
@@ -91,15 +125,17 @@ p {
   background: var(--surface);
   font-size: 30px;
   cursor: pointer;
-  transition: transform 0.12s ease-out;
+  transition: transform 0.16s var(--ease);
 }
 
 .button.inline {
   display: inline-flex;
 }
 
+/* The current choice in a list (settings section, track): a mark on the left. */
 .button.selected {
-  color: var(--accent);
+  color: var(--accent-text);
+  box-shadow: inset 6px 0 0 var(--accent);
 }
 
 /* Focus: inverted colours plus a slight scale, visible from across the room. */
@@ -118,14 +154,17 @@ p {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(5, 5, 10, 0.8);
+  animation: fade-in 0.16s var(--ease);
 }
 
 .dialog {
   width: 760px;
   padding: 48px;
-  border-radius: 16px;
+  border-radius: 20px;
   background: var(--surface-raised);
+  box-shadow: inset 0 0 0 2px var(--edge);
+  animation: dialog-in 0.2s var(--ease);
 }
 
 .dialog-buttons {
@@ -167,6 +206,7 @@ p {
   align-items: center;
   padding-top: 200px;
   text-align: center;
+  animation: fade-in 0.2s var(--ease);
 }
 
 .welcome-logo {
@@ -186,6 +226,43 @@ p {
 .welcome p {
   max-width: 900px;
   margin-bottom: 40px;
+}
+
+/* First launch: what to do on the left, the phone's QR code on the right. */
+.welcome.welcome-split {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding-top: 0;
+  text-align: left;
+}
+
+.welcome-main {
+  width: 820px;
+  margin-right: 96px;
+}
+
+.welcome-split h1 {
+  font-size: 56px;
+}
+
+.welcome-split p {
+  max-width: 760px;
+}
+
+.welcome-phone {
+  flex: none;
+  width: 460px;
+  box-sizing: border-box;
+  padding: 40px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--edge);
+}
+
+.welcome-phone p {
+  margin-bottom: 0;
 }
 
 /* "Or use your phone" under the form's title */
@@ -218,13 +295,28 @@ p {
   margin: 0 16px 0 0;
 }
 
+/* Choices side by side (source type, season, refresh interval): the current one is tinted, lighter
+   than a primary button so it doesn't read as the main action. */
+.segmented .button.selected,
+.button-row .button.selected {
+  background: rgba(123, 47, 247, 0.4);
+  color: #fff;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.segmented .button.selected.focused,
+.button-row .button.selected.focused {
+  background: var(--focus-bg);
+  color: var(--focus-text);
+}
+
 .field {
   display: block;
   margin-bottom: 14px;
   padding: 10px 20px 14px;
   border-radius: 12px;
   background: var(--surface);
-  transition: transform 0.12s ease-out;
+  transition: transform 0.16s var(--ease);
 }
 
 .field-label {
@@ -241,7 +333,7 @@ p {
   border: 2px solid transparent;
   border-radius: 8px;
   outline: none;
-  background: var(--bg);
+  background: rgba(0, 0, 0, 0.35);
   color: var(--text);
   font: inherit;
 }
@@ -253,6 +345,10 @@ p {
 .field.focused {
   background: var(--focus-bg);
   transform: scale(1.02);
+}
+
+.field.focused input {
+  background: var(--bg);
 }
 
 .field.focused .field-label {
@@ -271,13 +367,15 @@ p {
   overflow: hidden;
 }
 
+/* A card per source. */
 .row {
   display: flex;
   align-items: center;
   margin-bottom: 16px;
-  padding: 16px 20px;
-  border-radius: 12px;
+  padding: 24px 28px;
+  border-radius: 16px;
   background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--edge);
 }
 
 .row-text {
@@ -286,7 +384,9 @@ p {
 }
 
 .row-title {
-  font-size: 30px;
+  margin-bottom: 4px;
+  font-size: 32px;
+  font-weight: 600;
 }
 
 .row-actions {
@@ -296,7 +396,7 @@ p {
 
 .row-actions .button {
   margin: 0 0 0 12px;
-  background: var(--surface-raised);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .row-actions .button.focused {
@@ -333,12 +433,13 @@ h3 {
   right: 0;
 }
 
+/* The side padding leaves room for the focused row's scale. */
 .vlist-row {
   position: absolute;
   left: 0;
   right: 0;
   box-sizing: border-box;
-  padding: 4px 6px;
+  padding: 4px 10px;
 }
 
 .group-list {
@@ -352,14 +453,19 @@ h3 {
   box-sizing: border-box;
   height: 100%;
   padding: 0 20px;
-  border-radius: 10px;
+  border-radius: 12px;
   white-space: nowrap;
+  transition: transform 0.16s var(--ease);
 }
 
 .group-name,
 .channel-name {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.channel-name {
+  font-weight: 600;
 }
 
 .group-name {
@@ -375,7 +481,7 @@ h3 {
 }
 
 .group-row.selected {
-  color: var(--accent);
+  color: var(--accent-text);
   box-shadow: inset 6px 0 0 var(--accent);
 }
 
@@ -384,6 +490,7 @@ h3 {
 .channel-row.focused {
   background: var(--focus-bg);
   color: var(--focus-text);
+  transform: scale(1.015);
 }
 
 .group-row.focused .group-detail {
@@ -417,7 +524,7 @@ h3 {
   flex: none;
   width: 112px;
   height: 63px;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--surface-raised);
   color: var(--text-dim);
@@ -461,8 +568,8 @@ h3 {
 }
 
 .pin-dots span.filled {
-  border-color: var(--text);
-  background: var(--text);
+  border-color: var(--accent-text);
+  background: var(--accent-text);
 }
 
 .keypad-row {
@@ -480,7 +587,8 @@ h3 {
   margin-top: 12px;
 }
 
-/* Player: full screen (outside the safe area); overlays stay inside it. */
+/* Player: full screen (outside the safe area); overlays stay inside it. Nothing here animates or
+   transforms the video element: webOS finds the video area by its box (see .player-video.zoom). */
 .player {
   position: fixed;
   top: 0;
@@ -528,14 +636,30 @@ h3 {
   height: 100%;
 }
 
+/* The info bar: a dark gradient from the bottom edge (it may cover the overscan area; only its
+   content must stay inside the safe area, which the padding keeps). */
 .osd {
   position: absolute;
-  right: 96px;
-  bottom: 54px;
-  left: 96px;
-  padding: 28px 32px;
-  border-radius: 16px;
-  background: rgba(11, 13, 18, 0.88);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 200px 96px 54px;
+  background: linear-gradient(to top, rgba(8, 8, 14, 0.96) 0%, rgba(8, 8, 14, 0.88) 55%, rgba(8, 8, 14, 0.5) 80%, rgba(8, 8, 14, 0) 100%);
+  animation: fade-in 0.2s var(--ease);
+}
+
+/* The clock, top right, over a lighter gradient from the top edge. */
+.osd-top {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 220px;
+  box-sizing: border-box;
+  padding: 54px 96px 0;
+  background: linear-gradient(to bottom, rgba(8, 8, 14, 0.7), rgba(8, 8, 14, 0));
+  text-align: right;
+  animation: fade-in 0.2s var(--ease);
 }
 
 .osd-info {
@@ -557,9 +681,15 @@ h3 {
   margin-left: 24px;
 }
 
+/* Movies and episodes: no channel number or logo before the title, so it lines up with the buttons. */
+.osd-text:first-child {
+  margin-left: 0;
+}
+
 .osd-name {
   overflow: hidden;
-  font-size: 40px;
+  font-size: 44px;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -570,17 +700,56 @@ h3 {
 }
 
 .osd-clock {
-  margin-left: 24px;
-  font-size: 36px;
+  font-size: 40px;
+  font-weight: 600;
 }
 
+/* Round buttons of 76 px (LG recommends at least 75 x 75 at 1920x1080); the focused one shows its
+   label underneath, in the room the bottom padding keeps. */
 .osd-buttons {
   display: flex;
-  margin-top: 24px;
+  margin-top: 28px;
+  padding-bottom: 48px;
 }
 
 .osd-buttons .button {
-  margin: 0 16px 0 0;
+  position: relative;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  box-sizing: border-box;
+  margin: 0 24px 0 0;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.osd-buttons .button.focused {
+  background: var(--focus-bg);
+  transform: scale(1.08);
+}
+
+.osd-buttons .button .icon {
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  vertical-align: 0;
+}
+
+.osd-buttons .button-label {
+  position: absolute;
+  top: 84px;
+  left: 50%;
+  color: var(--text);
+  font-size: 24px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.16s var(--ease);
+}
+
+.osd-buttons .button.focused .button-label {
+  opacity: 1;
 }
 
 .spinner {
@@ -591,7 +760,7 @@ h3 {
   height: 120px;
   box-sizing: border-box;
   border: 10px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #fff;
+  border-top-color: var(--accent-text);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
 }
@@ -608,8 +777,8 @@ h3 {
   top: 54px;
   left: 50%;
   max-width: 1400px;
-  padding: 16px 32px;
-  border-radius: 12px;
+  padding: 16px 36px;
+  border-radius: 40px;
   transform: translateX(-50%);
   white-space: nowrap;
 }
@@ -619,7 +788,8 @@ h3 {
 }
 
 .toast {
-  background: rgba(34, 40, 54, 0.95);
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 2px var(--edge);
 }
 
 .digits {
@@ -627,8 +797,9 @@ h3 {
   top: 54px;
   right: 96px;
   padding: 12px 32px;
-  border-radius: 12px;
+  border-radius: 16px;
   background: rgba(11, 13, 18, 0.88);
+  box-shadow: inset 0 0 0 2px var(--edge);
   font-size: 72px;
   font-weight: bold;
 }
@@ -640,8 +811,9 @@ h3 {
   width: 1000px;
   box-sizing: border-box;
   padding: 48px;
-  border-radius: 16px;
+  border-radius: 20px;
   background: var(--surface-raised);
+  box-shadow: inset 0 0 0 2px var(--edge);
 }
 
 .mini-list {
@@ -653,8 +825,10 @@ h3 {
   width: 1400px;
   padding: 16px;
   box-sizing: border-box;
-  border-radius: 16px;
-  background: rgba(13, 16, 22, 0.97);
+  border-radius: 20px;
+  background: rgba(13, 14, 22, 0.96);
+  box-shadow: inset 0 0 0 2px var(--edge);
+  animation: slide-in 0.2s var(--ease);
 }
 
 .mini-groups {
@@ -662,7 +836,7 @@ h3 {
   width: 440px;
   margin-right: 16px;
   padding-right: 16px;
-  border-right: 2px solid var(--surface-raised);
+  border-right: 2px solid var(--edge);
 }
 
 .mini-channels {
@@ -672,10 +846,10 @@ h3 {
 
 .mini-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  height: 56px;
-  padding: 4px 20px 0;
+  height: 80px;
+  padding: 0 20px 4px;
   box-sizing: border-box;
   overflow: hidden;
   font-size: 28px;
@@ -776,6 +950,21 @@ h3 {
   margin-top: 4px;
 }
 
+/* Digits that line up in columns and don't shift as they change. */
+.channel-number,
+.osd-number,
+.osd-clock,
+.osd-times,
+.vod-time,
+.digits,
+.group-count,
+.episode-length,
+.stepper-value,
+.guide-slot,
+.guide-now-time {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Settings */
 .stepper {
   align-items: center;
@@ -789,6 +978,10 @@ h3 {
 }
 
 /* Guide grid */
+.guide {
+  animation: fade-in 0.2s var(--ease);
+}
+
 .guide-details {
   height: 168px;
   overflow: hidden;
@@ -802,6 +995,7 @@ h3 {
   margin: 6px 0;
   overflow: hidden;
   font-size: 40px;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -816,7 +1010,7 @@ h3 {
   position: relative;
   height: 48px;
   overflow: hidden;
-  border-bottom: 2px solid var(--surface-raised);
+  border-bottom: 2px solid var(--edge);
   color: var(--text-dim);
   font-size: 24px;
 }
@@ -831,7 +1025,21 @@ h3 {
   position: absolute;
   top: 8px;
   padding-left: 8px;
-  border-left: 2px solid var(--surface-raised);
+  border-left: 2px solid var(--edge);
+}
+
+/* The time now, on the red line. */
+.guide-now-time {
+  position: absolute;
+  top: 6px;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: #e5383b;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 34px;
+  transform: translateX(-50%);
 }
 
 .guide-body {
@@ -852,7 +1060,7 @@ h3 {
   display: flex;
   align-items: center;
   flex: none;
-  width: 360px;
+  width: 420px;
   box-sizing: border-box;
   padding-right: 12px;
   overflow: hidden;
@@ -863,8 +1071,16 @@ h3 {
   width: 64px;
 }
 
+.guide-channel .logo {
+  width: 88px;
+  height: 50px;
+  margin-right: 16px;
+  font-size: 22px;
+  line-height: 50px;
+}
+
 .guide-channel.focused-row {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .guide-channel-name {
@@ -884,7 +1100,7 @@ h3 {
   box-sizing: border-box;
   padding: 0 14px;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--surface);
   font-size: 24px;
   line-height: 76px;
@@ -892,8 +1108,18 @@ h3 {
   text-overflow: ellipsis;
 }
 
-.guide-cell.empty {
+.guide-cell.empty,
+.guide-cell.past {
   color: var(--text-dim);
+}
+
+.guide-cell.past {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* On air now. */
+.guide-cell.live {
+  background: rgba(123, 47, 247, 0.28);
 }
 
 .guide-cell.focused {
@@ -906,7 +1132,7 @@ h3 {
   top: 0;
   bottom: 0;
   width: 3px;
-  background: #ff5252;
+  background: #e5383b;
 }
 
 .details-dialog {
@@ -975,8 +1201,9 @@ h3 {
 .panel {
   box-sizing: border-box;
   padding: 24px 16px;
-  border-radius: 20px;
-  background: #10131a;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 2px var(--edge);
 }
 
 .brand {
@@ -988,12 +1215,33 @@ h3 {
 
 .brand .icon {
   margin-right: 14px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
+/* The app icon's mark on its purple square. */
+.brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  margin-right: 16px;
+  border-radius: 14px;
+  background: var(--accent);
+}
+
+.brand .brand-mark .icon {
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  color: #fff;
+}
+
+/* 76 px tall, like every button (LG recommends at least 75 px at 1920x1080). */
 .button.nav {
   margin-bottom: 8px;
-  padding: 12px 20px;
+  padding: 18px 20px;
   background: transparent;
 }
 
@@ -1007,7 +1255,7 @@ h3 {
 }
 
 .group-row.selected .icon {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .group-row.focused .icon {
@@ -1042,36 +1290,70 @@ h3 {
   margin: 0;
 }
 
+/* Remote keys and what they do, under a list. */
 .hints {
   display: flex;
   align-items: center;
-  height: 32px;
-  margin-top: 12px;
+  height: 40px;
+  margin-top: 8px;
   color: var(--text-dim);
   font-size: 24px;
 }
 
-.hints span {
-  margin-right: 36px;
+.hint {
+  display: flex;
+  align-items: center;
+  margin-right: 40px;
 }
 
-.hint-star {
-  margin-right: 6px;
-  color: #f5c518;
+.key {
+  flex: none;
+  min-width: 32px;
+  box-sizing: border-box;
+  margin-right: 10px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 32px;
+  text-align: center;
 }
 
-/* Favorite star at the end of a channel row */
+.key .icon {
+  vertical-align: -0.2em;
+}
+
+/* Color keys: a dot in the key's color. */
+.key.color {
+  width: 22px;
+  min-width: 0;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.key.red {
+  background: #e5383b;
+}
+
+.key.yellow {
+  background: #f5c518;
+}
+
+/* Favorite star at the end of a channel row: 76 px for the pointer (LG recommends at least 75). */
 .row-action {
   display: flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 56px;
-  height: 56px;
-  margin-left: 12px;
+  width: 76px;
+  height: 76px;
+  margin-left: 8px;
   border-radius: 50%;
   color: var(--text-dim);
-  font-size: 30px;
+  font-size: 32px;
   cursor: pointer;
 }
 
@@ -1114,8 +1396,10 @@ h3 {
 .mini-actions .button {
   flex: 1;
   justify-content: center;
+  height: 76px;
+  box-sizing: border-box;
   margin: 0 12px 0 0;
-  padding: 8px 18px;
+  padding: 0 18px;
   font-size: 24px;
 }
 
@@ -1133,7 +1417,7 @@ h3 {
 .poster {
   position: relative;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-raised);
 }
 
@@ -1165,9 +1449,9 @@ h3 {
 }
 
 .poster-cell .poster {
-  width: 158px;
-  height: 237px;
-  transition: transform 0.12s ease-out;
+  width: 188px;
+  height: 282px;
+  transition: transform 0.16s var(--ease);
 }
 
 .poster-cell.focused .poster {
@@ -1180,7 +1464,7 @@ h3 {
   overflow: hidden;
   margin-top: 10px;
   color: var(--text-dim);
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.3;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -1227,6 +1511,54 @@ h3 {
 }
 
 /* Movie and series details */
+
+/* The backdrop (or the poster, stretched and dimmed) behind the page, edge to edge: it carries no
+   text, so it may cover the overscan area. Content after it is positioned to paint over it. */
+.backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+}
+
+.backdrop img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease);
+}
+
+.backdrop img.shown {
+  opacity: 0.5;
+}
+
+.backdrop.soft img.shown {
+  opacity: 0.3;
+}
+
+.backdrop:after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    linear-gradient(to top, rgba(11, 13, 18, 0.9), rgba(11, 13, 18, 0) 55%),
+    linear-gradient(90deg, rgba(11, 13, 18, 0.96) 0%, rgba(11, 13, 18, 0.88) 45%, rgba(11, 13, 18, 0.6) 75%, rgba(11, 13, 18, 0.3) 100%);
+}
+
+.details .content,
+.details .sidebar {
+  position: relative;
+}
+
 .details-poster {
   flex: none;
   width: 400px;
@@ -1239,7 +1571,30 @@ h3 {
 }
 
 .details-title {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  font-size: 56px;
+}
+
+/* Year, length, genre, rating */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  margin: 0 12px 8px 0;
+  padding: 4px 18px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 24px;
+}
+
+.chip .icon {
+  margin-right: 8px;
+  color: #f5c518;
 }
 
 .details-plot {
@@ -1302,6 +1657,10 @@ h3 {
 .episode-watched {
   flex: none;
   margin-left: 16px;
+  color: var(--accent-text);
+}
+
+.episode-row.focused .episode-watched {
   color: var(--accent);
 }
 
@@ -1331,7 +1690,7 @@ h3 {
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.25);
   cursor: pointer;
-  transition: transform 0.12s ease-out;
+  transition: transform 0.16s var(--ease);
 }
 
 .vod-progress.focused {

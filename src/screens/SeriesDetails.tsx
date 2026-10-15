@@ -1,16 +1,17 @@
 import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { library, useLibrary } from '../data/library'
-import type { Episode } from '../data/models'
+import type { Episode, SeriesDetails } from '../data/models'
 import { unlock, useUnlocked } from '../data/parental'
 import { usePrefs } from '../data/prefs'
 import { isVodLocked } from '../data/vod'
 import { isFinished, useWatch, type WatchEntry } from '../data/watch'
 import { t } from '../i18n'
 import { Button } from '../ui/Button'
+import { Chips } from '../ui/Chips'
 import { formatClock } from '../ui/format'
 import { Icon } from '../ui/Icon'
-import { Poster } from '../ui/Logo'
+import { Backdrop, Poster } from '../ui/Logo'
 import { navigate, type ScreenProps } from '../ui/navigation'
 import { PinDialog } from '../ui/PinDialog'
 import { Region } from '../ui/Region'
@@ -49,6 +50,7 @@ export function SeriesScreen({ entry }: ScreenProps<'series'>) {
   const series = library.series(entry.seriesId)
   const [episodes, setEpisodes] = useState<Episode[] | 'loading' | 'failed'>('loading')
   const [attempt, setAttempt] = useState(0)
+  const [details, setDetails] = useState<SeriesDetails>()
   const [askPin, setAskPin] = useState(false)
   const locked = !!series && isVodLocked(series, prefs, unlocked)
 
@@ -56,6 +58,7 @@ export function SeriesScreen({ entry }: ScreenProps<'series'>) {
     if (!series) return
     setEpisodes('loading')
     library.episodes(series).then(setEpisodes, () => setEpisodes('failed'))
+    library.seriesDetails(series).then(setDetails, () => setDetails({}))
   }, [series?.id, attempt])
 
   const list = Array.isArray(episodes) ? episodes : []
@@ -85,10 +88,11 @@ export function SeriesScreen({ entry }: ScreenProps<'series'>) {
 
   return (
     <div className="screen details">
+      <Backdrop url={details && (details.backdrop ?? series.poster)} soft={!details?.backdrop} />
       <div className="sidebar series-sidebar">
         <Poster url={series.poster} name={series.name} className="series-poster" />
         <h1 className="details-title">{series.name}</h1>
-        {series.released && <p className="dim">{series.released}</p>}
+        <Chips facts={series.released ? [series.released] : []} rating={details?.rating} />
         {series.plot && <p className="details-plot series-plot">{series.plot}</p>}
       </div>
       <Region focusKey="series-content" className="content">
