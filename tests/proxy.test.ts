@@ -33,6 +33,11 @@ beforeAll(async () => {
     } else if (req.url === '/cdn/variant/index.m3u8') {
       res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl' })
       res.end('#EXTM3U\r\n#EXT-X-KEY:METHOD=AES-128,URI="key.bin"\r\n#EXTINF:4,\r\nseg1.ts\r\n')
+    } else if (req.url === '/cdn/split.m3u8' || req.url === '/cdn/split-bom.m3u8') {
+      const body = Buffer.from((req.url.includes('bom') ? '\uFEFF' : '') + '#EXTM3U\n#EXTINF:4,\nsegment.ts\n')
+      res.writeHead(200, { 'Content-Type': 'text/plain' })
+      res.write(body.slice(0, 1))
+      setTimeout(() => res.end(body.slice(1)), 30)
     } else if (req.url === '/cdn/variant/seg1.ts') {
       res.writeHead(200, { 'Content-Type': 'video/mp2t', 'Content-Length': '11' })
       res.end('segment one')
@@ -72,6 +77,13 @@ describe('proxy', () => {
 
   it('passes the server’s refusal on when the headers are wrong', async () => {
     expect((await fetch(through(`${origin}/live/channel.m3u8`, 'Referer=https%3A%2F%2Fother%2F'))).status).toBe(403)
+  })
+
+  it.each(['split.m3u8', 'split-bom.m3u8'])('rewrites %s when its signature spans network chunks', async (file) => {
+    const answer = await fetch(through(`${origin}/cdn/${file}`))
+    expect(answer.headers.get('content-type')).toBe('application/vnd.apple.mpegurl')
+    const [segment] = addresses(await answer.text())
+    expect(segment).toBe(`/${TOKEN}/proxy?u=${encodeURIComponent(`${origin}/cdn/segment.ts`)}&h=${encodeURIComponent(HEADERS)}`)
   })
 
   it('makes every address absolute, leaving data: keys alone', () => {

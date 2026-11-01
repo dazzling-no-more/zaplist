@@ -32,21 +32,29 @@ export function proxy(base: string, url: string, headers: string, via: string | 
       const status = response.statusCode || 502
       const answer: Record<string, string> = {}
       for (const name of PASSED) if (response.headers[name]) answer[name] = String(response.headers[name])
-      const empty = () => {
+      let first: Buffer = Buffer.alloc(0)
+      const ended = () => {
         res.writeHead(status, answer)
-        res.end()
+        res.end(first)
       }
       // A playlist is told by its first bytes: servers label them in many ways. The TV's player asks
       // for them from byte 0 on, which some servers answer as a part (206): it is the whole.
-      response.once('data', (first: Buffer) => {
-        response.removeListener('end', empty)
+      const inspect = (chunk: Buffer) => {
+        first = first.length ? Buffer.concat([first, chunk]) : chunk
+        const isPlaylist = (status === 200 || status === 206) && /^\uFEFF?\s*#EXTM3U/.test(first.slice(0, 64).toString('utf8'))
+        // TCP chunks can split even the BOM or #EXTM3U. Wait for enough prefix bytes before
+        // passing a non-playlist through; a shorter body is flushed by ended.
+        if (!isPlaylist && first.length < 64 && (status === 200 || status === 206)) return
+        response.removeListener('data', inspect)
+        response.removeListener('end', ended)
         response.pause()
-        if ((status === 200 || status === 206) && /^\uFEFF?\s*#EXTM3U/.test(first.slice(0, 64).toString('utf8'))) return playlist(response, first, final, base, headers, via, res)
+        if (isPlaylist) return playlist(response, first, final, base, headers, via, res)
         res.writeHead(status, answer)
         res.write(first)
         response.pipe(res)
-      })
-      response.on('end', empty)
+      }
+      response.on('data', inspect)
+      response.on('end', ended)
     },
     () => {
       res.writeHead(502)

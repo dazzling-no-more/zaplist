@@ -59,6 +59,19 @@ describe('parental control settings', () => {
     expect(prefs.getPrefs()).toMatchObject({ pin: '1234', lockedCategories: ['a'] })
     expect(lockedOnDisk()).toEqual(['a'])
   })
+
+  it('does not overwrite a newly saved PIN with a guide setting changed while it was saving', async () => {
+    const prefs = await load()
+    let finish!: () => void
+    db.putSecretSettings.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)))
+    const saving = prefs.saveParental({ pin: '1234' })
+    await vi.waitFor(() => expect(db.putSecretSettings).toHaveBeenCalledOnce())
+    prefs.updatePrefs({ epgUrl: 'http://example.com/guide.xml' })
+    finish()
+    await saving
+    await vi.waitFor(() => expect(db.putSecretSettings).toHaveBeenCalledTimes(2))
+    expect(db.putSecretSettings).toHaveBeenLastCalledWith({ pin: '1234', epgUrl: 'http://example.com/guide.xml', proxy: undefined })
+  })
 })
 
 describe('proxy settings', () => {
@@ -72,7 +85,7 @@ describe('proxy settings', () => {
     const prefs = await load()
     const proxy = { host: '203.0.113.10', port: 18080, user: 'zaplist', password: 'secret' }
     prefs.updatePrefs({ proxy })
-    expect(db.putSecretSettings).toHaveBeenCalledWith({ pin: undefined, epgUrl: undefined, proxy })
+    await vi.waitFor(() => expect(db.putSecretSettings).toHaveBeenCalledWith({ pin: undefined, epgUrl: undefined, proxy }))
     expect(stored[KEY]).not.toContain('secret')
     expect(stored[KEY]).not.toContain('203.0.113.10')
 
@@ -80,6 +93,32 @@ describe('proxy settings', () => {
     db.getSecretSettings.mockResolvedValue({ proxy })
     await restarted.loadSecretPrefs()
     expect(restarted.getPrefs().proxy).toEqual(proxy)
+  })
+
+  it('stores rapid edits in order even when the first encrypted write is slow', async () => {
+    const prefs = await load()
+    let persisted: unknown
+    let finish!: () => void
+    db.putSecretSettings
+      .mockImplementationOnce((value: unknown) => new Promise<void>((resolve) => {
+        finish = () => { persisted = value; resolve() }
+      }))
+      .mockImplementation(async (value: unknown) => { persisted = value })
+    prefs.updatePrefs({ epgUrl: 'http://example.com/old' })
+    await vi.waitFor(() => expect(db.putSecretSettings).toHaveBeenCalledOnce())
+    prefs.updatePrefs({ epgUrl: 'http://example.com/new' })
+    finish()
+    await vi.waitFor(() => expect(db.putSecretSettings).toHaveBeenCalledTimes(2))
+    expect(persisted).toMatchObject({ epgUrl: 'http://example.com/new' })
+  })
+
+  it('continues saving settings after an earlier encrypted write fails', async () => {
+    const prefs = await load()
+    db.putSecretSettings.mockRejectedValueOnce(new Error('storage unavailable'))
+    prefs.updatePrefs({ epgUrl: 'http://example.com/old' })
+    prefs.updatePrefs({ epgUrl: 'http://example.com/new' })
+    await vi.waitFor(() => expect(db.putSecretSettings).toHaveBeenCalledTimes(2))
+    expect(db.putSecretSettings).toHaveBeenLastCalledWith({ pin: undefined, epgUrl: 'http://example.com/new', proxy: undefined })
   })
 })
 

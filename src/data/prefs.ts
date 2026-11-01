@@ -65,6 +65,15 @@ export const getPrefs = (): Prefs => prefs
 type Secrets = Pick<Prefs, 'pin' | 'epgUrl' | 'proxy'>
 const secretsOf = ({ pin, epgUrl, proxy }: Prefs): Secrets => ({ pin, epgUrl, proxy })
 
+// Encryption is asynchronous: writes must finish in order, and each must read the PIN after any
+// earlier parental change has committed. Otherwise a later guide/proxy edit can restore an old PIN.
+let savingSecrets: Promise<void> = Promise.resolve()
+function queueSecrets(save: () => Promise<void>): Promise<void> {
+  const result = savingSecrets.then(save)
+  savingSecrets = result.catch(() => undefined)
+  return result
+}
+
 function writeLocal(value: Prefs): void {
   const { pin: _pin, epgUrl: _epgUrl, proxy: _proxy, ...rest } = value
   localStorage.setItem(KEY, JSON.stringify(rest))
@@ -85,7 +94,7 @@ type ParentalPrefs = Pick<Prefs, 'pin' | 'lockedCategories'>
 export function updatePrefs(patch: Partial<Omit<Prefs, keyof ParentalPrefs>>): void {
   prefs = { ...prefs, ...patch }
   saveLocal()
-  if ('epgUrl' in patch || 'proxy' in patch) void putSecretSettings(secretsOf(prefs)).catch(() => undefined)
+  if ('epgUrl' in patch || 'proxy' in patch) void queueSecrets(() => putSecretSettings(secretsOf(prefs))).catch(() => undefined)
   listeners.forEach((listener) => listener())
 }
 
@@ -93,19 +102,21 @@ export function updatePrefs(patch: Partial<Omit<Prefs, keyof ParentalPrefs>>): v
  * Changes parental control. A setting that applied now but was lost at the next start would quietly
  * unlock the TV, so this resolves only once the change is stored and rejects, changing nothing, when it can't be.
  */
-export async function saveParental(patch: Partial<ParentalPrefs>): Promise<void> {
-  const next = { ...prefs, ...patch }
-  if ('lockedCategories' in patch) writeLocal(next)
-  if ('pin' in patch) {
-    try {
-      await putSecretSettings(secretsOf(next))
-    } catch (error) {
-      saveLocal() // puts back the locked categories written above
-      throw error
+export function saveParental(patch: Partial<ParentalPrefs>): Promise<void> {
+  return queueSecrets(async () => {
+    const next = { ...prefs, ...patch }
+    if ('lockedCategories' in patch) writeLocal(next)
+    if ('pin' in patch) {
+      try {
+        await putSecretSettings(secretsOf(next))
+      } catch (error) {
+        saveLocal() // puts back the locked categories written above
+        throw error
+      }
     }
-  }
-  prefs = { ...prefs, ...patch }
-  listeners.forEach((listener) => listener())
+    prefs = { ...prefs, ...patch }
+    listeners.forEach((listener) => listener())
+  })
 }
 
 /** Reads the PIN, guide URL and proxy from encrypted storage, moving them there from localStorage (older versions). */

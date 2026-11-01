@@ -40,7 +40,12 @@ export async function ingest(source: Source, progress: (p: IngestProgress) => vo
     progress({ stage: 'download' })
     const failed = new Set<string>()
     const list = <T>(action: string, required: boolean): Promise<T[]> => {
-      const request = fetchJson<T[]>(apiUrl(source, { action })).then((items) => (Array.isArray(items) ? items : []))
+      const request = fetchJson<unknown>(apiUrl(source, { action })).then((items) => {
+        // Panels sometimes return a JSON error with HTTP 200. Treat it as a failed request, so
+        // it cannot replace a working cached list with an empty one.
+        if (!Array.isArray(items)) throw new LoadError('format', `${action}: Response is not a list`)
+        return items as T[]
+      })
       // Movies and series are extras: a server that can't list them still gives its live channels.
       return required
         ? request

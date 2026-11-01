@@ -175,4 +175,32 @@ describe('guide', () => {
       vi.restoreAllMocks()
     }
   })
+
+  it('reloads a channel when the guide changes while its lookup is still pending', async () => {
+    const xtream: Source = { id: 'race', kind: 'xtream', name: 'X', host: 'http://x.example', username: 'u', password: 'p', addedAt: 1 }
+    const channel: Channel = { ...sport('race'), streamId: 1 }
+    state.sources = [xtream]
+    state.channels = [channel]
+    state.playlistGuides = {}
+    guide.invalidate()
+    const response = (title: string) => new Response(JSON.stringify({
+      epg_listings: [{ title: btoa(title), start_timestamp: hour / 1000, stop_timestamp: (hour + HOUR) / 1000 }],
+    }))
+    let finish!: (response: Response) => void
+    const fetch = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (finish = resolve)))
+      .mockImplementationOnce(async () => response('Updated'))
+    vi.stubGlobal('location', { origin: 'http://localhost' })
+    vi.stubGlobal('fetch', fetch)
+
+    const pending = guide.load(channel)
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce())
+    guide.invalidate()
+    await guide.load(channel) // the mounted row still has a lookup in flight
+    finish(response('Old'))
+    await pending
+
+    expect(guide.cached(channel.id)?.map((p) => p.title)).toEqual(['Updated'])
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
 })

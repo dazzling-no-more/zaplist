@@ -49,4 +49,33 @@ describe('ingest', () => {
     expect((await getVodChunk('x', 0)).movies?.map((m) => [m.name, m.urls[0]])).toEqual([['Film', 'http://x.example/movie/u/new/9.mkv']])
     expect((await getPlaylistMeta('x'))?.categories.filter((c) => c.kind).map((c) => c.name)).toEqual(['Films'])
   })
+
+  it.each(['get_live_categories', 'get_live_streams', 'get_vod_categories', 'get_vod_streams', 'get_series_categories', 'get_series'])(
+    'preserves cached lists when %s returns a JSON error object with HTTP 200', async (action) => {
+      const xtream: XtreamSource = { id: 'invalid', kind: 'xtream', name: 'X', host: 'http://x.example', username: 'u', password: 'p', addedAt: 1 }
+      const answers: Record<string, unknown> = {
+        '': { user_info: { auth: 1 } },
+        get_live_categories: [{ category_id: '1', category_name: 'TV' }],
+        get_live_streams: [{ stream_id: 1, name: 'News', category_id: '1' }],
+        get_vod_categories: [{ category_id: '2', category_name: 'Films' }],
+        get_vod_streams: [{ stream_id: 2, name: 'Film', category_id: '2', container_extension: 'mp4' }],
+        get_series_categories: [{ category_id: '3', category_name: 'Shows' }],
+        get_series: [{ series_id: 3, name: 'Show', category_id: '3' }],
+      }
+      vi.stubGlobal('location', { origin: 'http://localhost' })
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(answers[/action=(\w+)/.exec(url)?.[1] ?? '']))))
+      await ingest(xtream, () => {})
+      const original = await getPlaylistMeta(xtream.id)
+      answers[action] = { error: 'Temporarily unavailable' }
+      const refresh = ingest(xtream, () => {})
+      if (action.startsWith('get_live_')) await expect(refresh).rejects.toMatchObject({ code: 'format' })
+      else await expect(refresh).resolves.toMatchObject({ channels: 1, movies: 1, series: 1 })
+      const refreshed = await getPlaylistMeta(xtream.id)
+      expect(refreshed).toEqual({ ...original, categories: expect.arrayContaining(original!.categories) })
+      expect(refreshed?.categories).toHaveLength(original!.categories.length)
+      expect((await getChannelChunk(xtream.id, 0)).map((c) => c.name)).toEqual(['News'])
+      expect((await getVodChunk(xtream.id, 0)).movies?.map((m) => m.name)).toEqual(['Film'])
+      expect((await getVodChunk(xtream.id, 1)).series?.map((s) => s.name)).toEqual(['Show'])
+    },
+  )
 })

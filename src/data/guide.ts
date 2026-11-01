@@ -90,7 +90,9 @@ class Guide {
     } finally {
       this.loading.delete(channel.id)
     }
-    if (generation !== this.generation) return
+    // A mounted row may still have an undefined snapshot after invalidation, so its effect won't
+    // necessarily run again. Finish its lookup against the refreshed guide instead of leaving it blank.
+    if (generation !== this.generation) return this.load(channel)
     this.remember(channel.id, programmes?.length ? programmes : NO_PROGRAMMES, shortEpg)
   }
 
